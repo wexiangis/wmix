@@ -2297,11 +2297,7 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
             (name[len-3] == 'a' || name[len-3] == 'A') &&
             (name[len-2] == 'a' || name[len-2] == 'A') &&
             (name[len-1] == 'c' || name[len-1] == 'C'))
-#if(WMIX_MODE==1)
             wmix_load_aac(wmtp->wmix, name, msg_fd, (wmtp->flag>>8)&0xFF, (wmtp->flag>>16)&0xFF);
-#else
-            ;
-#endif
         else if(len > 3 &&
             (name[len-3] == 'm' || name[len-3] == 'M') &&
             (name[len-2] == 'p' || name[len-2] == 'P') &&
@@ -2944,17 +2940,22 @@ void wmix_load_wav(
     int fd = 0;
     ssize_t ret = 0;
     uint8_t *buff = NULL;
+    //每次读
     uint32_t buffSize, buffSize2;
-    WAVContainer_t wav;//wav文件头信息
+    //wav文件头信息
+    WAVContainer_t wav;
+    //写循环缓冲区
     WMix_Point src, head;
+    //播放计时
     uint32_t tick, total = 0, total2 = 0, totalWait;
     uint32_t second = 0, bpsCount = 0;
     double totalPow;
+    //背景消减和重复播放延时
     uint8_t rdce = reduce+1, rdceIsMe = 0;
     uint16_t repeat = (uint16_t)repeatInterval*10;
-    //
+    //消息通信
     WMix_Msg msg;
-    //
+    //系统更新loopWord时,会关闭该条播放
     uint8_t loopWord;
     loopWord = wmix->loopWord;
     //
@@ -3135,7 +3136,6 @@ void wmix_load_wav(
         wmix->reduceMode = 1;
 }
 
-#if(WMIX_MODE==1)
 void wmix_load_aac(
     WMix_Struct *wmix,
     char *aacPath,
@@ -3145,29 +3145,27 @@ void wmix_load_aac(
 {
     int fd = 0;
     ssize_t ret = 0;
-    uint8_t *buff = NULL;
-    uint32_t buffSize, buffSize2;
+    //写循环缓冲区
     WMix_Point src, head;
+    //播放计时
     uint32_t tick, total = 0, total2 = 0, totalWait;
     uint32_t second = 0, bpsCount = 0;
     double totalPow;
+    //背景消减和重复播放延时
     uint8_t rdce = reduce+1, rdceIsMe = 0;
     uint16_t repeat = (uint16_t)repeatInterval*10;
-    //
+    //消息通信
     WMix_Msg msg;
-    //
-    uint8_t loopWord;
-    //
-    void *aacDecFd = NULL;
-    unsigned char aacBuff[2048];
-    int readLen, datUse = 0, retLen, fileEnd = 0;
-    //
-    uint8_t chn;
-    uint8_t sample;
-    uint16_t freq;
-    uint16_t port;
+    //aac解码句柄
+    void *aacDec = NULL;
+    uint8_t out[8192];
+    //音频基本参数
+    int chn;
+    int sample = 16;
+    int freq;
     uint32_t bytes_p_second;
-    //
+    //系统更新loopWord时,会关闭该条播放
+    uint8_t loopWord;
     loopWord = wmix->loopWord;
     //
     if(!wmix || !wmix->run || !aacPath)
@@ -3179,26 +3177,10 @@ void wmix_load_aac(
         return;
     }
     //初始化解码器
-    aacDecFd = hiaudio_aacDec_init();
-    if(!aacDecFd)
+    ret = aac_decode2(&aacDec, fd, out, &chn, &freq);
+    if(ret < 0)
     {
         fprintf(stderr, "hiaudio_aacDec_init: err\n");
-        close(fd);
-        return;
-    }
-    //读取数据并解析格式
-    readLen = read(fd, aacBuff, sizeof(aacBuff));
-    buff = (uint8_t *)calloc(4096, sizeof(uint8_t));
-    retLen = hiaudio_aacDec(
-        aacDecFd, 
-        &chn, 
-        &sample, 
-        &freq, 
-        &datUse, aacBuff, readLen, buff);
-    if(retLen < 1)
-    {
-        fprintf(stderr, "hiaudio_aacDec: err\n");
-        hiaudio_aacDec_deinit(aacDecFd);
         close(fd);
         return;
     }
@@ -3220,16 +3202,12 @@ void wmix_load_aac(
     }
     else
         rdce = 1;
-    //默认缓冲区大小设为1秒字播放字节数
-    buffSize = bytes_p_second;
-    buffSize2 = WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ;
-    totalPow = (double)buffSize2/buffSize;
     //
-    buffSize = chn*sample/8*1024;
-    buffSize2 = WMIX_CHANNELS*WMIX_SAMPLE/8*1024;
-    totalWait = buffSize2*4;
+    totalPow = (double)(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ)/bytes_p_second;
     //
-    src.U8 = buff;
+    totalWait = bytes_p_second/2;
+    //
+    src.U8 = out;
     head.U8 = 0;
     tick = wmix->tick;
     //
@@ -3245,7 +3223,7 @@ void wmix_load_aac(
                 break;
         }
         //播放文件
-        if(retLen > 0)
+        if(ret > 0)
         {
             //等播放指针赶上写入进度
             if(total2 > totalWait)
@@ -3261,13 +3239,13 @@ void wmix_load_aac(
             //写入循环缓冲区
             head = wmix_load_wavStream(
                 wmix, 
-                src, retLen, 
+                src, ret, 
                 freq, 
                 chn, 
                 sample, head, rdce);
             //写入的总字节数统计
-            bpsCount += retLen;
-            total += retLen;
+            bpsCount += ret;
+            total += ret;
             total2 = total*totalPow;
             //播放时间
             if(bpsCount > bytes_p_second)
@@ -3280,6 +3258,8 @@ void wmix_load_aac(
             if(head.U8 == 0)
                 break;
         }
+        else if(ret == 0)
+            ;
         else if(repeat)
         {
             //关闭 reduceMode
@@ -3287,9 +3267,6 @@ void wmix_load_aac(
                 wmix->reduceMode = 1;
             //
             lseek(fd, 0, SEEK_SET);
-            readLen = 0;
-            datUse = 0;
-            fileEnd = 0;
             //
             for(ret = 0; ret < repeat; ret++)
             {
@@ -3324,52 +3301,25 @@ void wmix_load_aac(
                 repeat/10);
             //
             total = total2 = bpsCount = 0;
-            src.U8 = buff;
+            src.U8 = out;
             head.U8 = wmix->head.U8;
             tick = wmix->tick;
         }
         else
             break;
-        //缓冲区aacBuff数据左移
-        if(datUse <= readLen)
-        {
-            readLen -= datUse;
-            memcpy(aacBuff, &aacBuff[datUse], readLen);
-            datUse = 0;
-        }
-        //继续往aacBuff读入数据
-        if(!fileEnd)
-        {
-            ret = read(fd, &aacBuff[readLen], sizeof(aacBuff)-readLen);
-            if(ret > 0)
-                readLen += ret;
-            else
-                fileEnd = 1;
-        }
-        //aacBuff还有数据则继续解码
-        if(readLen > 0)
-        {
-            retLen = hiaudio_aacDec(
-                aacDecFd, 
-                &chn, 
-                &sample, 
-                &freq, 
-                &datUse, aacBuff, readLen, buff);
-        }
-        else
-            retLen = -1;
+        //
+        ret = aac_decode2(&aacDec, fd, out, &chn, &freq);
     }
     //
     close(fd);
-    free(buff);
-    hiaudio_aacDec_deinit(aacDecFd);
+    if(aacDec)
+        aac_decodeRelease(&aacDec);
     //
     if(wmix->debug) printf(">> PLAY-AAC: %s end <<\n", aacPath);
     //关闭 reduceMode
     if(rdceIsMe && wmix->reduceMode == rdce)
         wmix->reduceMode = 1;
 }
-#endif
 
 typedef struct{
     // char *msgPath;//消息队列挂靠路径
@@ -3653,7 +3603,7 @@ void help(char *argv0)
         ,argv0, WMIX_VERSION, argv0);
 }
 
-#if(WMIX_MERGE_MODE==1)
+#if(WMIX_MERGE_MODE!=0)
 void wmix_start()
 {
     main_wmix = wmix_init();
