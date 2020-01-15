@@ -11,9 +11,7 @@
 
 #include "wmix.h"
 #include "wav.h"
-#if(WMIX_MP3)
 #include "mad.h"
-#endif
 #include "id3.h"
 #include "rtp.h"
 #include "aac.h"
@@ -2304,13 +2302,11 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
 #else
             ;
 #endif
-#if(WMIX_MP3)
         else if(len > 3 &&
             (name[len-3] == 'm' || name[len-3] == 'M') &&
             (name[len-2] == 'p' || name[len-2] == 'P') &&
             name[len-1] == '3')
             wmix_load_mp3(wmtp->wmix, name, msg_fd, (wmtp->flag>>8)&0xFF, (wmtp->flag>>16)&0xFF);
-#endif
         else
             wmix_load_wav(wmtp->wmix, name, msg_fd, (wmtp->flag>>8)&0xFF, (wmtp->flag>>16)&0xFF);
         //
@@ -2977,13 +2973,13 @@ void wmix_load_wav(
         return;
 	}
     //
-    if(wmix->debug) printf("<< PLAY-WAV: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   总数据量: %d Bytes\n", 
+    if(wmix->debug) printf("<< PLAY-WAV: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
         wavPath,
         wav.format.channels,
         wav.format.sample_length,
         wav.format.sample_rate,
         wav.format.bytes_p_second,
-        wav.chunk.length);
+        repeat/10);
     //独占 reduceMode
     if(rdce > 1 && wmix->reduceMode == 1)
     {
@@ -3113,13 +3109,13 @@ void wmix_load_wav(
             if(rdceIsMe && wmix->reduceMode == 1)
                 wmix->reduceMode = rdce;
             //
-            if(wmix->debug) printf("<< PLAY-WAV: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   总数据量: %d Bytes\n", 
+            if(wmix->debug) printf("<< PLAY-WAV: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
                 wavPath,
                 wav.format.channels,
                 wav.format.sample_length,
                 wav.format.sample_rate,
                 wav.format.bytes_p_second,
-                wav.chunk.length);
+                repeat/10);
             //
             total = total2 = bpsCount = 0;
             src.U8 = buff;
@@ -3209,12 +3205,13 @@ void wmix_load_aac(
     //
     bytes_p_second = chn*sample/8*freq;
     //
-    if(wmix->debug) printf("<< PLAY-AAC: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   总数据量: -- Bytes\n", 
+    if(wmix->debug) printf("<< PLAY-AAC: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
         aacPath,
         chn,
         sample,
         freq,
-        bytes_p_second);
+        bytes_p_second,
+        repeat/10);
     //独占 reduceMode
     if(rdce > 1 && wmix->reduceMode == 1)
     {
@@ -3318,12 +3315,13 @@ void wmix_load_aac(
             if(rdceIsMe && wmix->reduceMode == 1)
                 wmix->reduceMode = rdce;
             //
-            if(wmix->debug) printf("<< PLAY-AAC: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   总数据量: -- Bytes\n", 
+            if(wmix->debug) printf("<< PLAY-AAC: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
                 aacPath,
                 chn,
                 sample,
                 freq,
-                bytes_p_second);
+                bytes_p_second,
+                repeat/10);
             //
             total = total2 = bpsCount = 0;
             src.U8 = buff;
@@ -3373,7 +3371,6 @@ void wmix_load_aac(
 }
 #endif
 
-#if(WMIX_MP3)
 typedef struct{
     // char *msgPath;//消息队列挂靠路径
     char *mp3Path;
@@ -3426,11 +3423,12 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
         wmm->totalPow = (double)(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ)/wmm->bps;
         wmm->totalWait = wmm->bps*wmm->totalPow/3;
         //
-        if(wmm->wmix->debug) printf("<< PLAY-MP3: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   总数据量: -- Bytes\n", 
+        if(wmm->wmix->debug) printf("<< PLAY-MP3: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
             wmm->mp3Path,
             pcm->channels, 16,
             header->samplerate,
-            wmm->bps);
+            wmm->bps,
+            wmm->repeat/10);
         //
         wmm->total = wmm->total2 = wmm->bpsCount = 0;
         wmm->head.U8 = 0;
@@ -3634,7 +3632,6 @@ void wmix_load_mp3(
     //
     if(wmix->debug) printf(">> PLAY-MP3: %s end <<\n", mp3Path);
 }
-#endif //#if(WMIX_MP3)
 
 //--------------- wmix main ---------------
 

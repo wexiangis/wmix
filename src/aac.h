@@ -53,9 +53,17 @@ int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate,
 //bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
 //返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
 int aac_decode(void **aacDec, uint8_t* in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq);
+
+//aac解码为pcm
+//aacDec: 解码器句柄,值为NULL时自动初始化
+//aacFile_fd: 已打开的aac文件句柄
+//out: 返回数据缓冲区,要求大于等于8192
+//返回: pcm数据长度, -1失败
+int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq);
+
 //文件
 void aac_decodeToFile(char *aacFile, char *pcmFile);
-void aac_decodeToFile2(char *aacFile, int pcmFile_fd);
+
 //销毁解码器句柄
 void aac_decodeRelease(void **aacDec);
 

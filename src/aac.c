@@ -130,7 +130,11 @@ int aac_decode(void **aacDec, uint8_t* in, int inLen, uint8_t *out, int *bytesCo
         if(in[0] == 0xFF && (in[1]&0xF0) == 0xF0)
         {
             if(aac_parseHeader(in, &aacHead, 0) == 0)
+            {
+                if(count > 0)
+                    printf("break at %d\n", count);
                 break;
+            }
         }
         in++;
     }
@@ -172,65 +176,102 @@ int aac_decode(void **aacDec, uint8_t* in, int inLen, uint8_t *out, int *bytesCo
     return hInfo.samples*hInfo.channels;
 }
 
-void aac_decodeToFile2(char *aacFile, int pcmFile_fd)
+//aac解码为pcm
+//aacDec: 解码器句柄,值为NULL时自动初始化
+//aacFile_fd: 已打开的aac文件句柄
+//out: 返回数据缓冲区,要求大于等于8192
+//返回: pcm数据长度, -1失败
+int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq)
 {
-    int fw = pcmFile_fd;
-    if(fw < 1)
-        return;
+    if(!aacDec)
+        return -1;
     //
-    int fr = open(aacFile, O_RDONLY);
-    if(fr > 0)
-    {
-        void *aacDec = NULL;
-        uint8_t in[2048], out[8192];
-        int inLen = 0, outLen = 0, ret = 0;
-        int bytesConsumed = 0, chn = 0 , freq = 0;
-        size_t totalBytes = 0;
-        //
-        int i, j;
-        do{
-            //数据移动
-            for(i = 0, j = bytesConsumed; i < inLen;)
-                in[i++] = in[j++];
-            //
-            inLen = read(fr, in+i, 2048-i);
-            if(inLen < 1)
+    AacHeader aacHead;
+    uint8_t in[2048];
+    //找到aac头
+    do{
+        if(read(aacFile_fd, in, 2) != 2)
+            return -1;
+        if(in[0] == 0xFF && (in[1]&0xF0) == 0xF0)
+        {
+            if(read(aacFile_fd, &in[2], 5) != 5)
+                return -1;
+            if(aac_parseHeader(in, &aacHead, 0) == 0)
                 break;
-            inLen += i;
-            //
-            ret = aac_decode(&aacDec, in, inLen, out, &bytesConsumed, &chn, &freq);
-            //
-            if(ret > 0)
-            {
-                totalBytes += ret;
-                write(fw, out, ret);
-            }
-            //
-            inLen -= bytesConsumed;
-        }while(ret >= 0);
+        }
+    }while(1);
+    //
+    if(read(aacFile_fd, &in[7], aacHead.aacFrameLength-7) != aacHead.aacFrameLength-7)
+        return -1;
+    //第一次初始化解码器句柄
+    NeAACDecHandle hDecoder = *((NeAACDecHandle*)aacDec);
+    if(!hDecoder)
+    {
+        hDecoder = NeAACDecOpen();
+        //初始化解码器
+        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, freq, chn);
         //
-        if(totalBytes < 0x100000)
-            printf("aac_decodeToFile: final %.1fKb chn/%d freq/%d\n", 
-                (float)totalBytes/1024, chn, freq);
-        else
-            printf("aac_decodeToFile: final %.1fMb chn/%d freq/%d\n", 
-                (float)totalBytes/1024/1024, chn, freq);
-        //
-        if(aacDec)
-            aac_decodeRelease(&aacDec);
-        //
-        close(fr);
+        *aacDec = hDecoder;
     }
+    //解码
+    NeAACDecFrameInfo hInfo;
+    uint8_t *retp;
+    retp = (uint8_t*)NeAACDecDecode(hDecoder, &hInfo, in, aacHead.aacFrameLength);
+    if(!retp || hInfo.error > 0)
+    {
+        printf("aac_decode: err %d [%s]\n", 
+            hInfo.error, NeAACDecGetErrorMessage(hInfo.error));
+        return -1;
+    }
+    //拷贝数据
+    size_t ret = hInfo.samples*hInfo.channels;
+    if(ret > 0)
+        memcpy(out, retp, ret);
+    //参数返回
+    *chn = hInfo.channels;
+    *freq = hInfo.samplerate;
+    //
+    return ret;
 }
 
 void aac_decodeToFile(char *aacFile, char *pcmFile)
 {
+    void *aacDec = NULL;
+    uint8_t *out = NULL;
+    int ret = 0, chn = 0 , freq = 0;
+    size_t totalBytes = 0;
+    //
     remove(pcmFile);
     int fw = open(pcmFile, O_WRONLY|O_CREAT, 0666);
     if(fw < 1)
         return;
     //
-    aac_decodeToFile2(aacFile, fw);
+    int fr = open(aacFile, O_RDONLY);
+    if(fr < 1)
+        return;
+    //循环取数据
+    out = (uint8_t*)malloc(8192);
+    do{
+        ret = aac_decode2(&aacDec, fr, out, &chn, &freq);
+        if(ret > 0 && ret <= 8192)
+        {
+            totalBytes += ret;
+            write(fw, out, ret);
+        }
+    }while(ret >= 0);
+    free(out);
+    //
+    if(totalBytes < 0x100000)
+        printf("aac_decodeToFile: final %.1fKb chn/%d freq/%d\n", 
+            (float)totalBytes/1024, chn, freq);
+    else
+        printf("aac_decodeToFile: final %.1fMb chn/%d freq/%d\n", 
+            (float)totalBytes/1024/1024, chn, freq);
+    //
+    if(aacDec)
+        aac_decodeRelease(&aacDec);
+    //
+    close(fr);
     close(fw);
 }
 
@@ -251,15 +292,17 @@ void aac_decodeRelease(void **aacDec)
 //outSize: 4096
 int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq)
 {
+    uint32_t nPCMBitSize = 16;
+    uint32_t nInputSamples = 0;
+    uint32_t nMaxOutputBytes = 0;
+    faacEncHandle hEncoder;
+    //
     if(!aacEnc)
         return -1;
     //第一次初始化编码器
-    faacEncHandle hEncoder = *((faacEncHandle*)aacEnc);
+    hEncoder = *((faacEncHandle*)aacEnc);
     if(hEncoder == NULL)
     {
-        uint32_t nPCMBitSize = 16;
-        uint32_t nInputSamples = 0;
-        uint32_t nMaxOutputBytes = 0;
         hEncoder = faacEncOpen(freq, chn, &nInputSamples, &nMaxOutputBytes);
         if(!hEncoder)
         {
@@ -280,6 +323,11 @@ int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t out
 //文件
 void aac_encodeToFile2(int pcmFile, char *aacFile_fd, int chn, int freq)
 {
+    void *aacEnc = NULL;
+    uint8_t *in, *out;
+    int ret, rLen = 2048*chn;
+    size_t totalBytes = 0;
+    //
     int fw = aacFile_fd;
     if(fw < 1)
         return;
@@ -287,11 +335,8 @@ void aac_encodeToFile2(int pcmFile, char *aacFile_fd, int chn, int freq)
     int fr = open(pcmFile, O_RDONLY);
     if(fr > 0)
     {
-        void *aacEnc = NULL;
-        uint8_t in[4096], out[4096];
-        int ret, rLen = 2048*chn;
-        size_t totalBytes = 0;
-        //
+        in = (uint8_t*)malloc(4096);
+        out = (uint8_t*)malloc(4096);
         do
         {
             ret = read(fr, in, rLen);
@@ -305,6 +350,9 @@ void aac_encodeToFile2(int pcmFile, char *aacFile_fd, int chn, int freq)
                 write(fw, out, ret);
             }
         }while(ret >= 0);
+        //
+        free(in);
+        free(out);
         //
         if(totalBytes < 0x100000)
             printf("aac_encodeToFile: final %.1fKb chn/%d freq/%d\n", 

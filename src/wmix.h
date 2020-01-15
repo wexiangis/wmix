@@ -38,12 +38,6 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#if(WMIX_MERGE_MODE == 2)
-#define WMIX_MP3 0
-#else
-#define WMIX_MP3 1
-#endif
-
 #define WMIX_VERSION "V3.3 - 20200105"
 
 #define WMIX_MSG_PATH "/tmp/wmix"

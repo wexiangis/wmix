@@ -20,7 +20,9 @@ obj-wmix+=./src/wmix.c \
 		./src/rtp.c \
 		./src/rtp.h \
 		./src/g711codec.c \
-		./src/g711codec.h
+		./src/g711codec.h \
+		./src/aac.c \
+		./src/aac.h
 
 obj-wmixmsg+=./test/wmix_user.c \
 		./test/wmix_user.h \
@@ -51,17 +53,17 @@ obj-recvaac+=./test/recvAAC.c \
 		./src/aac.h
 
 target: wmixmsg
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lpthread -lasound -lm -ldl -lmad
+	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lpthread -lasound -lm -ldl -lmad -lfaac -lfaad
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
 	@$(cc) -Wall -o wmixMsg $(obj-wmixmsg) -lpthread
 
 sendRecvTest:
-	# @$(cc) -Wall -o sendpcm $(obj-sendpcm) -I./src
-	# @$(cc) -Wall -o recvpcm $(obj-recvpcm) -I./src
+	@$(cc) -Wall -o sendpcm $(obj-sendpcm) -I./src
+	@$(cc) -Wall -o recvpcm $(obj-recvpcm) -I./src
 	@$(cc) -Wall -o sendaac $(obj-sendaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
-	# @$(cc) -Wall -o recvaac $(obj-recvaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(cc) -Wall -o recvaac $(obj-recvaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 
 libs: libalsa libmad libfaac libfaad
 	@echo "---------- all complete !! ----------"
