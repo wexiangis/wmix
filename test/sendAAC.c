@@ -14,6 +14,12 @@
 #define RTP_IP      "127.0.0.1"
 #define RTP_PORT    9832
 
+// void main(void)
+// {
+//     // aac_decodeToFile("./audio/2x32000.aac", "./t.pcm");
+//     aac_encodeToFile("./t.pcm", "./t.aac", 2, 32000);
+// }
+
 int main(int argc, char* argv[])
 {
     int ret;

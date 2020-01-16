@@ -68,7 +68,7 @@ typedef struct{
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
     long type;
-    //value: filePath + '\0' + msgPath
+    //value(file/fifo): filePath + '\0' + msgPath
     //value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 }WMix_Msg;

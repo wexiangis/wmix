@@ -321,7 +321,7 @@ int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t out
 }
 
 //文件
-void aac_encodeToFile2(int pcmFile, char *aacFile_fd, int chn, int freq)
+void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq)
 {
     void *aacEnc = NULL;
     uint8_t *in, *out;
@@ -332,40 +332,38 @@ void aac_encodeToFile2(int pcmFile, char *aacFile_fd, int chn, int freq)
     if(fw < 1)
         return;
     //
-    int fr = open(pcmFile, O_RDONLY);
-    if(fr > 0)
+    int fr = pcmFile_fd;
+    if(fr < 1)
+        return;
+    //
+    in = (uint8_t*)malloc(4096);
+    out = (uint8_t*)malloc(4096);
+    do
     {
-        in = (uint8_t*)malloc(4096);
-        out = (uint8_t*)malloc(4096);
-        do
+        ret = read(fr, in, rLen);
+        if(ret < rLen)
+            break;
+        //
+        ret = aac_encode(&aacEnc, in, rLen, out, 4096, chn, freq);
+        if(ret > 0)
         {
-            ret = read(fr, in, rLen);
-            if(ret < rLen)
-                break;
-            //
-            ret = aac_encode(&aacEnc, in, rLen, out, 4096, chn, freq);
-            if(ret > 0)
-            {
-                totalBytes += ret;
-                write(fw, out, ret);
-            }
-        }while(ret >= 0);
-        //
-        free(in);
-        free(out);
-        //
-        if(totalBytes < 0x100000)
-            printf("aac_encodeToFile: final %.1fKb chn/%d freq/%d\n", 
-                (float)totalBytes/1024, chn, freq);
-        else
-            printf("aac_encodeToFile: final %.1fMb chn/%d freq/%d\n", 
-                (float)totalBytes/1024/1024, chn, freq);
-        //
-        if(aacEnc)
-            aac_encodeRelease(&aacEnc);
-        //
-        close(fr);
-    }
+            totalBytes += ret;
+            write(fw, out, ret);
+        }
+    }while(ret >= 0);
+    //
+    free(in);
+    free(out);
+    //
+    if(totalBytes < 0x100000)
+        printf("aac_encodeToFile: final %.1fKb chn/%d freq/%d\n", 
+            (float)totalBytes/1024, chn, freq);
+    else
+        printf("aac_encodeToFile: final %.1fMb chn/%d freq/%d\n", 
+            (float)totalBytes/1024/1024, chn, freq);
+    //
+    if(aacEnc)
+        aac_encodeRelease(&aacEnc);
 }
 
 void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq)
@@ -375,8 +373,17 @@ void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq)
     if(fw < 1)
         return;
     //
-    aac_encodeToFile2(pcmFile, fw, chn, freq);
+    int fr = open(pcmFile, O_RDONLY);
+    if(fr < 1)
+    {
+        close(fw);
+        return;
+    }
+    //
+    aac_encodeToFile2(fr, fw, chn, freq);
+    //
     close(fw);
+    close(fr);
 }
 
 //销毁编码器句柄

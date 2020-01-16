@@ -76,7 +76,7 @@ void aac_decodeRelease(void **aacDec);
 int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq);
 //文件
 void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq);
-void aac_encodeToFile2(int pcmFile, char *aacFile_fd, int chn, int freq);
+void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq);
 //销毁编码器句柄
 void aac_encodeRelease(void **aacEnc);
 

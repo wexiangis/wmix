@@ -673,6 +673,12 @@ int SNDWAV_SetParams2(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels
     sndpcm->bits_per_frame = sndpcm->bits_per_sample * channels;
     sndpcm->chunk_bytes = sndpcm->chunk_size * sndpcm->bits_per_frame / 8;
 
+    // printf("---- record info -----\n  每次写入帧数: %d\n   每帧字节数: %ld Bytes\n   每次读写字节数: %ld Bytes\n   缓冲区大小: %d Bytes\n", 
+    //     sndpcm->chunk_size,
+    //     sndpcm->bits_per_frame/8,
+    //     sndpcm->chunk_bytes,
+    //     sndpcm->buffer_size);
+
     /* Allocate audio data buffer */
 #if(WMIX_CHANNELS == 1)
     sndpcm->data_buf = (uint8_t *)malloc(sndpcm->chunk_bytes*2+1);
@@ -1337,10 +1343,16 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     float divCount, divPow;
     //
     int fd;
+    //
+#if(WMIX_MODE==1)
     int16_t record_addr;
     unsigned char *buff, *buff2, *pBuff2_S, *pBuff2_E;
-    unsigned char aacBuff[2048];
-    void *aacEncFd;
+#else
+    SNDPCMContainer_t *record = NULL;
+#endif
+    //
+    unsigned char aacBuff[4096];
+    void *aacEnc = NULL;
     //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
@@ -1364,13 +1376,13 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
         return;
     }
     //
-    if(!(aacEncFd = hiaudio_aacEnc_init(chn, sample, freq))){
-        fprintf(stderr, "hiaudio_aacEnc_init: err\n");
-        return;
-    }
-    //
+#if(WMIX_MODE==1)
     record_addr = hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
     if(record_addr < 0){
+#else
+    record = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
+    if(!record){
+#endif
         close(fd);
         fprintf(stderr, "wmix_record_aac_thread: wmix_alsa_init err\n");
         return;
