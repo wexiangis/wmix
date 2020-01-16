@@ -1106,7 +1106,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = SNDWAV_ReadPcm(record, frame_size);
+        ret = SNDWAV_ReadPcm(record, frame_size)*(WMIX_CHANNELS*WMIX_SAMPLE/8);
 #endif
         if(ret > 0)
         {
@@ -1267,7 +1267,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = SNDWAV_ReadPcm(record, frame_size);
+        ret = SNDWAV_ReadPcm(record, frame_size)*(WMIX_CHANNELS*WMIX_SAMPLE/8);
 #endif
         if(ret > 0)
         {
@@ -1938,7 +1938,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     buffSize = 320;
     buff = malloc(2*WMIX_SAMPLE/8*1024);
 #else
-    buffSize = 320*8/record->bits_per_frame;
+    buffSize = 320/(WMIX_CHANNELS*WMIX_SAMPLE/8);
 #endif
     //
     if(wmtp->wmix->debug) printf("<< RTP-SEND-PCM: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n\n", 
@@ -1990,7 +1990,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = SNDWAV_ReadPcm(record, buffSize)*8;
+        ret = SNDWAV_ReadPcm(record, buffSize)*(WMIX_CHANNELS*WMIX_SAMPLE/8);
 #endif
         if(ret > 0)
         {
