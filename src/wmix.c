@@ -2502,7 +2502,9 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
     WMix_Point dist;
-    uint32_t count;
+    uint32_t count, countTotal;
+    __time_t t1 = 0, t2 = 0, tt = 0;
+    double dataToTime = 1000000/(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ);
 #if(WMIX_MODE==1)
     uint8_t write_buff[1024+32];
 #else
@@ -2519,8 +2521,11 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             if(wmix->head.U8 >= wmix->end.U8)
                 wmix->head.U8 = wmix->start.U8;
 
+            t1 = getTickUs();
+
+            count = countTotal = 0;
 #if(WMIX_MODE==1)
-            for(count = 0, dist.U8 = write_buff; 
+            for(dist.U8 = write_buff; 
                 wmix->head.U8 != wmix->tail.U8;)
 #else
             for(count = 0, dist.U8 = playback->data_buf; 
@@ -2546,6 +2551,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
                 if(count == 1024)
                 {
+                    countTotal += count;
                     //写入数据
                     hiaudio_ao_write(write_buff, count);
                     dist.U8 = write_buff;
@@ -2562,16 +2568,29 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             //最后一丁点
             if(count)
             {
-                wmix->tick += count;
+                countTotal += count;
 #if(WMIX_MODE==1)
                 hiaudio_ao_write(write_buff, count);
 #else
                 SNDWAV_WritePcm(playback, count/divVal);
 #endif
             }
+
+            tt = countTotal*dataToTime;
+            t2 = getTickUs() - t1;
+
+            if(tt > t2)
+                tt -= t2;
+            else
+                tt = 0;
         }
         //
-        delayus(1000);
+        if(tt > 1000)
+            delayus(tt - 1000);
+        else
+            delayus(1000);
+        //
+        tt = 0;
     }
     //
     if(wmix->debug) printf("wmix_play_thread exit\n");
