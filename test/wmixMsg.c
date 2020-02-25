@@ -28,6 +28,7 @@ void help(char *argv0)
         "                : 生成/tmp/record.sdp\n"
         "  -rtpr ip port : 启动rtp接收播音,使用-rc,-rr可以配置通道和频率参数\n"
         "  -? --help : 显示帮助\n"
+        "  -log 0/1 : 关闭/显示log\n"
         "\n"
         "其它说明:\n"
         "  支持播放格式 : wav,mp3,aac\n"
@@ -60,6 +61,7 @@ int main(int argc, char **argv)
     bool useAAC = false;
     bool rtps = false;
     bool rtpr = false;
+    int log = -1;
 
     char *filePath = NULL;
     char tmpPath[128] = {0};
@@ -77,6 +79,10 @@ int main(int argc, char **argv)
         {
             record = true;
             useAAC = false;
+        }
+        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-log") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &log);
         }
         else if(strlen(argv[i]) == 5 && strstr(argv[i], "-raac"))
         {
@@ -157,6 +163,9 @@ int main(int argc, char **argv)
             return 0;
     }
 
+    if(log >= 0)
+        wmix_log(log);
+
     if(id >= 0)
     {
         wmix_play_kill(id);
@@ -188,7 +197,7 @@ int main(int argc, char **argv)
             id = wmix_play(filePath, reduce, interval, order);
     }
     
-    if(!filePath && !rtpr && !rtps)
+    if(!filePath && !rtpr && !rtps && log < 0)
     {
         printf("\nparam err !!\n");
         help(argv[0]);

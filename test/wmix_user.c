@@ -34,6 +34,7 @@ typedef struct{
     //      13/录音aac文件
     //      14/fifo录音aac流
     //      15/fifo播放aac流
+    //      100/开关log
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
     long type;
@@ -514,4 +515,16 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     *addr = w;
     //
     return i;
+}
+
+void wmix_log(int b)
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT();
+    //装填 message
+    msg.type = 100;
+    msg.value[0] = b;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }

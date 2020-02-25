@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define WMIX_VERSION "V3.3 - 20200107"
+#define WMIX_VERSION "V3.4 - 20200225"
 
 //----- 设置音量 count/div 例如: 30% -> 30/100 -----
 //count: 音量  div: 分度
@@ -112,6 +112,8 @@ bool wmix_check_id(int id);
 //wait: 阻塞
 //返回: 按int16_t计算的数据长度
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
+
+void wmix_log(int b);
 
 #ifdef __cplusplus
 };

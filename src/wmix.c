@@ -1753,7 +1753,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     //
     buffSize = chn*sample/8*1024;
     buffSize2 = WMIX_CHANNELS*WMIX_SAMPLE/8*1024;
-    totalWait = buffSize2*8;
+    totalWait = buffSize2*4;
     //
     if(wmtp->wmix->debug) printf("<< RTP-RECV: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n\n", 
         path, port, chn, sample, freq);
@@ -1798,7 +1798,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 while(wmtp->wmix->run &&
                     get_tick_err(wmtp->wmix->tick, tick) < 
                     total2 - totalWait)
-                    delayus(10000);
+                    delayus(5000);
                 if(!wmtp->wmix->run)
                     break;
             }
@@ -2195,7 +2195,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         //         total2 - totalWait)
         //     {
         //         rtp_recv(rtp_sr, &rtpPacket, &retSize);
-        //         delayus(1000);
+        //         delayus(5000);
         //     }
         //     if(!wmtp->wmix->run)
         //         break;
@@ -2463,6 +2463,13 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                         WMIX_MSG_BUFF_SIZE, 
                         &wmix_record_aac_thread);
                     break;
+                //开关log
+                case 100:
+                    if(msg.value[0])
+                        wmix->debug = true;
+                    else
+                        wmix->debug = false;
+                    break;
             }
             continue;
         }
@@ -2502,7 +2509,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
     WMix_Point dist;
-    uint32_t count, countTotal;
+    uint32_t count = 0, countTotal = 0;
     __time_t t1 = 0, t2 = 0, tt = 0;
     double dataToTime = 1000000/(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ);
 #if(WMIX_MODE==1)
@@ -2520,6 +2527,14 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         {
             if(wmix->head.U8 >= wmix->end.U8)
                 wmix->head.U8 = wmix->start.U8;
+
+            if(tt > 0)
+            {
+                t2 = getTickUs() - t1;
+                if(tt > t2)
+                    tt -= t2;
+                delayus((unsigned int)(tt*0.9));
+            }
 
             t1 = getTickUs();
 
@@ -2577,20 +2592,13 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             }
 
             tt = countTotal*dataToTime;
-            t2 = getTickUs() - t1;
-
-            if(tt > t2)
-                tt -= t2;
-            else
-                tt = 0;
         }
         //
+        delayus(1000);
         if(tt > 1000)
-            delayus(tt - 1000);
+            tt -= 1000;
         else
-            delayus(1000);
-        //
-        tt = 0;
+            tt = 0;
     }
     //
     if(wmix->debug) printf("wmix_play_thread exit\n");
@@ -3091,7 +3099,7 @@ void wmix_load_wav(
                     loopWord == wmix->loopWord &&
                     get_tick_err(wmix->tick, tick) < 
                     total2 - totalWait)
-                    delayus(10000);
+                    delayus(5000);
                 if(!wmix->run || loopWord != wmix->loopWord)
                     break;
             }
@@ -3271,7 +3279,7 @@ void wmix_load_aac(
                     loopWord == wmix->loopWord &&
                     get_tick_err(wmix->tick, tick) < 
                     total2 - totalWait)
-                    delayus(10000);
+                    delayus(5000);
                 if(!wmix->run || loopWord != wmix->loopWord)
                     break;
             }
@@ -3460,7 +3468,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
             wmm->loopWord == wmm->wmix->loopWord &&
             get_tick_err(wmm->wmix->tick, wmm->tick) < 
             wmm->total2 - wmm->totalWait)
-            delayus(10000);
+            delayus(5000);
         if(!wmm->wmix->run || wmm->loopWord != wmm->wmix->loopWord)
             return MAD_FLOW_STOP;
     }
@@ -3642,7 +3650,7 @@ void help(char *argv0)
         ,argv0, WMIX_VERSION, argv0);
 }
 
-#if(WMIX_MERGE_MODE!=0)
+#if(WMIX_MERGE_MODE==2)
 void wmix_start()
 {
     main_wmix = wmix_init();

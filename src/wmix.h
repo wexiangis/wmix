@@ -38,7 +38,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.3 - 20200105"
+#define WMIX_VERSION "V3.4 - 20200225"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -65,6 +65,7 @@ typedef struct{
     //      11/rtp send pcma
     //      12/rtp recv pcma
     //      13/录音aac文件
+    //      100/开关log
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
     long type;
