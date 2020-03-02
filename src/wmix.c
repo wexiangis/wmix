@@ -819,7 +819,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     uint8_t rdce = ((wmtp->flag>>8)&0xFF)+1, rdceIsMe = 0;
     //
     uint8_t loopWord;
-    loopWord = wmtp->wmix->loopWord;
+    loopWord = wmtp->wmix->loopWordFifo;
     //
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
     {
@@ -859,7 +859,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     wmtp->wmix->thread_play += 1;
     //
     while(wmtp->wmix->run && 
-        loopWord == wmtp->wmix->loopWord)
+        loopWord == wmtp->wmix->loopWordFifo)
     {
         ret = read(fd_read, buff, buffSize);
         if(ret > 0)
@@ -868,7 +868,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
             if(total2 > totalWait)
             {
                 while(wmtp->wmix->run && 
-                    loopWord == wmtp->wmix->loopWord && 
+                    loopWord == wmtp->wmix->loopWordFifo && 
                     get_tick_err(wmtp->wmix->tick, tick) < 
                     total2 - totalWait)
                     delayus(10000);
@@ -1043,7 +1043,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 #endif
     //
     uint8_t loopWord;
-    loopWord = wmtp->wmix->loopWordRecord;
+    loopWord = wmtp->wmix->loopWordFifo;
     //
     if(freq > WMIX_FREQ){
         fprintf(stderr, "wmix_record_wav_fifo_thread: freq err, %dHz > %dHz(machine)\n", freq, WMIX_FREQ);
@@ -1101,7 +1101,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
     wmtp->wmix->thread_record += 1;
     //
     while(wmtp->wmix->run && 
-        loopWord == wmtp->wmix->loopWordRecord)
+        loopWord == wmtp->wmix->loopWordFifo)
     {
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
@@ -1523,7 +1523,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     //
     uint8_t loopWord;
-    loopWord = wmtp->wmix->loopWordRecord;
+    loopWord = wmtp->wmix->loopWordRtp;
     //
     //参数检查,是否在允许的变参范围内
     if(freq > WMIX_FREQ){
@@ -1598,7 +1598,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     wmtp->wmix->thread_record += 1;
     //
     while(wmtp->wmix->run && 
-        loopWord == wmtp->wmix->loopWordRecord)
+        loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
         if(msg_fd){
@@ -1710,6 +1710,9 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     SocketStruct *ss;
     RtpPacket rtpPacket;
     int retSize;
+    //
+    uint8_t loopWord;
+    loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
     ss = rtp_socket(path, port, 0);
     if(!ss){
@@ -1764,7 +1767,8 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
-    while(wmtp->wmix->run)
+    while(wmtp->wmix->run && 
+        loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
         if(msg_fd){
@@ -1796,6 +1800,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             if(total2 > totalWait)
             {
                 while(wmtp->wmix->run &&
+                    loopWord == wmtp->wmix->loopWordRtp &&
                     get_tick_err(wmtp->wmix->tick, tick) < 
                     total2 - totalWait)
                     delayus(5000);
@@ -2106,6 +2111,9 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     //
     RtpPacket rtpPacket;
     int retSize;
+    //
+    uint8_t loopWord;
+    loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
     if(!rtp_sr)
         rtp_sr = rtp_socket(path, port, 0);
@@ -2150,7 +2158,8 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
-    while(wmtp->wmix->run)
+    while(wmtp->wmix->run && 
+        loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
         if(msg_fd){
@@ -2191,6 +2200,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         // if(total2 > totalWait)
         // {
         //     while(wmtp->wmix->run &&
+        //         loopWord == wmtp->wmix->loopWordRtp &&
         //         get_tick_err(wmtp->wmix->tick, tick) < 
         //         total2 - totalWait)
         //     {

@@ -103,6 +103,8 @@ typedef struct{
     //
     uint8_t run;//全局正常运行标志
     uint8_t loopWord;//每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放
+    uint8_t loopWordFifo;
+    uint8_t loopWordRtp;
     uint8_t loopWordRecord;
     uint32_t tick;//播放指针启动至今走过的字节数
     //
