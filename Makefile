@@ -1,4 +1,4 @@
-# cross:=arm-linux-gnueabihf
+cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 
 host:=
@@ -11,18 +11,25 @@ endif
 
 ROOT=$(shell pwd)
 
+#base
 obj-wmix+=./src/wmix.c \
 		./src/wmix.h \
 		./src/wav.c \
 		./src/wav.h \
-		./src/id3.c \
-		./src/id3.h \
 		./src/rtp.c \
 		./src/rtp.h \
 		./src/g711codec.c \
-		./src/g711codec.h \
-		./src/aac.c \
-		./src/aac.h
+		./src/g711codec.h
+obj-libs += -lm -lpthread -lasound -ldl
+
+#MP3
+# obj-libs += -lmad
+# obj-wmix+=./src/id3.c ./src/id3.h
+
+#aac
+# obj-wmix+=./src/aac.c ./src/aac.h
+# obj-libs += -lfaac -lfaad
+
 
 obj-wmixmsg+=./test/wmix_user.c \
 		./test/wmix_user.h \
@@ -53,7 +60,7 @@ obj-recvaac+=./test/recvAAC.c \
 		./src/aac.h
 
 target: wmixmsg
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lpthread -lasound -lm -ldl -lmad -lfaac -lfaad
+	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-libs)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:

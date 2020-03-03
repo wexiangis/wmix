@@ -11,10 +11,14 @@
 
 #include "wmix.h"
 #include "wav.h"
+#if(WMIX_MP3)
 #include "mad.h"
 #include "id3.h"
+#endif
 #include "rtp.h"
+#if(WMIX_AAC)
 #include "aac.h"
+#endif
 #include "g711codec.h"
 
 static WMix_Struct *main_wmix = NULL;
@@ -895,7 +899,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
         else if(errno != EAGAIN)
             break;
         //
-        delayus(1000);
+        delayus(5000);
     }
     //用完关闭
     wmtp->wmix->vipWrite.U8 = 0;
@@ -1307,7 +1311,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
             break;
         }
         else
-            delayus(1000);
+            delayus(5000);
     }
     //
 #if(WMIX_MODE==1)
@@ -1326,6 +1330,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
+#if(WMIX_AAC)
 void wmix_record_aac_thread(WMixThread_Param *wmtp)
 {
     char *path = (char*)&wmtp->param[6];
@@ -1645,7 +1650,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                     }
                 }
                 pBuff2_S += buffSizeR;
-                delayus(1000);
+                delayus(5000);
             }
             if(ret < 0)
                 break;
@@ -1829,7 +1834,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             continue;
         }
         else
-            delayus(1000);
+            delayus(5000);
     }
     //用完关闭
     wmtp->wmix->vipWrite.U8 = 0;
@@ -1852,6 +1857,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     free(wmtp);
 }
 #endif
+#endif //if(WMIX_AAC)
 
 #if(RTP_ONE_SR)
 static SocketStruct *rtp_sr = NULL;
@@ -2275,7 +2281,7 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
     key_t msg_key;
     int msg_fd = 0;
     //
-    bool run = true;
+    bool run = true, joinQueue = false;
     //
     int queue = -1;
     //
@@ -2302,6 +2308,7 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
         && ((wmtp->flag>>16)&0xFF) == 0)
     {
         run = false;
+        joinQueue = true;
 
         if((wmtp->flag&0xFF) == 9 && 
             wmtp->wmix->queue.head != wmtp->wmix->queue.tail)//排头
@@ -2323,22 +2330,32 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
     //
     if(run)
     {
-        wmtp->wmix->onPlayCount += 1;
+        if(joinQueue)
+            wmtp->wmix->onPlayCount += 1;
         //
         if(len > 3 &&
             (name[len-3] == 'a' || name[len-3] == 'A') &&
             (name[len-2] == 'a' || name[len-2] == 'A') &&
             (name[len-1] == 'c' || name[len-1] == 'C'))
+#if(WMIX_AAC)
             wmix_load_aac(wmtp->wmix, name, msg_fd, (wmtp->flag>>8)&0xFF, (wmtp->flag>>16)&0xFF);
+#else
+            ;
+#endif
         else if(len > 3 &&
             (name[len-3] == 'm' || name[len-3] == 'M') &&
             (name[len-2] == 'p' || name[len-2] == 'P') &&
             name[len-1] == '3')
+#if(WMIX_MP3)
             wmix_load_mp3(wmtp->wmix, name, msg_fd, (wmtp->flag>>8)&0xFF, (wmtp->flag>>16)&0xFF);
+#else
+            ;
+#endif
         else
             wmix_load_wav(wmtp->wmix, name, msg_fd, (wmtp->flag>>8)&0xFF, (wmtp->flag>>16)&0xFF);
         //
-        wmtp->wmix->onPlayCount -= 1;
+        if(joinQueue)
+            wmtp->wmix->onPlayCount -= 1;
     }
     //
     if(queue >= 0)
@@ -2465,6 +2482,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                         WMIX_MSG_BUFF_SIZE, 
                         &wmix_rtp_recv_pcma_thread);
                     break;
+#if(WMIX_AAC)
                 //录音aac文件
                 case 13:
                     wmix_throwOut_thread(wmix, 
@@ -2473,6 +2491,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                         WMIX_MSG_BUFF_SIZE, 
                         &wmix_record_aac_thread);
                     break;
+#endif
                 //开关log
                 case 100:
                     if(msg.value[0])
@@ -2604,9 +2623,9 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             tt = countTotal*dataToTime;
         }
         //
-        delayus(1000);
-        if(tt > 1000)
-            tt -= 1000;
+        delayus(2000);
+        if(tt > 2000)
+            tt -= 2000;
         else
             tt = 0;
     }
@@ -3193,6 +3212,7 @@ void wmix_load_wav(
         wmix->reduceMode = 1;
 }
 
+#if(WMIX_AAC)
 void wmix_load_aac(
     WMix_Struct *wmix,
     char *aacPath,
@@ -3377,7 +3397,9 @@ void wmix_load_aac(
     if(rdceIsMe && wmix->reduceMode == rdce)
         wmix->reduceMode = 1;
 }
+#endif
 
+#if(WMIX_MP3)
 typedef struct{
     // char *msgPath;//消息队列挂靠路径
     char *mp3Path;
@@ -3639,6 +3661,7 @@ void wmix_load_mp3(
     //
     if(wmix->debug) printf(">> PLAY-MP3: %s end <<\n", mp3Path);
 }
+#endif
 
 //--------------- wmix main ---------------
 

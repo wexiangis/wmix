@@ -120,11 +120,11 @@ int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, 
     if(order < 0)
         msg.type += 2;
     else if(order == 0)
-        msg.type += 3;
+        msg.type += 10;
     else if(order == 1)
         msg.type += 9;
     else
-        msg.type += 10;
+        msg.type += 3;
     strcpy((char*)msg.value, wavOrMp3);
     strcpy((char*)&msg.value[strlen(wavOrMp3)+1], msgPath);
     //发出

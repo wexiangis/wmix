@@ -54,7 +54,7 @@ int main(int argc, char **argv)
     int reduce = 0;
     int volume = -1;
     int id = -1;
-    int order = 2;
+    int order = 0;
     int rt = 5, rc = 1, rr = 8000;
     char *ip;
     int port = 9999;
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
         }
         else if(strlen(argv[i]) == 2 && strstr(argv[i], "-m"))
         {
-            order = 0;
+            order = 2;
         }
         else if(strlen(argv[i]) == 2 && strstr(argv[i], "-i"))
         {
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
         }
         else if(strlen(argv[i]) == 2 && strstr(argv[i], "-l"))
         {
-            order = 2;
+            order = 0;
         }
         else if(strlen(argv[i]) == 2 && strstr(argv[i], "-t") && i+1 < argc)
         {

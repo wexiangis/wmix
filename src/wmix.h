@@ -4,6 +4,10 @@
 //0/alsa 1/hi3516
 #define WMIX_MODE 0
 
+//选择启用,记得改Makefile取消库链接
+#define WMIX_MP3 0
+#define WMIX_AAC 0
+
 //rtp发收同fd
 #if(WMIX_MODE!=1)
 #define RTP_ONE_SR 0
@@ -38,7 +42,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.4 - 20200225"
+#define WMIX_VERSION "V3.4 - 20200303"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -48,7 +52,7 @@ typedef struct SNDPCMContainer {
 
 #define WMIX_CHANNELS    2
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        44100
+#define WMIX_FREQ        16000
 
 typedef struct{
     //type[0,7]:
@@ -160,7 +164,7 @@ void wmix_load_wav(
     uint8_t reduce,
     uint8_t repeatInterval);
 
-#if(WMIX_MODE==1)
+#if(WMIX_AAC)
 //指定aac文件 的方式播放
 void wmix_load_aac(
     WMix_Struct *wmix,
@@ -170,6 +174,7 @@ void wmix_load_aac(
     uint8_t repeatInterval);
 #endif
 
+#if(WMIX_MP3)
 //指定mp3文件 的方式播放
 void wmix_load_mp3(
     WMix_Struct *wmix,
@@ -177,6 +182,7 @@ void wmix_load_mp3(
     int msg_fd,
     uint8_t reduce,
     uint8_t repeatInterval);
+#endif
 
 #endif
 

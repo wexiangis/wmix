@@ -8,14 +8,16 @@
 extern "C" {
 #endif
 
-#define WMIX_VERSION "V3.4 - 20200225"
+#define WMIX_VERSION "V3.4 - 20200303"
 
-//----- 设置音量 count/div 例如: 30% -> 30/100 -----
+//----- 设置音量 count/div 例如: 30% -> wmix_set_volume(3,10) -----
 //count: 音量  div: 分度
 //正常返回0
 int wmix_set_volume(uint8_t count, uint8_t div);
 
-//----- 播放 wav 和 mp3 文件 (互斥播放, wavOrMp3=NULL 时强制关闭播放) -----
+//----- 播放 wav 和 mp3 文件 -----
+//wavOrMp3: 音频文件
+//  支持格式: wav, aac, mp3
 //backgroundReduce: 播放当前音频时,降低背景音量
 //  0: 不启用
 //  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
@@ -25,9 +27,9 @@ int wmix_set_volume(uint8_t count, uint8_t div);
 //  >0: 播放结束后间隔 repeatInterval sec 后重播
 //order: 播放顺序(backgroundReduce>0或repeatInterval>0时不参与排队)
 //  -1: 打断所有
-//  0:混音
+//  0:排尾
 //  1:排头
-//  2:排尾
+//  2:混音
 //返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
 int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, int order);
 
@@ -113,6 +115,7 @@ bool wmix_check_id(int id);
 //返回: 按int16_t计算的数据长度
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 
+//开关系统log
 void wmix_log(int b);
 
 #ifdef __cplusplus
