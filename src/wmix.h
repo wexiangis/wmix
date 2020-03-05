@@ -42,7 +42,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.4 - 20200305"
+#define WMIX_VERSION "V3.5 - 20200305"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -107,10 +107,10 @@ typedef struct{
     //
     uint8_t run;//全局正常运行标志
     uint8_t loopWord;//每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放
+    uint8_t loopWordRecord;
     uint8_t loopWordFifo;
     uint8_t loopWordRtp;
-    uint8_t loopWordRecord;
-    uint32_t tick;//播放指针启动至今走过的字节数
+    uint32_t tick, tickTial;//播放指针启动至今走过的字节数
     //
     uint32_t thread_sys;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
     uint32_t thread_record;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
@@ -154,7 +154,8 @@ WMix_Point wmix_load_wavStream(
     uint8_t channels,
     uint8_t sample,
     WMix_Point head,
-    uint8_t reduce);
+    uint8_t reduce,
+    uint32_t *tick);
 
 //指定wav文件 的方式播放
 void wmix_load_wav(
