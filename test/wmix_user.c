@@ -440,8 +440,30 @@ bool wmix_check_id(int id)
     return false;
 }
 
-//============= shm
+void wmix_log(int b)
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT();
+    //装填 message
+    msg.type = 100;
+    msg.value[0] = b;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+}
+
+//============= shm =============
+
 #include <sys/shm.h>
+
+#define AI_CIRCLE_BUFF_LEN 10240
+typedef struct{
+    int16_t w;
+    int16_t buff[AI_CIRCLE_BUFF_LEN+4];
+}ShmemAi_Circle;
+
+static ShmemAi_Circle *ai_circle = NULL;
+
 int shm_create(char *path, int flag, int size, void **mem)
 {
     key_t key = ftok(path, flag);
@@ -464,18 +486,11 @@ int shm_create(char *path, int flag, int size, void **mem)
 
     return id;
 }
+
 int shm_destroy(int id)
 {
 	return shmctl(id,IPC_RMID,NULL);
 }
-#define AI_CIRCLE_BUFF_LEN 10240
-
-typedef struct{
-    int16_t w;
-    int16_t buff[AI_CIRCLE_BUFF_LEN+4];
-}HiaudioAi_Circle;
-
-static HiaudioAi_Circle *ai_circle = NULL;
 
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
@@ -484,7 +499,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     //
     if(!ai_circle)
     {
-        shm_create("/tmp/wmix", 'h', sizeof(HiaudioAi_Circle), &ai_circle);
+        shm_create("/tmp/wmix", 'h', sizeof(ShmemAi_Circle), &ai_circle);
         if(!ai_circle)
         {
             fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
@@ -517,14 +532,3 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
-void wmix_log(int b)
-{
-    WMix_Msg msg;
-    //msg初始化
-    MSG_INIT();
-    //装填 message
-    msg.type = 100;
-    msg.value[0] = b;
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-}

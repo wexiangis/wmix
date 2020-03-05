@@ -11,7 +11,7 @@ endif
 
 ROOT=$(shell pwd)
 
-#base
+# BASE
 obj-wmix+=./src/wmix.c \
 		./src/wmix.h \
 		./src/wav.c \
@@ -22,11 +22,11 @@ obj-wmix+=./src/wmix.c \
 		./src/g711codec.h
 obj-libs += -lm -lpthread -lasound -ldl
 
-#MP3
+# MP3 LIB
 # obj-libs += -lmad
 # obj-wmix+=./src/id3.c ./src/id3.h
 
-#aac
+# AAC LIB
 # obj-wmix+=./src/aac.c ./src/aac.h
 # obj-libs += -lfaac -lfaad
 

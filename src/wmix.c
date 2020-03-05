@@ -804,6 +804,156 @@ void wmix_throwOut_thread(
     pthread_attr_destroy(&attr);
 }
 
+//============= shm =============
+
+#include <sys/shm.h>
+
+#define AI_CIRCLE_BUFF_LEN 10240
+typedef struct{
+    int16_t w;
+    int16_t buff[AI_CIRCLE_BUFF_LEN+4];
+}ShmemAi_Circle;
+
+static ShmemAi_Circle *ai_circle = NULL;
+
+int shm_create(char *path, int flag, int size, void **mem)
+{
+    key_t key = ftok(path, flag);
+    if(key < 0)
+    {
+        fprintf(stderr, "get key error\n");
+        return -1;
+    }
+    int id;
+    id = shmget(key, size, 0666);
+    if(id < 0)
+        id = shmget(key, size, IPC_CREAT|0666);
+    if(id < 0)
+    {
+        fprintf(stderr, "get id error\n");
+        return -1;
+    }
+    if(mem)
+        *mem = shmat(id, NULL, 0);
+
+    return id;
+}
+
+int shm_destroy(int id)
+{
+	return shmctl(id,IPC_RMID,NULL);
+}
+
+int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
+{
+    int16_t i = 0;
+    int16_t w = *addr;
+    //
+    if(!ai_circle)
+    {
+        // shm_create("/tmp/wmix", 'h', sizeof(ShmemAi_Circle), &ai_circle);
+        // if(!ai_circle)
+        // {
+        //     fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
+        //     return 0;
+        // }
+        // //
+        // w = ai_circle->w;
+        
+        //共享内存尚未初始化,返回空数据
+        *addr = -1;
+        return len;
+    }
+    //
+    if(w < 0 || w >= AI_CIRCLE_BUFF_LEN)
+        w = ai_circle->w;
+    for(i = 0; i < len; i++)
+    {
+        if(w == ai_circle->w)
+        {
+            if(wait && ai_circle)
+            {
+                usleep(1000);
+                continue;
+            }
+            break;
+        }
+        //
+        *dat++ = ai_circle->buff[w++];
+        if(w >= AI_CIRCLE_BUFF_LEN)
+            w = 0;
+    }
+    *addr = w;
+    //
+    return i;
+}
+
+int16_t wmix_mem_write(int16_t *dat, int16_t len)
+{
+    int16_t i = 0;
+    //
+    if(!ai_circle)
+    {
+        shm_create("/tmp/wmix", 'h', sizeof(ShmemAi_Circle), &ai_circle);
+        if(!ai_circle)
+        {
+            fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
+            return 0;
+        }
+        //
+        ai_circle->w = 0;
+    }
+    //
+    for(i = 0; i < len; i++)
+    {
+        ai_circle->buff[ai_circle->w++] = *dat++;
+        if(ai_circle->w >= AI_CIRCLE_BUFF_LEN)
+            ai_circle->w = 0;
+    }
+    //
+    return i;
+}
+
+void wmix_shmem_circle(WMixThread_Param *wmtp)
+{
+    WMix_Struct *wmix = wmtp->wmix;
+    //
+    size_t frame_size, ret;
+    int pak_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
+    //
+    if(wmix->recordback)
+        frame_size = wmix->recordback->chunk_bytes/pak_size;
+    //
+    while(wmix->run)
+    {
+        if(wmix->recordback)
+        {
+            //神奇的 SNDWAV_ReadPcm
+            //读取数据大小按 pak_size 为单位
+            ret = SNDWAV_ReadPcm(wmix->recordback, frame_size)*pak_size;
+            if(ret > 0)
+                wmix_mem_write(wmix->recordback->data_buf, ret/2);
+        }
+        else
+        {
+            wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
+            if(wmix->recordback)
+                frame_size = wmix->recordback->chunk_bytes/pak_size;
+            else
+                sleep(3);
+        }
+        delayus(10000);
+    }
+    //
+    if(wmix->recordback)
+    {
+        wmix_alsa_release(wmix->recordback);
+        wmix->recordback = NULL;
+    }
+}
+
+//============= shm =============
+
 void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
 {
     char *path = (char*)&wmtp->param[4];
@@ -822,6 +972,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     uint32_t tick, second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
     uint8_t rdce = ((wmtp->flag>>8)&0xFF)+1, rdceIsMe = 0;
     //
+    int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordFifo;
     //
@@ -869,14 +1020,15 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
         if(ret > 0)
         {
             //等播放指针赶上写入进度
-            if(total2 > totalWait)
-            {
-                while(wmtp->wmix->run && 
-                    loopWord == wmtp->wmix->loopWordFifo && 
-                    get_tick_err(wmtp->wmix->tick, tick) < 
-                    total2 - totalWait)
-                    delayus(10000);
-            }
+            // if(total2 > totalWait)
+            // {
+            //     timeout = 0;
+            //     while(wmtp->wmix->run && timeout++ < 200 &&
+            //         loopWord == wmtp->wmix->loopWordFifo && 
+            //         get_tick_err(wmtp->wmix->tick, tick) < 
+            //         total2 - totalWait)
+            //         delayus(10000);
+            // }
             //
             wmtp->wmix->vipWrite = wmix_load_wavStream(
                 wmtp->wmix, 
@@ -922,7 +1074,6 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
-#if(WMIX_MODE==1)
 #if(WMIX_CHANNELS == 1)
 #define RECORD_DATA_TRANSFER()  \
 if(chn == 1)\
@@ -969,54 +1120,6 @@ else\
     buffSize2 = (size_t)(dist.U32 - src.U32)*4;\
 }
 #endif
-#else
-#if(WMIX_CHANNELS == 1)
-#define RECORD_DATA_TRANSFER()  \
-if(chn == 1)\
-{\
-    for(count = 0, src.U8 = dist.U8 = record->data_buf; count < frame_size; count++)\
-    {\
-        if(divCount >= 1.0){src.U16++;divCount -= 1.0;}\
-        else{*dist.U16++ = *src.U16++;divCount += divPow;}\
-    }\
-    src.U8 = record->data_buf;\
-    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
-}\
-else\
-{\
-    memcpy(&record->data_buf[frame_size], record->data_buf, frame_size);\
-    for(count = 0, src.U8 = &record->data_buf[frame_size], dist.U8 = record->data_buf; count < frame_size; count++)\
-    {\
-        if(divCount >= 1.0){src.U16++;divCount -= 1.0;}\
-        else{*dist.U16++ = *src.U16;*dist.U16++ = *src.U16++;divCount += divPow;}\
-    }\
-    src.U8 = record->data_buf;\
-    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
-}
-#else
-#define RECORD_DATA_TRANSFER()  \
-if(chn == 1)\
-{\
-    for(count = 0, src.U8 = dist.U8 = record->data_buf; count < frame_size; count++)\
-    {\
-        if(divCount >= 1.0){src.U16++;src.U16++;divCount -= 1.0;}\
-        else{*dist.U16++ = *src.U16++;src.U16++;divCount += divPow;}\
-    }\
-    src.U8 = record->data_buf;\
-    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
-}\
-else\
-{\
-    for(count = 0, src.U8 = dist.U8 = record->data_buf; count < frame_size; count++)\
-    {\
-        if(divCount >= 1.0){src.U32++;divCount -= 1.0;}\
-        else{*dist.U32++ = *src.U32++;divCount += divPow;}\
-    }\
-    src.U8 = record->data_buf;\
-    buffSize2 = (size_t)(dist.U32 - src.U32)*4;\
-}
-#endif
-#endif
 
 void signal_get_SIGPIPE(int id){}
 
@@ -1035,15 +1138,11 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
     float divCount, divPow;
     //
     int fd_write;
-#if(WMIX_MODE==1)
-    int16_t record_addr;
+    int16_t record_addr = -1;
 #if(WMIX_CHANNELS == 1)
     unsigned char buff[1024];
 #else
     unsigned char buff[512];
-#endif
-#else
-    SNDPCMContainer_t *record = NULL;
 #endif
     //
     uint8_t loopWord;
@@ -1065,13 +1164,10 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
     record_addr = hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
     if(record_addr < 0){
-#else
-    record = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
-    if(!record){
-#endif
         fprintf(stderr, "wmix_record_wav_fifo_thread: wmix_alsa_init err\n");
         return;
     }
+#endif
     //
     if (mkfifo(path, 0666) < 0 && errno != EEXIST){
         fprintf(stderr, "wmix_record_wav_fifo_thread: mkfifo err\n");
@@ -1084,16 +1180,11 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ;
     bytes_p_second2 = chn*sample/8*freq;
-#if(WMIX_MODE==1)
     frame_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
 #if(WMIX_CHANNELS == 1)
     buffSize = sizeof(buff)/2;
 #else
     buffSize = sizeof(buff);
-#endif
-#else
-    buffSize = record->chunk_bytes;
-    frame_size = buffSize/(WMIX_CHANNELS*WMIX_SAMPLE/8);
 #endif
     //
     divPow = (float)(WMIX_FREQ - freq)/freq;
@@ -1110,7 +1201,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = SNDWAV_ReadPcm(record, frame_size)*(WMIX_CHANNELS*WMIX_SAMPLE/8);
+        ret = wmix_mem_read(buff, buffSize/2, &record_addr, false)*2;
 #endif
         if(ret > 0)
         {
@@ -1129,11 +1220,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
             //不同频率和通道数的数据处理
             RECORD_DATA_TRANSFER();
             //
-#if(WMIX_MODE==1)
             ret = write(fd_write, buff, buffSize2);
-#else
-            ret = write(fd_write, record->data_buf, buffSize2);
-#endif
             if(ret < 0 && errno != EAGAIN)
                 break;
         }
@@ -1148,12 +1235,6 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
             fsync(fd_write);
         }
     }
-    //
-#if(WMIX_MODE==1)
-    // hiaudio_ai_exit();
-#else
-    wmix_alsa_release(record);
-#endif
     close(fd_write);
     //
     if(wmtp->wmix->debug) printf(">> FIFO-R: %s end <<\n", path);
@@ -1184,15 +1265,11 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
     //
     int fd;
     WAVContainer_t wav;
-#if(WMIX_MODE==1)
-    int16_t record_addr;
+    int16_t record_addr = -1;
 #if(WMIX_CHANNELS == 1)
     unsigned char buff[1024];
 #else
     unsigned char buff[512];
-#endif
-#else
-    SNDPCMContainer_t *record = NULL;
 #endif
     //
     uint8_t loopWord;
@@ -1227,27 +1304,19 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
     record_addr = hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
     if(record_addr < 0){
-#else
-    record = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
-    if(!record){
-#endif
         close(fd);
         fprintf(stderr, "wmix_record_wav_thread: hiaudio_ai_init err\n");
         return;
     }
+#endif
     //
     bytes_p_second = WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ;
     bytes_p_second2 = chn*sample/8*freq;
-#if(WMIX_MODE==1)
     frame_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
 #if(WMIX_CHANNELS == 1)
     buffSize = sizeof(buff)/2;
 #else
     buffSize = sizeof(buff);
-#endif
-#else
-    buffSize = record->chunk_bytes;
-    frame_size = buffSize/(WMIX_CHANNELS*WMIX_SAMPLE/8);
 #endif
     TOTAL = bytes_p_second*duration_time;
     //
@@ -1271,11 +1340,10 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = SNDWAV_ReadPcm(record, frame_size)*(WMIX_CHANNELS*WMIX_SAMPLE/8);
+        ret = wmix_mem_read(buff, buffSize/2, &record_addr, false)*2;
 #endif
         if(ret > 0)
         {
-            //
             bpsCount += ret;
             total += ret;
             //录制时间
@@ -1291,11 +1359,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
             //不同频率和通道数的数据处理
             RECORD_DATA_TRANSFER();
             //
-#if(WMIX_MODE==1)
             ret = write(fd, buff, buffSize2);
-#else
-            ret = write(fd, record->data_buf, buffSize2);
-#endif
             if(ret < 0 && errno != EAGAIN)
             {
                 fprintf(stderr, "wmix_record_wav_thread: write err %d\n", errno);
@@ -1307,18 +1371,13 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_wav_thread: hiaudio_ai_read err %d\n", ret);
+            fprintf(stderr, "wmix_record_wav_thread: read err %d\n", ret);
             break;
         }
         else
             delayus(5000);
     }
     //
-#if(WMIX_MODE==1)
-    // hiaudio_ai_exit();
-#else
-    wmix_alsa_release(record);
-#endif
     close(fd);
     //
     if(wmtp->wmix->debug) printf(">> RECORD-WAV: %s end <<\n", path);
@@ -1350,11 +1409,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     //
     void *aacEnc = NULL;
     unsigned char *buff, *buff2, *pBuff2_S, *pBuff2_E, buffSizeR;
-#if(WMIX_MODE==1)
-    int16_t record_addr;
-#else
-    SNDPCMContainer_t *record = NULL;
-#endif
+    int16_t record_addr = -1;
     //
     unsigned char aacBuff[4096];
     //
@@ -1383,14 +1438,11 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
     record_addr = hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
     if(record_addr < 0){
-#else
-    record = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
-    if(!record){
-#endif
         close(fd);
         fprintf(stderr, "wmix_record_aac_thread: wmix_alsa_init err\n");
         return;
     }
+#endif
     //
     bytes_p_second = WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ;
     bytes_p_second2 = chn*sample/8*freq;
@@ -1423,7 +1475,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = SNDWAV_ReadPcm(record, buffSize/(WMIX_CHANNELS*WMIX_SAMPLE/8))*(WMIX_CHANNELS*WMIX_SAMPLE/8);
+        ret = wmix_mem_read(buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -1472,18 +1524,13 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_aac_thread: hiaudio_ai_read err %d\n", ret);
+            fprintf(stderr, "wmix_record_aac_thread: read err %d\n", ret);
             break;
         }
         else
             delayus(10000);
     }
     //
-#if(WMIX_MODE==1)
-    // hiaudio_ai_exit();
-#else
-    wmix_alsa_release(record);
-#endif
     close(fd);
     free(buff);
     free(buff2);
@@ -1661,12 +1708,10 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_rtp_send_aac_thread: hiaudio_ai_read err %d\n", ret);
+            fprintf(stderr, "wmix_rtp_send_aac_thread: read err %d\n", ret);
             break;
         }
     }
-    //
-    // hiaudio_ai_exit();
     //
     if(wmtp->wmix->debug) printf(">> RTP-SEND-AAC: %s:%d end <<\n", path, port);
     //线程计数
@@ -1716,6 +1761,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     int retSize;
     //
+    int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
@@ -1804,7 +1850,8 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             //等播放指针赶上写入进度
             if(total2 > totalWait)
             {
-                while(wmtp->wmix->run &&
+                timeout = 0;
+                while(wmtp->wmix->run && timeout++ < 200 &&
                     loopWord == wmtp->wmix->loopWordRtp &&
                     get_tick_err(wmtp->wmix->tick, tick) < 
                     total2 - totalWait)
@@ -1887,12 +1934,8 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     //
     __time_t tick1, tick2;
     //
-#if(WMIX_MODE==1)
-    int16_t record_addr;
+    int16_t record_addr = -1;
     unsigned char *buff;
-#else
-    SNDPCMContainer_t *record = NULL;
-#endif
     //
     RtpPacket rtpPacket;
     //
@@ -1924,16 +1967,13 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
     record_addr = hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
     if(record_addr < 0){
-#else
-    record = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
-    if(!record){
-#endif
 #if(!RTP_ONE_SR)
         free(rtp_sr);
 #endif
         fprintf(stderr, "wmix_rtp_send_pcma_thread: wmix_alsa_init err\n");
         return;
     }
+#endif
     //初始化消息
     msgPath = (char*)&wmtp->param[strlen(path)+6+1];
     if(msgPath && msgPath[0])
@@ -1955,12 +1995,8 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ;
     //每次从ai读取字节数
-#if(WMIX_MODE==1)
     buffSize = 320;
     buff = malloc(2*WMIX_SAMPLE/8*1024);
-#else
-    buffSize = 320/(WMIX_CHANNELS*WMIX_SAMPLE/8);
-#endif
     //
     if(wmtp->wmix->debug) printf("<< RTP-SEND-PCM: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n\n", 
         path, port, chn, sample, freq);
@@ -2011,7 +2047,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = SNDWAV_ReadPcm(record, buffSize)*(WMIX_CHANNELS*WMIX_SAMPLE/8);
+        ret = wmix_mem_read(buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -2028,11 +2064,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 }
             }
             //
-#if(WMIX_MODE==1)
             ret = PCM2G711a(buff, rtpPacket.payload, ret, 0);
-#else
-            ret = PCM2G711a(record->data_buf, rtpPacket.payload, ret, 0);
-#endif
             if(ctrl == 0)
             {
                 if(rtp_send(rtp_sr, &rtpPacket, ret) < ret)
@@ -2057,16 +2089,10 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         }
         else
         {
-            fprintf(stderr, "wmix_rtp_send_pcma_thread: hiaudio_ai_read err %d\n", ret);
+            fprintf(stderr, "wmix_rtp_send_pcma_thread: read err %d\n", ret);
             break;
         }
     }
-    //
-#if(WMIX_MODE==1)
-    // hiaudio_ai_exit();
-#else
-    wmix_alsa_release(record);
-#endif
     //
     if(wmtp->wmix->debug) printf(">> RTP-SEND-PCM: %s:%d end <<\n", path, port);
     //线程计数
@@ -2118,6 +2144,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     int retSize;
     //
+    int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
@@ -2205,7 +2232,8 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         //等播放指针赶上写入进度
         // if(total2 > totalWait)
         // {
-        //     while(wmtp->wmix->run &&
+        //     timeout = 0;
+        //     while(wmtp->wmix->run && timeout++ < 200 &&
         //         loopWord == wmtp->wmix->loopWordRtp &&
         //         get_tick_err(wmtp->wmix->tick, tick) < 
         //         total2 - totalWait)
@@ -2683,15 +2711,18 @@ WMix_Struct *wmix_init(void)
         return NULL;
 #else
 	SNDPCMContainer_t *playback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'p');
-    //
     if(!playback)
         return NULL;
+    //
+    SNDPCMContainer_t *recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
+
 #endif
     //
 	wmix = (WMix_Struct *)calloc(1, sizeof(WMix_Struct));
     wmix->buff = (uint8_t *)calloc(WMIX_BUFF_SIZE+4, sizeof(uint8_t));
 #if(WMIX_MODE!=1)
     wmix->playback = playback;
+    wmix->recordback = recordback;
 #endif
     wmix->start.U8 = wmix->head.U8 = wmix->tail.U8 = wmix->buff;
     wmix->end.U8 = wmix->buff + WMIX_BUFF_SIZE;
@@ -2699,6 +2730,7 @@ WMix_Struct *wmix_init(void)
     // pthread_mutex_init(&wmix->lock, NULL);
     wmix->run = 1;
     wmix->reduceMode = 1;
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_circle);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
     //
@@ -3032,6 +3064,7 @@ void wmix_load_wav(
     //消息通信
     WMix_Msg msg;
     //系统更新loopWord时,会关闭该条播放
+    int timeout;
     uint8_t loopWord;
     loopWord = wmix->loopWord;
     //
@@ -3124,7 +3157,8 @@ void wmix_load_wav(
             //等播放指针赶上写入进度
             if(total2 > totalWait)
             {
-                while(wmix->run && 
+                timeout = 0;
+                while(wmix->run && timeout++ < 200 &&
                     loopWord == wmix->loopWord &&
                     get_tick_err(wmix->tick, tick) < 
                     total2 - totalWait)
@@ -3242,6 +3276,7 @@ void wmix_load_aac(
     int freq;
     uint32_t bytes_p_second;
     //系统更新loopWord时,会关闭该条播放
+    int timeout;
     uint8_t loopWord;
     loopWord = wmix->loopWord;
     //
@@ -3305,7 +3340,8 @@ void wmix_load_aac(
             //等播放指针赶上写入进度
             if(total2 > totalWait)
             {
-                while(wmix->run && 
+                timeout = 0;
+                while(wmix->run && timeout++ < 200 &&
                     loopWord == wmix->loopWord &&
                     get_tick_err(wmix->tick, tick) < 
                     total2 - totalWait)
@@ -3442,6 +3478,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     WMix_Mp3 *wmm = data;
     uint32_t count = 0, second;
     int16_t *val = (int16_t*)&pcm->samples[0][count];
+    int timeout;
     //
     if(!wmm->wmix->run || wmm->loopWord != wmm->wmix->loopWord)
         return MAD_FLOW_STOP;
@@ -3496,7 +3533,8 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     //等待消化
     if(wmm->total2 > wmm->totalWait)
     {
-        while(wmm->wmix->run && 
+        timeout = 0;
+        while(wmm->wmix->run && timeout++ < 200 &&
             wmm->loopWord == wmm->wmix->loopWord &&
             get_tick_err(wmm->wmix->tick, wmm->tick) < 
             wmm->total2 - wmm->totalWait)

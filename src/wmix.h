@@ -42,7 +42,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.4 - 20200303"
+#define WMIX_VERSION "V3.4 - 20200305"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -50,9 +50,9 @@ typedef struct SNDPCMContainer {
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#define WMIX_CHANNELS    2
+#define WMIX_CHANNELS    1
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        16000
+#define WMIX_FREQ        8000
 
 typedef struct{
     //type[0,7]:
@@ -98,7 +98,7 @@ typedef struct{
 
 typedef struct{
 #if(WMIX_MODE!=1)
-    SNDPCMContainer_t *playback;
+    SNDPCMContainer_t *playback, *recordback;
 #endif
     uint8_t *buff;//缓冲区
     WMix_Point start, end;//缓冲区头尾指针

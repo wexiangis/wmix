@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define WMIX_VERSION "V3.4 - 20200303"
+#define WMIX_VERSION "V3.4 - 20200305"
 
 //----- 设置音量 count/div 例如: 30% -> wmix_set_volume(3,10) -----
 //count: 音量  div: 分度
