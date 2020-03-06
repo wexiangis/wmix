@@ -440,18 +440,6 @@ bool wmix_check_id(int id)
     return false;
 }
 
-void wmix_log(int b)
-{
-    WMix_Msg msg;
-    //msg初始化
-    MSG_INIT();
-    //装填 message
-    msg.type = 100;
-    msg.value[0] = b;
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-}
-
 //============= shm =============
 
 #include <sys/shm.h>
@@ -462,9 +450,9 @@ typedef struct{
     int16_t buff[AI_CIRCLE_BUFF_LEN+4];
 }ShmemAi_Circle;
 
-static ShmemAi_Circle *ai_circle = NULL;
+static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL;
 
-int shm_create(char *path, int flag, int size, void **mem)
+int wmix_mem_create(char *path, int flag, int size, void **mem)
 {
     key_t key = ftok(path, flag);
     if(key < 0)
@@ -487,7 +475,7 @@ int shm_create(char *path, int flag, int size, void **mem)
     return id;
 }
 
-int shm_destroy(int id)
+int wmix_mem_destroy(int id)
 {
 	return shmctl(id,IPC_RMID,NULL);
 }
@@ -499,7 +487,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     //
     if(!ai_circle)
     {
-        shm_create("/tmp/wmix", 'h', sizeof(ShmemAi_Circle), &ai_circle);
+        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ai_circle);
         if(!ai_circle)
         {
             fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
@@ -532,3 +520,42 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
+int16_t wmix_mem_write(int16_t *dat, int16_t len)
+{
+    int16_t i = 0;
+    //
+    if(!ao_circle)
+    {
+        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), &ao_circle);
+        if(!ao_circle)
+        {
+            fprintf(stderr, "wmix_mem_write: shm_create err !!\n");
+            return 0;
+        }
+        //
+        ao_circle->w = 0;
+    }
+    //
+    for(i = 0; i < len; i++)
+    {
+        ao_circle->buff[ao_circle->w++] = *dat++;
+        if(ao_circle->w >= AI_CIRCLE_BUFF_LEN)
+            ao_circle->w = 0;
+    }
+    //
+    return i;
+}
+
+//============= shm =============
+
+void wmix_log(int b)
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT();
+    //装填 message
+    msg.type = 100;
+    msg.value[0] = b;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+}

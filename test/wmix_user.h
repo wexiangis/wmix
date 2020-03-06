@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define WMIX_VERSION "V3.5 - 20200305"
+#define WMIX_VERSION "V3.5 - 20200306"
 
 //----- 设置音量 count/div 例如: 30% -> wmix_set_volume(3,10) -----
 //count: 音量  div: 分度
@@ -107,6 +107,8 @@ int wmix_reset(void);
 //检查指定id的音频是否存在
 bool wmix_check_id(int id);
 
+void wmix_log(int b);
+
 //从共享内存读取录音数据
 //dat: 传入数据保存地址
 //len: 按int16_t计算的数据长度
@@ -115,8 +117,7 @@ bool wmix_check_id(int id);
 //返回: 按int16_t计算的数据长度
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 
-//开关系统log
-void wmix_log(int b);
+int16_t wmix_mem_write(int16_t *dat, int16_t len);
 
 #ifdef __cplusplus
 };

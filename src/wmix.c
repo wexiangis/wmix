@@ -814,9 +814,9 @@ typedef struct{
     int16_t buff[AI_CIRCLE_BUFF_LEN+4];
 }ShmemAi_Circle;
 
-static ShmemAi_Circle *ai_circle = NULL;
+static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL;
 
-int shm_create(char *path, int flag, int size, void **mem)
+int wmix_mem_create(char *path, int flag, int size, void **mem)
 {
     key_t key = ftok(path, flag);
     if(key < 0)
@@ -839,7 +839,7 @@ int shm_create(char *path, int flag, int size, void **mem)
     return id;
 }
 
-int shm_destroy(int id)
+int wmix_mem_destroy(int id)
 {
 	return shmctl(id,IPC_RMID,NULL);
 }
@@ -851,18 +851,14 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     //
     if(!ai_circle)
     {
-        // shm_create("/tmp/wmix", 'h', sizeof(ShmemAi_Circle), &ai_circle);
-        // if(!ai_circle)
-        // {
-        //     fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
-        //     return 0;
-        // }
-        // //
-        // w = ai_circle->w;
-        
-        //共享内存尚未初始化,返回空数据
-        *addr = -1;
-        return len;
+        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), &ai_circle);
+        if(!ai_circle)
+        {
+            fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
+            return 0;
+        }
+        //
+        w = ai_circle->w;
     }
     //
     if(w < 0 || w >= AI_CIRCLE_BUFF_LEN)
@@ -892,30 +888,31 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
     //
-    if(!ai_circle)
+    if(!ao_circle)
     {
-        shm_create("/tmp/wmix", 'h', sizeof(ShmemAi_Circle), &ai_circle);
-        if(!ai_circle)
+        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ao_circle);
+        if(!ao_circle)
         {
-            fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
+            fprintf(stderr, "wmix_mem_write: shm_create err !!\n");
             return 0;
         }
         //
-        ai_circle->w = 0;
+        ao_circle->w = 0;
     }
     //
     for(i = 0; i < len; i++)
     {
-        ai_circle->buff[ai_circle->w++] = *dat++;
-        if(ai_circle->w >= AI_CIRCLE_BUFF_LEN)
-            ai_circle->w = 0;
+        ao_circle->buff[ao_circle->w++] = *dat++;
+        if(ao_circle->w >= AI_CIRCLE_BUFF_LEN)
+            ao_circle->w = 0;
     }
     //
     return i;
 }
 
-void wmix_shmem_circle(WMixThread_Param *wmtp)
+void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
+#if(WMIX_MODE==0)
     WMix_Struct *wmix = wmtp->wmix;
     //
     size_t frame_size, ret;
@@ -924,6 +921,7 @@ void wmix_shmem_circle(WMixThread_Param *wmtp)
     if(wmix->recordback)
         frame_size = wmix->recordback->chunk_bytes/pak_size;
     //
+    wmix->thread_record += 1;
     while(wmix->run)
     {
         if(wmix->recordback)
@@ -944,12 +942,88 @@ void wmix_shmem_circle(WMixThread_Param *wmtp)
         }
         delayus(10000);
     }
+    wmix->thread_record -= 1;
     //
     if(wmix->recordback)
     {
         wmix_alsa_release(wmix->recordback);
         wmix->recordback = NULL;
     }
+#endif
+}
+
+void wmix_shmem_read_circle(WMixThread_Param *wmtp)
+{
+#if 0
+    WMix_Struct *wmix = wmtp->wmix;
+    //
+    uint8_t buff[320];
+    int16_t addr = -1, ret;
+    WMix_Point head, src;
+    uint32_t tick;
+    uint8_t rdce = 2;
+    //
+    uint32_t bpsCount = 0, total = 0, totalWait;
+    uint32_t second = 0, bytes_p_second = WMIX_FREQ*WMIX_CHANNELS*WMIX_SAMPLE/8;
+    int timeout;
+    //
+    //独占 reduceMode
+    if(rdce > 1)
+        wmix->reduceMode = rdce;
+    //
+    src.U8 = buff;
+    head.U8 = 0;
+    tick = wmix->tick;
+    wmix->tickVip = 0;
+    //
+    totalWait = bytes_p_second/2;
+    //
+    wmix->thread_play += 1;
+    //
+    while(wmix->run)
+    {
+        ret = wmix_mem_read((int16_t*)buff, 160, &addr, false)*2;
+        if(ret > 0)
+        {
+            //等播放指针赶上写入进度
+            // timeout = 0;
+            // while(wmix->run && timeout++ < 200 &&
+            //     tick > wmix->tick && 
+            //     tick - wmix->tick > totalWait)
+            //     delayus(5000);
+            // if(!wmix->run)
+            //     break;
+            //
+            head = wmix_load_wavStream(
+                wmix, 
+                src, ret, WMIX_FREQ, WMIX_CHANNELS, WMIX_SAMPLE, head, rdce, &wmix->tickVip);
+            //
+            bpsCount += ret;
+            total += ret;
+            //播放时间
+            if(bpsCount > bytes_p_second)
+            {
+                bpsCount -= bytes_p_second;
+                second = total/bytes_p_second;
+                if(wmix->debug) printf("  SHMEM-PLAY: %02d:%02d\n", second/60, second%60);
+            }
+            //
+            delayus(1000);
+            continue;
+        }
+        //
+        delayus(10000);
+    }
+    //
+    wmix->thread_play -= 1;
+    //
+    wmix->tickVip = 0;
+    //
+    if(wmix->debug) printf(">> SHMEM-PLAY: end <<\n");
+    //
+    if(rdce > 1)
+        wmix->reduceMode = 1;
+#endif
 }
 
 //============= shm =============
@@ -1010,6 +1084,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     src.U8 = buff;
     head.U8 = 0;
     tick = 0;
+    wmtp->wmix->tickVip = 0;
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
@@ -1029,7 +1104,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
             //
             head = wmix_load_wavStream(
                 wmtp->wmix, 
-                src, ret, freq, chn, sample, head, rdce, &tick);
+                src, ret, freq, chn, sample, head, rdce, &wmtp->wmix->tickVip);
             if(head.U8 == 0)
                 break;
             //
@@ -1050,6 +1125,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
         //
         delayus(5000);
     }
+    wmtp->wmix->tickVip = 0;
     //
     if(wmtp->wmix->debug) printf(">> FIFO-W: %s end <<\n", path);
     //
@@ -2525,7 +2601,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
         //清tick
         if(wmix->thread_play == 0 && 
             wmix->head.U8 == wmix->tail.U8)
-            wmix->tick = wmix->tickTial = 0;
+            wmix->tick = wmix->tickTial = wmix->tickVip = 0;
         //
         delayus(10000);
     }
@@ -2576,7 +2652,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 t2 = getTickUs() - t1;
                 if(tt > t2)
                     tt -= t2;
-                delayus((unsigned int)(tt*0.9));
+                delayus((unsigned int)(tt*0.85));
             }
 
             t1 = getTickUs();
@@ -2740,7 +2816,8 @@ WMix_Struct *wmix_init(void)
     // pthread_mutex_init(&wmix->lock, NULL);
     wmix->run = 1;
     wmix->reduceMode = 1;
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_circle);
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle);
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_read_circle);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
     //
@@ -2788,14 +2865,18 @@ WMix_Point wmix_load_wavStream(
     //srcU8Len 计数
     uint32_t count, tickAdd = 0;
     uint8_t *rdce = &wmix->reduceMode, rdce1 = 1;
+    bool isVip = false;
     //
     if(!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;
     //
+    if(&wmix->tickVip == tick)
+        isVip = true;
+    //
     if(!pHead.U8 || (*tick) < wmix->tick)
     {
-        (*tick) = wmix->tick;
         pHead.U8 = wmix->head.U8;
+        (*tick) = wmix->tick;
     }
     //
     if(reduce == wmix->reduceMode)
@@ -3062,6 +3143,7 @@ WMix_Point wmix_load_wavStream(
     //     wmix->tail.U8 = wmix->vipWrite.U8;
 
     tickAdd += (*tick);
+    
     //当前播放指针已慢于播放指针,更新为播放指针
     if(tickAdd < wmix->tick)
     {
@@ -3069,7 +3151,10 @@ WMix_Point wmix_load_wavStream(
         pHead.U8 = wmix->head.U8;
     }
     //比较当前尾指针,谁播放的最快,以谁为准
-    if(tickAdd > wmix->tickTial)
+    if((isVip && tickAdd > wmix->tick) || 
+        (tickAdd > wmix->tickTial && 
+        (wmix->tickVip <= wmix->tick || 
+        wmix->tickTial < wmix->tick)))
     {
         wmix->tickTial = tickAdd;
         wmix->tail.U8 = pHead.U8;
@@ -3812,7 +3897,8 @@ int main(int argc, char **argv)
             {
                 delayus(500000);
                 main_wmix->run = 1;
-                wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_shmem_circle);
+                wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_shmem_write_circle);
+                wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_shmem_read_circle);
                 wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_msg_thread);
                 wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_play_thread);
             }

@@ -66,6 +66,9 @@ target: wmixmsg
 wmixmsg:
 	@$(cc) -Wall -o wmixMsg $(obj-wmixmsg) -lpthread
 
+fifo:
+	@$(cc) -Wall -o fifo -lpthread -I./test -I./src ./test/fifo.c ./test/wmix_user.c ./src/wav.c
+
 sendRecvTest:
 	@$(cc) -Wall -o sendpcm $(obj-sendpcm) -I./src
 	@$(cc) -Wall -o recvpcm $(obj-recvpcm) -I./src
@@ -112,4 +115,4 @@ cleanall: clean
 	@rm -rf $(ROOT)/libs/* -rf
 
 clean:
-	@rm -rf ./wmix ./wmixMsg ./sendpcm ./recvpcm ./sendaac ./recvaac
+	@rm -rf ./wmix ./wmixMsg ./sendpcm ./recvpcm ./sendaac ./recvaac ./fifo

@@ -81,7 +81,9 @@ typedef struct WAVContainer {
 
 //---------- interface ----------
 
+//返回: 0：正常 -1:错误
 int WAV_ReadHeader(int fd, WAVContainer_t *container);
+//返回: 0：正常 -1:错误
 int WAV_WriteHeader(int fd, WAVContainer_t *container);
 void WAV_Params(WAVContainer_t *wav,uint32_t duration_time, uint8_t chn, uint8_t sample, uint16_t freq);
 

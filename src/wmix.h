@@ -42,7 +42,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.5 - 20200305"
+#define WMIX_VERSION "V3.5 - 20200306"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -102,7 +102,7 @@ typedef struct{
 #endif
     uint8_t *buff;//缓冲区
     WMix_Point start, end;//缓冲区头尾指针
-    WMix_Point head, tail, vipWrite;//当前缓冲区读写指针
+    WMix_Point head, tail;//当前缓冲区读写指针
     // pthread_mutex_t lock;//互斥锁
     //
     uint8_t run;//全局正常运行标志
@@ -110,7 +110,7 @@ typedef struct{
     uint8_t loopWordRecord;
     uint8_t loopWordFifo;
     uint8_t loopWordRtp;
-    uint32_t tick, tickTial;//播放指针启动至今走过的字节数
+    uint32_t tick, tickTial, tickVip;//播放指针启动至今走过的字节数
     //
     uint32_t thread_sys;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
     uint32_t thread_record;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
