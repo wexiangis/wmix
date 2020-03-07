@@ -5,8 +5,17 @@
 #define WMIX_MODE 0
 
 //选择启用,记得改Makefile取消库链接
-#define WMIX_MP3 0
-#define WMIX_AAC 0
+#ifdef MAKE_MP3
+#define WMIX_MP3 MAKE_MP3
+#else
+#define WMIX_MP3 1
+#endif
+
+#ifdef MAKE_AAC
+#define WMIX_AAC MAKE_AAC
+#else
+#define WMIX_AAC 1
+#endif
 
 //rtp发收同fd
 #if(WMIX_MODE!=1)

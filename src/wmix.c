@@ -1617,7 +1617,6 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
-#if(WMIX_MODE==1)
 void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
 {
     char *path = (char*)&wmtp->param[6];
@@ -1637,9 +1636,9 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
     float divCount, divPow;
     //
-    int16_t record_addr;
+    int16_t record_addr = -1;
     unsigned char *buff, *buff2, *pBuff2_S, *pBuff2_E;
-    void *aacEncFd;
+    void *aacEnc = NULL;
     unsigned char aacbuff[2048];
     //
     SocketStruct *ss;
@@ -1669,19 +1668,21 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_AAC, 1, 0, 0, 0x32411);
     //初始化编码器
-    if(!(aacEncFd = hiaudio_aacEnc_init(chn, sample, freq))){
-        fprintf(stderr, "hiaudio_aacEnc_init: err\n");
-        free(ss);
-        return;
-    }
+    // if(!(aacEncFd = hiaudio_aacEnc_init(chn, sample, freq))){
+    //     fprintf(stderr, "hiaudio_aacEnc_init: err\n");
+    //     free(ss);
+    //     return;
+    // }
     //初始化ai
+#if(WMIX_MODE==1)
     record_addr = hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
     if(record_addr < 0){
-        hiaudio_aacEnc_deinit(aacEncFd);
+        // hiaudio_aacEnc_deinit(aacEncFd);
         free(ss);
         fprintf(stderr, "wmix_record_aac_thread: wmix_alsa_init err\n");
         return;
     }
+#endif
     //初始化消息
     msgPath = (char*)&wmtp->param[strlen(path)+6+1];
     if(msgPath && msgPath[0])
@@ -1732,7 +1733,11 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                 break;
         }
         //
+#if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
+#else
+        ret = wmix_mem_read(buff, buffSize/2, &record_addr, true)*2;
+#endif
         if(ret > 0)
         {
             bpsCount += ret;
@@ -1755,7 +1760,8 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
             //
             while(pBuff2_E - pBuff2_S >= buffSizeR)
             {
-                ret = hiaudio_aacEnc(aacEncFd, pBuff2_S, aacbuff);
+                // ret = hiaudio_aacEnc(aacEncFd, pBuff2_S, aacbuff);
+                ret = aac_encode(&aacEnc, pBuff2_S, buffSizeR, aacbuff, 4096, chn, freq);
                 if(ret > 0)
                 {
                     ret -= 7;
@@ -1795,7 +1801,8 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     close(ss->fd);
     free(ss);
     //
-    hiaudio_aacEnc_deinit(aacEncFd);
+    if(aacEnc)
+        aac_encodeRelease(&aacEnc);
     if(wmtp->param)
         free(wmtp->param);
     free(wmtp);
@@ -1816,15 +1823,15 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint32_t bytes_p_second;
     //
     ssize_t ret = 0;
-    uint8_t buff[4096];
+    uint8_t buff[8192];
     uint32_t buffSize, buffSize2;
     WMix_Point head, src;
     uint32_t tick, total = 0, total2 = 0, totalWait;
     uint32_t second = 0, bpsCount = 0;
     double totalPow;
     uint8_t rdce = 2, rdceIsMe = 0;
-    //
-    void *aacDecFd = NULL;
+    //aac解码句柄
+    void *aacDec = NULL;
     int readLen, datUse = 0, retLen;
     unsigned char aacBuff[2048];
     //
@@ -1842,13 +1849,13 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化解码器
-    aacDecFd = hiaudio_aacDec_init();
-    if(!aacDecFd)
-    {
-        free(ss);
-        fprintf(stderr, "hiaudio_aacDec_init: err\n");
-        return;
-    }
+    // aacDecFd = hiaudio_aacDec_init();
+    // if(!aacDecFd)
+    // {
+    //     free(ss);
+    //     fprintf(stderr, "hiaudio_aacDec_init: err\n");
+    //     return;
+    // }
     //初始化消息
     msgPath = (char*)&wmtp->param[strlen(path)+6+1];
     if(msgPath && msgPath[0])
@@ -1906,12 +1913,17 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
         {
             memcpy(&aacBuff[7], &rtpPacket.payload[4], retSize);
             aac_createHeader(aacBuff, chn, freq, 0x7FF, retSize);
-            retLen = hiaudio_aacDec(
-                aacDecFd, 
-                &chn, 
-                &sample, 
-                &freq, 
-                &datUse, aacBuff, retSize+7, buff);
+            // retLen = hiaudio_aacDec(
+            //     aacDecFd, 
+            //     &chn, 
+            //     &sample, 
+            //     &freq, 
+            //     &datUse, aacBuff, retSize+7, buff);
+            retLen = aac_decode(
+                &aacDec, 
+                aacBuff, retSize+7, 
+                buff, &datUse, 
+                &chn, &freq);
         }
         else
             retLen = -1;
@@ -1958,7 +1970,8 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
         remove(msgPath);
     close(ss->fd);
     free(ss);
-    hiaudio_aacDec_deinit(aacDecFd);
+    if(aacDec)
+        aac_decodeRelease(&aacDec);
     //线程计数
     wmtp->wmix->thread_play -= 1;
     //
@@ -1969,7 +1982,6 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
         wmtp->wmix->reduceMode = 1;
     free(wmtp);
 }
-#endif
 #endif //if(WMIX_AAC)
 
 #if(RTP_ONE_SR)

@@ -1,5 +1,10 @@
-cross:=arm-linux-gnueabihf
+# cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
+# cross:=arm-himix100-linux
+
+# 选择启用音频库 0/关 1/启用
+MAKE_MP3=1
+MAKE_AAC=1
 
 host:=
 cc:=gcc
@@ -20,16 +25,19 @@ obj-wmix+=./src/wmix.c \
 		./src/rtp.h \
 		./src/g711codec.c \
 		./src/g711codec.h
-obj-libs += -lm -lpthread -lasound -ldl
+obj-flags += -lm -lpthread -lasound -ldl
 
 # MP3 LIB
-# obj-libs += -lmad
-# obj-wmix+=./src/id3.c ./src/id3.h
+ifeq ($(MAKE_MP3),1)
+obj-wmix+=./src/id3.c ./src/id3.h
+obj-flags += -lmad
+endif
 
 # AAC LIB
-# obj-wmix+=./src/aac.c ./src/aac.h
-# obj-libs += -lfaac -lfaad
-
+ifeq ($(MAKE_AAC),1)
+obj-wmix+=./src/aac.c ./src/aac.h
+obj-flags += -lfaac -lfaad
+endif
 
 obj-wmixmsg+=./test/wmix_user.c \
 		./test/wmix_user.h \
@@ -60,7 +68,7 @@ obj-recvaac+=./test/recvAAC.c \
 		./src/aac.h
 
 target: wmixmsg
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-libs)
+	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
