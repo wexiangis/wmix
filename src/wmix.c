@@ -2639,7 +2639,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
     WMix_Point dist;
-    uint32_t count = 0, countTotal = 0;
+    uint32_t count = 0, countTotal = 0, tmpTick;
     __time_t t1 = 0, t2 = 0, tt = 0;
     int error_count = 0;
     double dataToTime = 1000000/(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ);
@@ -2654,7 +2654,12 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     //
     while(wmix->run)
     {
-        if(wmix->head.U8 != wmix->tail.U8)
+        if(wmix->tickVip == 0)
+            tmpTick = wmix->tickTial;
+        else
+            tmpTick = wmix->tickVip;
+        //
+        if(wmix->tick < tmpTick)
         {
             if(wmix->head.U8 >= wmix->end.U8)
                 wmix->head.U8 = wmix->start.U8;
@@ -2664,32 +2669,30 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 t2 = getTickUs() - t1;
                 if(tt > t2)
                     tt -= t2;
-                delayus((unsigned int)(tt*0.85));
+                delayus((unsigned int)(tt*0.9));
             }
 
             t1 = getTickUs();
 
             count = countTotal = 0;
 #if(WMIX_MODE==1)
-            for(dist.U8 = write_buff; 
-                wmix->head.U8 != wmix->tail.U8;)
+            for(dist.U8 = write_buff; wmix->tick < tmpTick;)
 #else
-            for(count = 0, dist.U8 = playback->data_buf; 
-                wmix->head.U8 != wmix->tail.U8;)
+            for(count = 0, dist.U8 = playback->data_buf; wmix->tick < tmpTick;)
 #endif
             {
 #if(WMIX_CHANNELS == 1)
                 //每次拷贝 2字节
                 *dist.U16++ = *wmix->head.U16;
                 *wmix->head.U16++ = 0;
-                count += 2;
                 wmix->tick += 2;
+                count += 2;
 #else
                 //每次拷贝 4字节
                 *dist.U32++ = *wmix->head.U32;
                 *wmix->head.U32++ = 0;
-                count += 4;
                 wmix->tick += 4;
+                count += 4;
 #endif
                 if(wmix->head.U8 >= wmix->end.U8)
                     wmix->head.U8 = wmix->start.U8;
@@ -2725,28 +2728,6 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             tt = countTotal*dataToTime;
 
             error_count = 0;
-        }
-        //缓冲区指针相等,tick却没有追上?
-        else if(wmix->tick != wmix->tickTial)
-        {
-            //连续1秒异常状态,重置
-            if(error_count++ > 50)
-            {
-                error_count = 0;
-                //
-                printf("\033[1m\033[40;31m wmix check err, tick/%d, tickTail/%d, reset now ..\033[0m\n",
-                    wmix->tick, wmix->tickTial);
-                //如果不是刚好超前一圈的情况,则重置所有播音,录音线程
-                if(wmix->tickTial < wmix->tick || 
-                    wmix->tickTial - wmix->tick != WMIX_BUFF_SIZE)
-                {
-                    wmix->loopWord += 1;
-                    wmix->loopWordFifo += 1;
-                    wmix->loopWordRecord += 1;
-                    wmix->loopWordRtp += 1;
-                }
-                wmix->tick = wmix->tickTial = 0;
-            }
         }
         //
         delayus(2000);
@@ -2877,13 +2858,9 @@ WMix_Point wmix_load_wavStream(
     //srcU8Len 计数
     uint32_t count, tickAdd = 0;
     uint8_t *rdce = &wmix->reduceMode, rdce1 = 1;
-    bool isVip = false;
     //
     if(!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;
-    //
-    if(&wmix->tickVip == tick)
-        isVip = true;
     //
     if(!pHead.U8 || (*tick) < wmix->tick)
     {
@@ -3154,23 +3131,43 @@ WMix_Point wmix_load_wavStream(
     // else
     //     wmix->tail.U8 = wmix->vipWrite.U8;
 
-    tickAdd += (*tick);
-    
+    // tickAdd += (*tick);
+    // //当前播放指针已慢于播放指针,更新为播放指针
+    // if(tickAdd < wmix->tick)
+    // {
+    //     tickAdd = wmix->tick;
+    //     pHead.U8 = wmix->head.U8;
+    // }
+
     //当前播放指针已慢于播放指针,更新为播放指针
-    if(tickAdd < wmix->tick)
+    if((*tick) < wmix->tick)
     {
-        tickAdd = wmix->tick;
-        pHead.U8 = wmix->head.U8;
+        pHead.U8 = wmix->head.U8 + tickAdd;
+        tickAdd += wmix->tick;
+        //
+        if(pHead.U8 >= wmix->end.U8)
+            pHead.U8 -= WMIX_BUFF_SIZE;
     }
+    else
+        tickAdd += (*tick);
+
+    // //比较当前尾指针,谁播放的最快,以谁为准
+    // if((isVip && tickAdd > wmix->tick) || 
+    //     (tickAdd > wmix->tickTial && 
+    //     (wmix->tickVip <= wmix->tick || 
+    //     wmix->tickTial < wmix->tick)))
+    // {
+    //     wmix->tickTial = tickAdd;
+    //     wmix->tail.U8 = pHead.U8;
+    // }
+
     //比较当前尾指针,谁播放的最快,以谁为准
-    if((isVip && tickAdd > wmix->tick) || 
-        (tickAdd > wmix->tickTial && 
-        (wmix->tickVip <= wmix->tick || 
-        wmix->tickTial < wmix->tick)))
+    if(tickAdd > wmix->tickTial)
     {
         wmix->tickTial = tickAdd;
         wmix->tail.U8 = pHead.U8;
     }
+
     //
     *tick = tickAdd;
     //
@@ -3245,26 +3242,17 @@ void wmix_load_wav(
     totalWait = buffSize2/2;
     //把每秒数据包拆得越细, 打断速度越快
     //以下拆包的倍数必须能同时被 wav.format.sample_rate 和 WMIX_FREQ 整除 !!
-    if(msg_fd)//在互斥播放模式时才使用
+    if(wav.format.sample_rate%4 == 0)
     {
-        if(wav.format.sample_rate%4 == 0)
-        {
-            buffSize /= 4;
-            buffSize2 /= 4;
-            totalWait = buffSize2;
-        }
-        else if(wav.format.sample_rate%3 == 0)
-        {
-            buffSize /= 3;
-            buffSize2 /= 3;
-            totalWait = buffSize2;
-        }
-        else
-        {
-            buffSize /= 2;
-            buffSize2 /= 2;
-            totalWait = buffSize2/2;
-        }
+        buffSize /= 4;
+        buffSize2 /= 4;
+        totalWait = buffSize2;
+    }
+    else if(wav.format.sample_rate%3 == 0)
+    {
+        buffSize /= 3;
+        buffSize2 /= 3;
+        totalWait = buffSize2;
     }
     else
     {

@@ -1,4 +1,4 @@
 m=audio 9832 RTP/AVP 97
-a=rtpmap:97 mpeg4-generic/32000/2
-a=fmtp:97 sizeLength=13;config=1290;
+a=rtpmap:97 mpeg4-generic/44100/2
+a=fmtp:97 sizeLength=13;config=1210;
 c=IN IP4 127.0.0.1

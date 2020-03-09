@@ -59,9 +59,9 @@ typedef struct SNDPCMContainer {
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#define WMIX_CHANNELS    1
+#define WMIX_CHANNELS    2
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        8000
+#define WMIX_FREQ        44100
 
 typedef struct{
     //type[0,7]:
