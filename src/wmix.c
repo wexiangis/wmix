@@ -884,6 +884,46 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
+int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
+{
+    int16_t i = 0;
+    int16_t w = *addr;
+    //
+    if(!ao_circle)
+    {
+        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ao_circle);
+        if(!ao_circle)
+        {
+            fprintf(stderr, "wmix_mem_read2: shm_create err !!\n");
+            return 0;
+        }
+        //
+        w = ao_circle->w;
+    }
+    //
+    if(w < 0 || w >= AI_CIRCLE_BUFF_LEN)
+        w = ao_circle->w;
+    for(i = 0; i < len; i++)
+    {
+        if(w == ao_circle->w)
+        {
+            if(wait && ao_circle)
+            {
+                usleep(1000);
+                continue;
+            }
+            break;
+        }
+        //
+        *dat++ = ao_circle->buff[w++];
+        if(w >= AI_CIRCLE_BUFF_LEN)
+            w = 0;
+    }
+    *addr = w;
+    //
+    return i;
+}
+
 int16_t wmix_mem_write(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
@@ -1272,7 +1312,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = wmix_mem_read(buff, buffSize/2, &record_addr, false)*2;
+        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, false)*2;
 #endif
         if(ret > 0)
         {
@@ -1411,7 +1451,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = wmix_mem_read(buff, buffSize/2, &record_addr, false)*2;
+        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, false)*2;
 #endif
         if(ret > 0)
         {
@@ -1546,7 +1586,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = wmix_mem_read(buff, buffSize/2, &record_addr, true)*2;
+        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -1736,7 +1776,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = wmix_mem_read(buff, buffSize/2, &record_addr, true)*2;
+        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -2125,7 +2165,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = wmix_mem_read(buff, buffSize/2, &record_addr, true)*2;
+        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -2612,8 +2652,11 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
         }
         //清tick
         if(wmix->thread_play == 0 && 
-            wmix->head.U8 == wmix->tail.U8)
+            wmix->tick == wmix->tickTial)
+        {
+            wmix->head.U8 = wmix->tail.U8;
             wmix->tick = wmix->tickTial = wmix->tickVip = 0;
+        }
         //
         delayus(10000);
     }
