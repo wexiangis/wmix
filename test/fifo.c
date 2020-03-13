@@ -10,6 +10,15 @@
 #include "wmix_user.h"
 #include "wav.h"
 
+#include <sys/time.h>
+__time_t getTickUs(void)
+{
+    struct timespec tp={0};
+    struct timeval  tv={0};
+    gettimeofday(&tv,NULL);
+    return tv.tv_sec*1000000u+tv.tv_usec;
+}
+
 //============= shm =============
 
 #include <sys/shm.h>
@@ -294,6 +303,7 @@ int main(int argc, char **argv)
     ssize_t ret, total = 0, readSize = 320;
     uint8_t buff[8192];
     WAVContainer_t container;
+    __time_t t1, t2;
 
     fd = open(argv[1], O_RDONLY);
     if(fd > 0)
@@ -311,6 +321,7 @@ int main(int argc, char **argv)
                 //跳过文件头
                 lseek(fd, 44, SEEK_SET);
                 //
+                t1 = t2 = getTickUs();
                 while(1)
                 {
                     ret = read(fd, buff, readSize);
@@ -321,7 +332,13 @@ int main(int argc, char **argv)
                     }
                     else
                         lseek(fd, 44, SEEK_SET);
-                    usleep(18500);
+                    //
+                    t2 = getTickUs();
+                    //
+                    if(t2 - t1 < 19000)
+                        usleep(19000 - (t2 - t1));
+                    //
+                    t1 = getTickUs();
                 }
                 //
                 close(stream);

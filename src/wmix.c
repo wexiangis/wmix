@@ -1565,7 +1565,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     uint16_t freq = (wmtp->param[2]<<8) | wmtp->param[3];
     uint16_t duration_time = (wmtp->param[4]<<8) | wmtp->param[5];
     //
-    size_t buffSize, buffSize2, frame_size, count;
+    size_t buffSize, buffSize2, frame_size, count, buffSizeR;
     WMix_Point src, dist;
     ssize_t ret, total = 0;
     uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0, TOTAL;
@@ -1574,7 +1574,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     int fd;
     //
     void *aacEnc = NULL;
-    unsigned char *buff, *buff2, *pBuff2_S, *pBuff2_E, buffSizeR;
+    unsigned char *buff, *buff2, *pBuff2_S, *pBuff2_E;
     int16_t record_addr = -1;
     //
     unsigned char aacBuff[4096];
@@ -2769,7 +2769,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 t2 = getTickUs() - t1;
                 if(tt > t2)
                     tt -= t2;
-                delayus((unsigned int)(tt*0.9));
+                delayus((unsigned int)(tt*0.8));
             }
 
             t1 = getTickUs();
@@ -3983,7 +3983,8 @@ void help(char *argv0)
         "\n"
         "Opition:\n"
         "  -d : 显示debug信息\n"
-        "  -v -? --help : 显示帮助\n"
+        "  -v volume : 设置音量0~10\n"
+        "  -? --help : 显示帮助\n"
         "\n"
         "软件版本: %s\n"
         "\n"
@@ -4001,32 +4002,45 @@ void wmix_start()
 #else
 int main(int argc, char **argv)
 {
-    if(argc > 1 && 
-        (strstr(argv[1], "-v") || 
-        strstr(argv[1], "-?") ||
-        strstr(argv[1], "help")))
+    int i, volume = 10;
+    char *p, *path = NULL;
+    
+    //传入参数处理
+    if(argc > 1)
     {
-        help(argv[0]);
-        return 0;
+        for(i = 1; i < argc; i++)
+        {
+            if(strstr(argv[1], "-?") || strstr(argv[1], "help"))
+            {
+                help(argv[0]);
+                return 0;
+            }
+        }
     }
 
     main_wmix = wmix_init();
 
     if(main_wmix)
     {
+        //传入参数处理
         if(argc > 1)
         {
-            int i;
-            char *p, *path = NULL;
             for(i = 1; i < argc; i++)
             {
                 p = argv[i];
-
-                if(strlen(p) == 2 && strstr(p, "-d"))
+                //
+                if(strlen(argv[i]) == 2 && strstr(argv[i], "-d"))
+                {
                     main_wmix->debug = true;
-                else if(strstr(p, ".wav") ||
-                    strstr(p, ".mp3") ||
-                    strstr(p, ".aac"))
+                }
+                else if(strlen(argv[i]) == 2 && strstr(argv[i], "-v") && i+1 < argc)
+                {
+                    sscanf(argv[++i], "%d", &volume);
+                    if(volume < 0) volume = 0;
+                    else if(volume > 10) volume = 10;
+                    sys_volume_set(volume, 10);
+                }
+                else if(strstr(p, ".wav") || strstr(p, ".mp3") || strstr(p, ".aac"))
                     path = p;
             }
             //
