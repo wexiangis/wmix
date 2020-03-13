@@ -3,8 +3,8 @@ cross:=arm-linux-gnueabihf
 # cross:=arm-himix100-linux
 
 # 选择启用音频库 0/关 1/启用
-MAKE_MP3=1
-MAKE_AAC=1
+MAKE_MP3=0
+MAKE_AAC=0
 
 host:=
 cc:=gcc
