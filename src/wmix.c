@@ -812,6 +812,53 @@ void wmix_throwOut_thread(
     pthread_attr_destroy(&attr);
 }
 
+#if(WMIX_CHANNELS == 1)
+#define RECORD_DATA_TRANSFER()  \
+if(chn == 1)\
+{\
+    for(count = 0, src.U8 = dist.U8 = buff; count < ret; count+=frame_size)\
+    {\
+        if(divCount >= 1.0){src.U16++;divCount -= 1.0;}\
+        else{*dist.U16++ = *src.U16++;divCount += divPow;}\
+    }\
+    src.U8 = buff;\
+    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
+}\
+else\
+{\
+    memcpy(&buff[ret], buff, ret);\
+    for(count = 0, src.U8 = &buff[ret], dist.U8 = buff; count < ret; count+=frame_size)\
+    {\
+        if(divCount >= 1.0){src.U16++;divCount -= 1.0;}\
+        else{*dist.U16++ = *src.U16;*dist.U16++ = *src.U16++;divCount += divPow;}\
+    }\
+    src.U8 = buff;\
+    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
+}
+#else
+#define RECORD_DATA_TRANSFER()  \
+if(chn == 1)\
+{\
+    for(count = 0, src.U8 = dist.U8 = buff; count < ret; count+=frame_size)\
+    {\
+        if(divCount >= 1.0){src.U16++;src.U16++;divCount -= 1.0;}\
+        else{*dist.U16++ = *src.U16++;src.U16++;divCount += divPow;}\
+    }\
+    src.U8 = buff;\
+    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
+}\
+else\
+{\
+    for(count = 0, src.U8 = dist.U8 = buff; count < ret; count+=frame_size)\
+    {\
+        if(divCount >= 1.0){src.U32++;divCount -= 1.0;}\
+        else{*dist.U32++ = *src.U32++;divCount += divPow;}\
+    }\
+    src.U8 = buff;\
+    buffSize2 = (size_t)(dist.U32 - src.U32)*4;\
+}
+#endif
+
 //============= shm =============
 
 #include <sys/shm.h>
@@ -822,7 +869,7 @@ typedef struct{
     int16_t buff[AI_CIRCLE_BUFF_LEN+4];
 }ShmemAi_Circle;
 
-static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL;
+static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL, *ao_circleLocal = NULL;
 
 int wmix_mem_create(char *path, int flag, int size, void **mem)
 {
@@ -897,25 +944,25 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     int16_t i = 0;
     int16_t w = *addr;
     //
-    if(!ao_circle)
+    if(!ao_circleLocal)
     {
-        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ao_circle);
-        if(!ao_circle)
+        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), &ao_circleLocal);
+        if(!ao_circleLocal)
         {
             fprintf(stderr, "wmix_mem_read2: shm_create err !!\n");
             return 0;
         }
         //
-        w = ao_circle->w;
+        w = ao_circleLocal->w;
     }
     //
     if(w < 0 || w >= AI_CIRCLE_BUFF_LEN)
-        w = ao_circle->w;
+        w = ao_circleLocal->w;
     for(i = 0; i < len; i++)
     {
-        if(w == ao_circle->w)
+        if(w == ao_circleLocal->w)
         {
-            if(wait && ao_circle)
+            if(wait && ao_circleLocal)
             {
                 usleep(1000);
                 continue;
@@ -923,7 +970,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
             break;
         }
         //
-        *dat++ = ao_circle->buff[w++];
+        *dat++ = ao_circleLocal->buff[w++];
         if(w >= AI_CIRCLE_BUFF_LEN)
             w = 0;
     }
@@ -958,16 +1005,56 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     return i;
 }
 
+int16_t wmix_mem_write2(int16_t *dat, int16_t len)
+{
+    int16_t i = 0;
+    //
+    if(!ao_circleLocal)
+    {
+        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), &ao_circleLocal);
+        if(!ao_circleLocal)
+        {
+            fprintf(stderr, "wmix_mem_write2: shm_create err !!\n");
+            return 0;
+        }
+        //
+        ao_circleLocal->w = 0;
+    }
+    //
+    for(i = 0; i < len; i++)
+    {
+        ao_circleLocal->buff[ao_circleLocal->w++] = *dat++;
+        if(ao_circleLocal->w >= AI_CIRCLE_BUFF_LEN)
+            ao_circleLocal->w = 0;
+    }
+    //
+    return i;
+}
+
 void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
 #if(WMIX_MODE==0)
     WMix_Struct *wmix = wmtp->wmix;
     //
-    size_t frame_size, ret;
+    size_t buffSize, buffSize2, frame_size, count, ret;
+    WMix_Point src, dist;
+    uint8_t *buff;
+    float divCount, divPow;
+    //转换目标格式
+    int chn = 1, freq = 8000;
+    //
     int pak_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
     //
     if(wmix->recordback)
-        frame_size = wmix->recordback->chunk_size;
+    {
+        buffSize = wmix->recordback->chunk_size;
+        buff = wmix->recordback->data_buf;
+    }
+    //
+    frame_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
+    //
+    divPow = (float)(WMIX_FREQ - freq)/freq;
+    divCount = 0;
     //
     wmix->thread_record += 1;
     while(wmix->run)
@@ -976,15 +1063,22 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         {
             //神奇的 SNDWAV_ReadPcm
             //读取数据大小按 pak_size 为单位
-            ret = SNDWAV_ReadPcm(wmix->recordback, frame_size)*pak_size;
+            ret = SNDWAV_ReadPcm(wmix->recordback, buffSize)*pak_size;
             if(ret > 0)
-                wmix_mem_write(wmix->recordback->data_buf, ret/2);
+            {
+                wmix_mem_write2(wmix->recordback->data_buf, ret/2);
+                RECORD_DATA_TRANSFER();
+                wmix_mem_write(buff, buffSize2/2);
+            }
         }
         else
         {
             wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
             if(wmix->recordback)
-                frame_size = wmix->recordback->chunk_size;
+            {
+                buffSize = wmix->recordback->chunk_size;
+                buff = wmix->recordback->data_buf;
+            }
             else
                 sleep(3);
         }
@@ -1146,9 +1240,9 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
             // timeout = 0;
             // while(wmtp->wmix->run && timeout++ < 200 &&
             //     loopWord == wmtp->wmix->loopWordFifo && 
-            //     tick > wmtp->wmix->tick &&
-            //     tick - wmtp->wmix->tick > totalWait)
-            //     delayus(10000);
+            //     wmtp->wmix->tickVip > wmtp->wmix->tick &&
+            //     wmtp->wmix->tickVip - wmtp->wmix->tick > totalWait)
+            //     delayus(5000);
             //
             head = wmix_load_wavStream(
                 wmtp->wmix, 
@@ -1192,53 +1286,6 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
         wmtp->wmix->reduceMode = 1;
     free(wmtp);
 }
-
-#if(WMIX_CHANNELS == 1)
-#define RECORD_DATA_TRANSFER()  \
-if(chn == 1)\
-{\
-    for(count = 0, src.U8 = dist.U8 = buff; count < ret; count+=frame_size)\
-    {\
-        if(divCount >= 1.0){src.U16++;divCount -= 1.0;}\
-        else{*dist.U16++ = *src.U16++;divCount += divPow;}\
-    }\
-    src.U8 = buff;\
-    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
-}\
-else\
-{\
-    memcpy(&buff[ret], buff, ret);\
-    for(count = 0, src.U8 = &buff[ret], dist.U8 = buff; count < ret; count+=frame_size)\
-    {\
-        if(divCount >= 1.0){src.U16++;divCount -= 1.0;}\
-        else{*dist.U16++ = *src.U16;*dist.U16++ = *src.U16++;divCount += divPow;}\
-    }\
-    src.U8 = buff;\
-    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
-}
-#else
-#define RECORD_DATA_TRANSFER()  \
-if(chn == 1)\
-{\
-    for(count = 0, src.U8 = dist.U8 = buff; count < ret; count+=frame_size)\
-    {\
-        if(divCount >= 1.0){src.U16++;src.U16++;divCount -= 1.0;}\
-        else{*dist.U16++ = *src.U16++;src.U16++;divCount += divPow;}\
-    }\
-    src.U8 = buff;\
-    buffSize2 = (size_t)(dist.U16 - src.U16)*2;\
-}\
-else\
-{\
-    for(count = 0, src.U8 = dist.U8 = buff; count < ret; count+=frame_size)\
-    {\
-        if(divCount >= 1.0){src.U32++;divCount -= 1.0;}\
-        else{*dist.U32++ = *src.U32++;divCount += divPow;}\
-    }\
-    src.U8 = buff;\
-    buffSize2 = (size_t)(dist.U32 - src.U32)*4;\
-}
-#endif
 
 void signal_get_SIGPIPE(int id){}
 
@@ -2700,6 +2747,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     uint32_t divVal = WMIX_SAMPLE*WMIX_CHANNELS/8;
     SNDPCMContainer_t *playback = wmtp->wmix->playback;
 #endif
+    // remove("/home/xxx.pcm");
+    // int fd = open("/home/xxx.pcm", O_WRONLY|O_CREAT, 0666);
     //线程计数
     wmix->thread_sys += 1;
     //
@@ -2759,6 +2808,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #else
                 if(count == playback->chunk_bytes)
                 {
+                    // write(fd, playback->data_buf, count);
                     //写入数据
                     SNDWAV_WritePcm(playback, count/divVal);
                     memset(playback->data_buf, 0, playback->chunk_bytes);
@@ -2774,6 +2824,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
                 hiaudio_ao_write(write_buff, count);
 #else
+                // write(fd, playback->data_buf, count);
+                //写入数据
                 SNDWAV_WritePcm(playback, count/divVal);
                 memset(playback->data_buf, 0, playback->chunk_bytes);
 #endif
@@ -2790,6 +2842,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         else
             tt = 0;
     }
+    // close(fd);
     //
     if(wmix->debug) printf("wmix_play_thread exit\n");
     //线程计数
@@ -2912,6 +2965,14 @@ WMix_Point wmix_load_wavStream(
     //srcU8Len 计数
     uint32_t count, tickAdd = 0;
     uint8_t *rdce = &wmix->reduceMode, rdce1 = 1;
+    //频率差
+    int32_t freqErr = WMIX_FREQ - freq;
+    //步差计数 和 步差分量
+    float divCount, divPow;
+    int divCount2;
+    //陪衬的数据也要作均值滤波
+    int16_t repairBuff[64], repairBuffCount, repairTemp;
+    float repairStep, repairStepSum;
     //
     if(!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;
@@ -2953,10 +3014,6 @@ WMix_Point wmix_load_wavStream(
     //---------- 参数不一致 插值拷贝 ----------
     else
     {
-        //频率差
-        int32_t freqErr = WMIX_FREQ - freq;
-        //步差计数 和 步差分量
-        float divCount, divPow;
         //音频频率大于默认频率 //--- 重复代码比较多且使用可能极小,为减小函数入栈容量,不写了 ---
         if(freqErr < 0)
         {
@@ -3079,16 +3136,20 @@ WMix_Point wmix_load_wavStream(
                             if(divCount >= 1.0)
                             {
                                 //循环缓冲区指针继续移动,pSrc指针不动
-                                *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                // *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount]/(*rdce));
                                 pHead.S16++;
                                 tickAdd += 2;
 #if(WMIX_CHANNELS != 1)
-                                *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                // *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount]/(*rdce));
                                 pHead.S16++;
                                 tickAdd += 2;
 #endif
                                 //
                                 divCount -= 1.0;
+                                //
+                                repairBuffCount += 1;
                             }
                             else
                             {
@@ -3106,6 +3167,23 @@ WMix_Point wmix_load_wavStream(
                                 //
                                 divCount += divPow;
                                 count += 4;
+
+                                //填充数据均值滤波
+                                if(divCount >= 1.0)
+                                {
+                                    divCount2 = (int)divCount + 1;
+                                    repairTemp = *(pSrc.S16-2);
+                                    repairStep = (float)((*pSrc.S16) - repairTemp)/divCount2;
+                                    // printf(">> S/%d, E/%d, ERR/%.2f\n", repairTemp, (*pSrc.S16), repairStep);
+                                    for(repairBuffCount = 0, repairStepSum = repairStep; repairBuffCount < divCount2;)
+                                    {
+                                        repairBuff[repairBuffCount] = repairTemp + repairStepSum;
+                                        // printf("%d\n", repairBuff[repairBuffCount]);
+                                        repairBuffCount += 1;
+                                        repairStepSum += repairStep;
+                                    }
+                                    repairBuffCount = 0;
+                                }
                             }
                             //循环处理
                             if(pHead.U8 >= wmix->end.U8)
@@ -3120,16 +3198,20 @@ WMix_Point wmix_load_wavStream(
                             if(divCount >= 1.0)
                             {
                                 //拷贝一帧数据 pSrc指针不动
-                                *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                // *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount]/(*rdce));
                                 pHead.S16++;
                                 tickAdd += 2;
 #if(WMIX_CHANNELS != 1)
-                                *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                // *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
+                                *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount]/(*rdce));
                                 pHead.S16++;
                                 tickAdd += 2;
 #endif
                                 //
                                 divCount -= 1.0;
+                                //
+                                repairBuffCount += 1;
                             }
                             else
                             {
@@ -3146,6 +3228,23 @@ WMix_Point wmix_load_wavStream(
                                 //
                                 divCount += divPow;
                                 count += 2;
+
+                                //填充数据均值滤波
+                                if(divCount >= 1.0)
+                                {
+                                    divCount2 = (int)divCount + 1;
+                                    repairTemp = *(pSrc.S16-1);
+                                    repairStep = (float)((*pSrc.S16) - repairTemp)/divCount2;
+                                    // printf(">> S/%d, E/%d, ERR/%.2f\n", repairTemp, (*pSrc.S16), repairStep);
+                                    for(repairBuffCount = 0, repairStepSum = repairStep; repairBuffCount < divCount2;)
+                                    {
+                                        repairBuff[repairBuffCount] = repairTemp + repairStepSum;
+                                        // printf("%d\n", repairBuff[repairBuffCount]);
+                                        repairBuffCount += 1;
+                                        repairStepSum += repairStep;
+                                    }
+                                    repairBuffCount = 0;
+                                }
                             }
                             //循环处理
                             if(pHead.U8 >= wmix->end.U8)

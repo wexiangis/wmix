@@ -290,37 +290,46 @@ int main(int argc, char **argv)
 #elif(1)
 int main(int argc, char **argv)
 {
-    int fd;
-    ssize_t ret, total = 0;
-    uint8_t buff[320];
-    int stream = wmix_stream_open(1, 16, 8000, 1);
-    if(stream > 0)
+    int fd, stream;
+    ssize_t ret, total = 0, readSize = 320;
+    uint8_t buff[8192];
+    WAVContainer_t container;
+
+    fd = open(argv[1], O_RDONLY);
+    if(fd > 0)
     {
-        fd = open(argv[1], O_RDONLY);
-        if(fd > 0)
+        if(WAV_ReadHeader(fd, &container) == 0)
         {
-            //跳过文件头
-            lseek(fd, 44, SEEK_SET);
-            //
-            while(1)
+            stream = wmix_stream_open(
+                container.format.channels, 
+                container.format.sample_length, 
+                container.format.sample_rate, 
+                1);
+            if(stream > 0)
             {
-                ret = read(fd, buff, sizeof(buff));
-                if(ret > 0)
+                readSize = (ssize_t)(320*container.format.channels*((float)container.format.sample_rate/8000));
+                //跳过文件头
+                lseek(fd, 44, SEEK_SET);
+                //
+                while(1)
                 {
-                    write(stream, buff, ret);
-                    total += ret;
+                    ret = read(fd, buff, readSize);
+                    if(ret > 0)
+                    {
+                        write(stream, buff, ret);
+                        total += ret;
+                    }
+                    else
+                        lseek(fd, 44, SEEK_SET);
+                    usleep(18500);
                 }
-                else
-                    lseek(fd, 44, SEEK_SET);
-                usleep(19000);
+                //
+                close(stream);
+                //
+                printf("wav write end: %ld\n", (long)total);
             }
-            //
-            close(fd);
         }
-        //
-        close(stream);
-        //
-        printf("wav write end: %ld\n", (long)total);
+        close(fd);
     }
     return 0;
 }
