@@ -136,9 +136,9 @@ int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t rcount)
     size_t count = rcount;
     uint8_t *data = sndpcm->data_buf;
 
-    if (count != sndpcm->chunk_size) {
-        count = sndpcm->chunk_size;
-    }
+    // if (count != sndpcm->chunk_size) {
+    //     count = sndpcm->chunk_size;
+    // }
 
     while (count > 0) {
         r = snd_pcm_readi(sndpcm->handle, data, count);
@@ -147,14 +147,17 @@ int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t rcount)
             snd_pcm_wait(sndpcm->handle, 1000);
         } else if (r == -EPIPE) {
             snd_pcm_prepare(sndpcm->handle);
-            // fprintf(stderr, "Error: Buffer Underrun\n");
+            fprintf(stderr, "R-Error: Buffer Underrun\n");
         } else if (r == -ESTRPIPE) {
-            fprintf(stderr, "Error: Need suspend\n");
+            fprintf(stderr, "R-Error: Need suspend\n");
         } else if (r < 0) {
-            fprintf(stderr, "Error: snd_pcm_writei: [%s]\n", snd_strerror(r));
+            fprintf(stderr, "R-Error: snd_pcm_writei: [%s]\n", snd_strerror(r));
             return -1;
         }
-
+        //
+        if(count < r)
+            break;
+        //
         if (r > 0) {
             result += r;
             count -= r;
@@ -177,25 +180,30 @@ int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
     int result = 0;
     uint8_t *data = sndpcm->data_buf;
 
-    if (wcount < sndpcm->chunk_size) {
-        snd_pcm_format_set_silence(sndpcm->format,
-            data + wcount * sndpcm->bits_per_frame / 8,
-            (sndpcm->chunk_size - wcount) * sndpcm->channels);
-        wcount = sndpcm->chunk_size;
-    }
+    // if (wcount < sndpcm->chunk_size) {
+    //     snd_pcm_format_set_silence(sndpcm->format,
+    //         data + wcount * sndpcm->bits_per_frame / 8,
+    //         (sndpcm->chunk_size - wcount) * sndpcm->channels);
+    //     wcount = sndpcm->chunk_size;
+    // }
+    
     while (wcount > 0) {
         r = snd_pcm_writei(sndpcm->handle, data, wcount);
         if (r == -EAGAIN || (r >= 0 && (size_t)r < wcount)) {
-            snd_pcm_wait(sndpcm->handle, 1000);
+            // snd_pcm_wait(sndpcm->handle, 1000);
         } else if (r == -EPIPE) {
             snd_pcm_prepare(sndpcm->handle);
-            // fprintf(stderr, "Error: Buffer Underrun\n");
+            fprintf(stderr, "W-Error: Buffer Underrun\n");
         } else if (r == -ESTRPIPE) {
-            fprintf(stderr, "Error: Need suspend\n");
+            fprintf(stderr, "W-Error: Need suspend\n");
         } else if (r < 0) {
-            fprintf(stderr, "Error snd_pcm_writei: [%s]", snd_strerror(r));
+            fprintf(stderr, "W-Error snd_pcm_writei: [%s]", snd_strerror(r));
             return -1;
         }
+        //
+        if(wcount < r)
+            break;
+        //
         if (r > 0) {
             result += r;
             wcount -= r;
@@ -959,7 +967,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     int pak_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
     //
     if(wmix->recordback)
-        frame_size = wmix->recordback->chunk_bytes/pak_size;
+        frame_size = wmix->recordback->chunk_size;
     //
     wmix->thread_record += 1;
     while(wmix->run)
@@ -976,7 +984,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         {
             wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
             if(wmix->recordback)
-                frame_size = wmix->recordback->chunk_bytes/pak_size;
+                frame_size = wmix->recordback->chunk_size;
             else
                 sleep(3);
         }
@@ -2721,6 +2729,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
             for(dist.U8 = write_buff; wmix->tick < tmpTick;)
 #else
+            memset(playback->data_buf, 0, playback->chunk_bytes);
             for(count = 0, dist.U8 = playback->data_buf; wmix->tick < tmpTick;)
 #endif
             {
@@ -2752,6 +2761,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 {
                     //写入数据
                     SNDWAV_WritePcm(playback, count/divVal);
+                    memset(playback->data_buf, 0, playback->chunk_bytes);
                     dist.U8 = playback->data_buf;
 #endif
                     count = 0;
@@ -2765,6 +2775,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 hiaudio_ao_write(write_buff, count);
 #else
                 SNDWAV_WritePcm(playback, count/divVal);
+                memset(playback->data_buf, 0, playback->chunk_bytes);
 #endif
             }
 

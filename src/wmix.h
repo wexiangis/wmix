@@ -8,13 +8,13 @@
 #ifdef MAKE_MP3
 #define WMIX_MP3 MAKE_MP3
 #else
-#define WMIX_MP3 1
+#define WMIX_MP3 0
 #endif
 
 #ifdef MAKE_AAC
 #define WMIX_AAC MAKE_AAC
 #else
-#define WMIX_AAC 1
+#define WMIX_AAC 0
 #endif
 
 //rtp发收同fd
@@ -59,9 +59,9 @@ typedef struct SNDPCMContainer {
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#define WMIX_CHANNELS    1
+#define WMIX_CHANNELS    2
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        8000
+#define WMIX_FREQ        44100
 
 typedef struct{
     //type[0,7]:
