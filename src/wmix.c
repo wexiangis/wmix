@@ -2794,17 +2794,17 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 t2 = getTickUs() - t1;
                 if(tt > t2)
                     tt -= t2;
-                delayus((unsigned int)(tt*1));
+                delayus((unsigned int)(tt*0.8));
             }
             t1 = getTickUs();
             //
 #if(WMIX_MODE==1)
             // for(count = countTotal = 0, dist.U8 = write_buff; wmix->tick < tmpTick;)
-            for(count = countTotal = 0, dist.U8 = write_buff; countTotal < pkg_size*2;)
+            for(count = countTotal = 0, dist.U8 = write_buff; countTotal < pkg_size*3;)
 #else
             memset(playback->data_buf, 0, playback->chunk_bytes);
             // for(count = 0, dist.U8 = playback->data_buf; wmix->tick < tmpTick;)
-            for(count = countTotal = 0, dist.U8 = playback->data_buf; countTotal < pkg_size*2;)
+            for(count = countTotal = 0, dist.U8 = playback->data_buf; countTotal < pkg_size*3;)
 #endif
             {
 #if(WMIX_CHANNELS == 1)
@@ -2826,46 +2826,35 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 if(count == pkg_size)
                 {
                     countTotal += count;
+                    // write(fd, playback->data_buf, count);
 #if(WMIX_MODE==1)
                     //写入数据
                     hiaudio_ao_write(write_buff, count);
                     dist.U8 = write_buff;
 #else
-                    // write(fd, playback->data_buf, count);
                     //写入数据
                     SNDWAV_WritePcm(playback, count/divVal);
-                    // memset(playback->data_buf, 0, playback->chunk_bytes);
+                    memset(playback->data_buf, 0, playback->chunk_bytes);
                     dist.U8 = playback->data_buf;
 #endif
                     count = 0;
                 }
             }
-            //最后一丁点
-            if(count)
-            {
-                countTotal += count;
-#if(WMIX_MODE==1)
-                hiaudio_ao_write(write_buff, count);
-#else
-                // write(fd, playback->data_buf, count);
-                //写入数据
-                SNDWAV_WritePcm(playback, count/divVal);
-                // memset(playback->data_buf, 0, playback->chunk_bytes);
-#endif
-            }
             //
             tt = countTotal*dataToTime;
             //
-            delayus(2000);
-            if(tt > 2000)
-                tt -= 2000;
+            delayus(5000);
+            if(tt > 5000)
+                tt -= 5000;
             else
                 tt = 0;
         }
         else
         {
+#if(WMIX_MODE==0)
             SNDWAV_WritePcm(playback, playback->chunk_size);
-            // memset(playback->data_buf, 0, playback->chunk_bytes);
+            memset(playback->data_buf, 0, playback->chunk_bytes);
+#endif
             delayus(10000);
             tt = 0;
         }
@@ -3006,13 +2995,18 @@ WMix_Point wmix_load_wavStream(
     int16_t repairBuff[64], repairBuffCount, repairTemp;
     float repairStep, repairStepSum;
     //
+    uint16_t correct = WMIX_CHANNELS*WMIX_FREQ*16/8/5;
+    //
     if(!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;
     //
     if(!pHead.U8 || (*tick) < wmix->tick)
     {
-        pHead.U8 = wmix->head.U8;
-        (*tick) = wmix->tick;
+        pHead.U8 = wmix->head.U8 + correct;
+        (*tick) = wmix->tick + correct;
+        //循环处理
+        if(pHead.U8 >= wmix->end.U8)
+            pHead.U8 = wmix->start.U8;
     }
     //
     if(reduce == wmix->reduceMode)
@@ -3298,6 +3292,7 @@ WMix_Point wmix_load_wavStream(
     //当前播放指针已慢于播放指针,更新为播放指针
     if((*tick) < wmix->tick)
     {
+        // tickAdd += correct;
         pHead.U8 = wmix->head.U8 + tickAdd;
         tickAdd += wmix->tick;
         //
@@ -3494,7 +3489,7 @@ void wmix_load_wav(
             total = total2 = bpsCount = 0;
             src.U8 = buff;
             head.U8 = wmix->head.U8;
-            tick = wmix->tick;
+            tick = 0;
         }
         else
             break;
@@ -3676,7 +3671,7 @@ void wmix_load_aac(
             total = total2 = bpsCount = 0;
             src.U8 = out;
             head.U8 = wmix->head.U8;
-            tick = wmix->tick;
+            tick = 0;
         }
         else
             break;

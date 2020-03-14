@@ -94,7 +94,7 @@ typedef struct{
 }WMix_Msg;
 
 //循环缓冲区大小
-#define WMIX_BUFF_SIZE 131072//128K //262144//256K 524288//512K //1048576//1M
+#define WMIX_BUFF_SIZE 262144//256K //131072//128K //262144//256K 524288//512K //1048576//1M
 
 //多功能指针
 typedef union
