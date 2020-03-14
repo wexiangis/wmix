@@ -655,7 +655,7 @@ int SNDWAV_SetParams2(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels
         fprintf(stderr, "Error snd_pcm_hw_params_get_buffer_time_max\n");
         return -1;
     }
-    if (buffer_time > 500000) buffer_time = 500000;
+    // if (buffer_time > 500000) buffer_time = 500000;
     period_time = buffer_time / 4;
 
     if (snd_pcm_hw_params_set_buffer_time_near(sndpcm->handle, hwparams, &buffer_time, 0) < 0) {
@@ -685,11 +685,19 @@ int SNDWAV_SetParams2(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels
     sndpcm->bits_per_frame = sndpcm->bits_per_sample * channels;
     sndpcm->chunk_bytes = sndpcm->chunk_size * sndpcm->bits_per_frame / 8;
 
-    // printf("---- record info -----\n  每次写入帧数: %d\n   每帧字节数: %ld Bytes\n   每次读写字节数: %ld Bytes\n   缓冲区大小: %d Bytes\n", 
-    //     sndpcm->chunk_size,
-    //     sndpcm->bits_per_frame/8,
-    //     sndpcm->chunk_bytes,
-    //     sndpcm->buffer_size);
+    printf("\n---- SNDWAV_SetParams2 -----\n"
+    "  chunk_size: %d\n" //每次写入帧数
+    "  bits_per_frame/8: %ld Bytes\n" //每帧字节数
+    "  chunk_bytes: %ld Bytes\n" //每次读写字节数
+    "  buffer_size: %d Bytes\n" //缓冲区大小
+    "  buffer_time: %d Bytes\n" //缓冲区大小
+    "  period_time: %d Bytes\n", //缓冲区大小
+        sndpcm->chunk_size,
+        sndpcm->bits_per_frame/8,
+        sndpcm->chunk_bytes,
+        sndpcm->buffer_size,
+        buffer_time,
+        period_time);
 
     /* Allocate audio data buffer */
 #if(WMIX_CHANNELS == 1)
@@ -2738,14 +2746,17 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     WMix_Struct *wmix = wmtp->wmix;
     WMix_Point dist;
     uint32_t count = 0, countTotal = 0, tmpTick;
+    //
     __time_t t1 = 0, t2 = 0, tt = 0;
-    int error_count = 0;
     double dataToTime = 1000000/(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ);
+    //
 #if(WMIX_MODE==1)
     uint8_t write_buff[1024+32];
+    uint32_t pkg_size = 1024;
 #else
     uint32_t divVal = WMIX_SAMPLE*WMIX_CHANNELS/8;
     SNDPCMContainer_t *playback = wmtp->wmix->playback;
+    uint32_t pkg_size = playback->chunk_bytes/2;
 #endif
     // remove("/home/xxx.pcm");
     // int fd = open("/home/xxx.pcm", O_WRONLY|O_CREAT, 0666);
@@ -2798,16 +2809,14 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 if(wmix->head.U8 >= wmix->end.U8)
                     wmix->head.U8 = wmix->start.U8;
                 //
-#if(WMIX_MODE==1)
-                if(count == 1024)
+                if(count == pkg_size)
                 {
+#if(WMIX_MODE==1)
                     countTotal += count;
                     //写入数据
                     hiaudio_ao_write(write_buff, count);
                     dist.U8 = write_buff;
 #else
-                if(count == playback->chunk_bytes)
-                {
                     // write(fd, playback->data_buf, count);
                     //写入数据
                     SNDWAV_WritePcm(playback, count/divVal);
@@ -2832,8 +2841,6 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             }
 
             tt = countTotal*dataToTime;
-
-            error_count = 0;
         }
         //
         delayus(2000);
@@ -2921,7 +2928,11 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
     //
-    printf("\n---- WMix info -----\n   通道数: %d\n   采样率: %d Hz\n   采样位数: %d bit\n   总数据量: -- Bytes\n", 
+    printf("\n---- WMix info -----\n"
+    "   chn: %d\n"
+    "   freq: %d Hz\n"
+    "   sample: %d bit\n"
+    "   total: -- Bytes\n", 
         WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE);
     
     signal(SIGINT, signal_callback);
