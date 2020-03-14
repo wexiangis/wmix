@@ -190,7 +190,7 @@ int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
     while (wcount > 0) {
         r = snd_pcm_writei(sndpcm->handle, data, wcount);
         if (r == -EAGAIN || (r >= 0 && (size_t)r < wcount)) {
-            // snd_pcm_wait(sndpcm->handle, 1000);
+            snd_pcm_wait(sndpcm->handle, 1000);
         } else if (r == -EPIPE) {
             snd_pcm_prepare(sndpcm->handle);
             fprintf(stderr, "W-Error: Buffer Underrun\n");
@@ -1123,8 +1123,7 @@ void wmix_shmem_read_circle(WMixThread_Param *wmtp)
     //
     src.U8 = buff;
     head.U8 = 0;
-    tick = wmix->tick;
-    wmix->tickVip = 0;
+    tick = 0;
     //
     totalWait = bytes_p_second/2;
     //
@@ -1146,7 +1145,7 @@ void wmix_shmem_read_circle(WMixThread_Param *wmtp)
             //
             head = wmix_load_wavStream(
                 wmix, 
-                src, ret, WMIX_FREQ, WMIX_CHANNELS, WMIX_SAMPLE, head, rdce, &wmix->tickVip);
+                src, ret, WMIX_FREQ, WMIX_CHANNELS, WMIX_SAMPLE, head, rdce, &tick);
             //
             bpsCount += ret;
             total += ret;
@@ -1166,8 +1165,6 @@ void wmix_shmem_read_circle(WMixThread_Param *wmtp)
     }
     //
     wmix->thread_play -= 1;
-    //
-    wmix->tickVip = 0;
     //
     if(wmix->debug) printf(">> SHMEM-PLAY: end <<\n");
     //
@@ -1234,7 +1231,6 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     src.U8 = buff;
     head.U8 = 0;
     tick = 0;
-    wmtp->wmix->tickVip = 0;
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
@@ -1248,13 +1244,13 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
             // timeout = 0;
             // while(wmtp->wmix->run && timeout++ < 200 &&
             //     loopWord == wmtp->wmix->loopWordFifo && 
-            //     wmtp->wmix->tickVip > wmtp->wmix->tick &&
-            //     wmtp->wmix->tickVip - wmtp->wmix->tick > totalWait)
+            //     tick > wmtp->wmix->tick &&
+            //     tick - wmtp->wmix->tick > totalWait)
             //     delayus(5000);
             //
             head = wmix_load_wavStream(
                 wmtp->wmix, 
-                src, ret, freq, chn, sample, head, rdce, &wmtp->wmix->tickVip);
+                src, ret, freq, chn, sample, head, rdce, &tick);
             if(head.U8 == 0)
                 break;
             //
@@ -1275,7 +1271,6 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
         //
         delayus(5000);
     }
-    wmtp->wmix->tickVip = 0;
     //
     if(wmtp->wmix->debug) printf(">> FIFO-W: %s end <<\n", path);
     //
@@ -2581,6 +2576,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     WMix_Msg msg;
     ssize_t ret;
     bool err_exit = false;
+    int clearTickTimeout = 0;
 
     //路径检查 //F_OK 是否存在 R_OK 是否有读权限 W_OK 是否有写权限 X_OK 是否有执行权限
     if(access(WMIX_MSG_PATH, F_OK) != 0)
@@ -2714,11 +2710,34 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             break;
         }
         //清tick
-        if(wmix->thread_play == 0 && 
-            wmix->tick == wmix->tickTial)
+        if(wmix->thread_play == 0)
         {
-            wmix->head.U8 = wmix->tail.U8;
-            wmix->tick = wmix->tickTial = wmix->tickVip = 0;
+            //连续2秒没有播放线程,清tick
+            if(clearTickTimeout < 2000)
+                clearTickTimeout += 10;
+            else
+            {
+                //先关闭标志
+                if(clearTickTimeout < 3000)
+                {
+                    clearTickTimeout += 10;
+                    wmix->playRun = false;
+                }
+                //再清理tick
+                else if(clearTickTimeout != 9999)
+                {
+                    printf("wmix clear\n");
+                    clearTickTimeout = 9999;
+                    wmix->playRun = false;
+                    wmix->head.U8 = wmix->tail.U8 = wmix->start.U8;
+                    wmix->tick = 0;
+                }
+            }
+        }
+        else
+        {
+            clearTickTimeout = 0;
+            wmix->playRun = true;
         }
         //
         delayus(10000);
@@ -2756,7 +2775,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #else
     uint32_t divVal = WMIX_SAMPLE*WMIX_CHANNELS/8;
     SNDPCMContainer_t *playback = wmtp->wmix->playback;
-    uint32_t pkg_size = playback->chunk_bytes/2;
+    uint32_t pkg_size = playback->chunk_bytes;
 #endif
     // remove("/home/xxx.pcm");
     // int fd = open("/home/xxx.pcm", O_WRONLY|O_CREAT, 0666);
@@ -2765,32 +2784,27 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     //
     while(wmix->run)
     {
-        if(wmix->tickVip == 0)
-            tmpTick = wmix->tickTial;
-        else
-            tmpTick = wmix->tickVip;
-        //
-        if(wmix->tick < tmpTick)
+        if(wmix->playRun)
         {
             if(wmix->head.U8 >= wmix->end.U8)
                 wmix->head.U8 = wmix->start.U8;
-
+            //
             if(tt > 0)
             {
                 t2 = getTickUs() - t1;
                 if(tt > t2)
                     tt -= t2;
-                delayus((unsigned int)(tt*0.8));
+                delayus((unsigned int)(tt*1));
             }
-
             t1 = getTickUs();
-
-            count = countTotal = 0;
+            //
 #if(WMIX_MODE==1)
-            for(dist.U8 = write_buff; wmix->tick < tmpTick;)
+            // for(count = countTotal = 0, dist.U8 = write_buff; wmix->tick < tmpTick;)
+            for(count = countTotal = 0, dist.U8 = write_buff; countTotal < pkg_size*2;)
 #else
             memset(playback->data_buf, 0, playback->chunk_bytes);
-            for(count = 0, dist.U8 = playback->data_buf; wmix->tick < tmpTick;)
+            // for(count = 0, dist.U8 = playback->data_buf; wmix->tick < tmpTick;)
+            for(count = countTotal = 0, dist.U8 = playback->data_buf; countTotal < pkg_size*2;)
 #endif
             {
 #if(WMIX_CHANNELS == 1)
@@ -2811,8 +2825,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 //
                 if(count == pkg_size)
                 {
-#if(WMIX_MODE==1)
                     countTotal += count;
+#if(WMIX_MODE==1)
                     //写入数据
                     hiaudio_ao_write(write_buff, count);
                     dist.U8 = write_buff;
@@ -2820,7 +2834,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     // write(fd, playback->data_buf, count);
                     //写入数据
                     SNDWAV_WritePcm(playback, count/divVal);
-                    memset(playback->data_buf, 0, playback->chunk_bytes);
+                    // memset(playback->data_buf, 0, playback->chunk_bytes);
                     dist.U8 = playback->data_buf;
 #endif
                     count = 0;
@@ -2836,18 +2850,25 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 // write(fd, playback->data_buf, count);
                 //写入数据
                 SNDWAV_WritePcm(playback, count/divVal);
-                memset(playback->data_buf, 0, playback->chunk_bytes);
+                // memset(playback->data_buf, 0, playback->chunk_bytes);
 #endif
             }
-
+            //
             tt = countTotal*dataToTime;
+            //
+            delayus(2000);
+            if(tt > 2000)
+                tt -= 2000;
+            else
+                tt = 0;
         }
-        //
-        delayus(2000);
-        if(tt > 2000)
-            tt -= 2000;
         else
+        {
+            SNDWAV_WritePcm(playback, playback->chunk_size);
+            // memset(playback->data_buf, 0, playback->chunk_bytes);
+            delayus(10000);
             tt = 0;
+        }
     }
     // close(fd);
     //
@@ -3273,35 +3294,6 @@ WMix_Point wmix_load_wavStream(
             }
         }
     }
-    //---------- 修改尾指针 ----------
-    // if(wmix->vipWrite.U8 == 0)
-    // {
-    //     if(wmix->tail.U8 < wmix->head.U8)
-    //     {
-    //         if(pHead.U8 < wmix->head.U8 && 
-    //             pHead.U8 > wmix->tail.U8)
-    //             wmix->tail.U8 = pHead.U8;
-    //     }
-    //     else
-    //     {
-    //         if(pHead.U8 < wmix->head.U8)
-    //             wmix->tail.U8 = pHead.U8;
-    //         else if(pHead.U8 > wmix->tail.U8)
-    //             wmix->tail.U8 = pHead.U8;
-    //     }
-    // }
-    // else if(head.U8 == wmix->vipWrite.U8)
-    //     wmix->tail.U8 = pHead.U8;
-    // else
-    //     wmix->tail.U8 = wmix->vipWrite.U8;
-
-    // tickAdd += (*tick);
-    // //当前播放指针已慢于播放指针,更新为播放指针
-    // if(tickAdd < wmix->tick)
-    // {
-    //     tickAdd = wmix->tick;
-    //     pHead.U8 = wmix->head.U8;
-    // }
 
     //当前播放指针已慢于播放指针,更新为播放指针
     if((*tick) < wmix->tick)
@@ -3314,24 +3306,6 @@ WMix_Point wmix_load_wavStream(
     }
     else
         tickAdd += (*tick);
-
-    // //比较当前尾指针,谁播放的最快,以谁为准
-    // if((isVip && tickAdd > wmix->tick) || 
-    //     (tickAdd > wmix->tickTial && 
-    //     (wmix->tickVip <= wmix->tick || 
-    //     wmix->tickTial < wmix->tick)))
-    // {
-    //     wmix->tickTial = tickAdd;
-    //     wmix->tail.U8 = pHead.U8;
-    // }
-
-    //比较当前尾指针,谁播放的最快,以谁为准
-    if(tickAdd > wmix->tickTial)
-    {
-        wmix->tickTial = tickAdd;
-        wmix->tail.U8 = pHead.U8;
-    }
-
     //
     *tick = tickAdd;
     //

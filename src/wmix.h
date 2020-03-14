@@ -125,11 +125,14 @@ typedef struct{
     uint8_t loopWordRecord;
     uint8_t loopWordFifo;
     uint8_t loopWordRtp;
-    uint32_t tick, tickTial, tickVip;//播放指针启动至今走过的字节数
+    uint32_t tick;//播放指针启动至今走过的字节数
     //
     uint32_t thread_sys;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
     uint32_t thread_record;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
     uint32_t thread_play;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
+    //
+    bool playRun;//指导 play_thread() 运行, thread_play=0 时暂停播放
+    bool recordRun;//指导 wmix_shmem_write_circle() 运行, thread_record=0 时暂停播放
     //
     key_t msg_key;
     int msg_fd;

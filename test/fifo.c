@@ -314,7 +314,7 @@ int main(int argc, char **argv)
                 container.format.channels, 
                 container.format.sample_length, 
                 container.format.sample_rate, 
-                1);
+                0);
             if(stream > 0)
             {
                 readSize = (ssize_t)(320*container.format.channels*((float)container.format.sample_rate/8000));
