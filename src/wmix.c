@@ -1075,7 +1075,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     //
     while(wmix->run)
     {
-        if(wmix->recordRun)
+        if(wmix->recordRun || wmix->shmemRun > 0)
         {
             if(wmix->recordback)
             {
@@ -2716,6 +2716,17 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                         &wmix_record_aac_thread);
                     break;
 #endif
+                //开/关 shmem
+                case 14:
+                    if(msg.value[0])
+                        wmix->shmemRun += 1;
+                    else
+                    {
+                        wmix->shmemRun -= 1;
+                        if(wmix->shmemRun < 0)
+                            wmix->shmemRun = 0;
+                    }
+                    break;
                 //开关log
                 case 100:
                     if(msg.value[0])

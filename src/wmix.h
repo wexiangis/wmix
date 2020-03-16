@@ -51,7 +51,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.6 - 20200313"
+#define WMIX_VERSION "V3.7 - 20200316"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -84,6 +84,7 @@ typedef struct{
     //      11/rtp send pcma
     //      12/rtp recv pcma
     //      13/录音aac文件
+    //      14/开/关 shmem
     //      100/开关log
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
@@ -133,6 +134,7 @@ typedef struct{
     //
     bool playRun;//指导 play_thread() 运行, thread_play=0 时暂停播放
     bool recordRun;//指导 wmix_shmem_write_circle() 运行, thread_record=0 时暂停播放
+    int shmemRun;
     //
     key_t msg_key;
     int msg_fd;

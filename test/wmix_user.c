@@ -29,19 +29,19 @@ typedef struct{
     //      8/清空播放列表
     //      9/排头播放
     //      10/排尾播放
-    //      11/rtp send
-    //      12/rtp recv
+    //      11/rtp send pcma
+    //      12/rtp recv pcma
     //      13/录音aac文件
-    //      14/fifo录音aac流
-    //      15/fifo播放aac流
+    //      14/开/关 shmem
     //      100/开关log
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
     long type;
-    //value: filePath + '\0' + msgPath
+    //value(file/fifo): filePath + '\0' + msgPath
     //value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 }WMix_Msg;
+
 
 #define MSG_INIT() \
 key_t msg_key;\
@@ -451,6 +451,7 @@ typedef struct{
 }ShmemAi_Circle;
 
 static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL;
+static int wmix_shmemRun = 0;
 
 int wmix_mem_create(char *path, int flag, int size, void **mem)
 {
@@ -480,6 +481,38 @@ int wmix_mem_destroy(int id)
 	return shmctl(id,IPC_RMID,NULL);
 }
 
+void wmix_mem_open(void)
+{
+    if(wmix_shmemRun)
+        return;
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT();
+    //装填 message
+    msg.type = 14;
+    msg.value[0] = 1;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+    //
+    wmix_shmemRun = 1;
+}
+
+void wmix_mem_close(void)
+{
+    if(!wmix_shmemRun)
+        return;
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT();
+    //装填 message
+    msg.type = 14;
+    msg.value[0] = 0;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+    //
+    wmix_shmemRun = 0;
+}
+
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
@@ -487,6 +520,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     //
     if(!ai_circle)
     {
+        wmix_mem_open();
         wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ai_circle);
         if(!ai_circle)
         {
@@ -526,6 +560,7 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     //
     if(!ao_circle)
     {
+        wmix_mem_open();
         wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), &ao_circle);
         if(!ao_circle)
         {
