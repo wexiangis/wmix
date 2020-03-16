@@ -29,6 +29,7 @@ void help(char *argv0)
         "  -rtpr ip port : 启动rtp接收播音,使用-rc,-rr可以配置通道和频率参数\n"
         "  -? --help : 显示帮助\n"
         "  -log 0/1 : 关闭/显示log\n"
+        "  -reset : 重置\n"
         "\n"
         "其它说明:\n"
         "  支持播放格式 : wav,mp3,aac\n"
@@ -62,6 +63,7 @@ int main(int argc, char **argv)
     bool rtps = false;
     bool rtpr = false;
     int log = -1;
+    bool reset = false;
 
     char *filePath = NULL;
     char tmpPath[128] = {0};
@@ -145,6 +147,10 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%d", &port);
             rtpr = true;
         }
+        else if(strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
+        {
+            reset = true;
+        }
         else if(strstr(argv[i], "-?") || strstr(argv[i], "-help"))
         {
             help(argv[0]);
@@ -154,6 +160,12 @@ int main(int argc, char **argv)
         {
             filePath = argv[i];
         }
+    }
+
+    if(reset)
+    {
+        wmix_reset();
+        return 0;
     }
 
     if(volume >= 0 && volume < 11)

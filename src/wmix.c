@@ -131,7 +131,7 @@ int SNDWAV_P_GetFormat(WAVContainer_t *wav, snd_pcm_format_t *snd_format)
  ******************************************************************************/
 int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t rcount)
 {
-    int r;
+    int ret;
     size_t result = 0;
     size_t count = rcount;
     uint8_t *data = sndpcm->data_buf;
@@ -141,27 +141,30 @@ int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t rcount)
     // }
 
     while (count > 0) {
-        r = snd_pcm_readi(sndpcm->handle, data, count);
-
-        if (r == -EAGAIN || (r >= 0 && (size_t)r < count)) {
+        ret = snd_pcm_readi(sndpcm->handle, data, count);
+        //
+        if(ret < 0)
+            ret = snd_pcm_recover(sndpcm->handle, ret, 0);
+        //
+        if (ret == -EAGAIN || (ret >= 0 && (size_t)ret < count)) {
             snd_pcm_wait(sndpcm->handle, 1000);
-        } else if (r == -EPIPE) {
+        } else if (ret == -EPIPE) {
             snd_pcm_prepare(sndpcm->handle);
             fprintf(stderr, "R-Error: Buffer Underrun\n");
-        } else if (r == -ESTRPIPE) {
+        } else if (ret == -ESTRPIPE) {
             fprintf(stderr, "R-Error: Need suspend\n");
-        } else if (r < 0) {
-            fprintf(stderr, "R-Error: snd_pcm_writei: [%s]\n", snd_strerror(r));
+        } else if (ret < 0) {
+            fprintf(stderr, "R-Error: SNDWAV_ReadPcm: [%s]\n", snd_strerror(ret));
             return -1;
         }
         //
-        if(count < r)
+        if(count < ret)
             break;
         //
-        if (r > 0) {
-            result += r;
-            count -= r;
-            data += r * sndpcm->bits_per_frame / 8;
+        if (ret > 0) {
+            result += ret;
+            count -= ret;
+            data += ret * sndpcm->bits_per_frame / 8;
         }
     }
     return rcount;
@@ -176,7 +179,7 @@ int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t rcount)
  ******************************************************************************/
 int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
 {
-    int r;
+    int ret;
     int result = 0;
     uint8_t *data = sndpcm->data_buf;
 
@@ -188,26 +191,30 @@ int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
     // }
     
     while (wcount > 0) {
-        r = snd_pcm_writei(sndpcm->handle, data, wcount);
-        if (r == -EAGAIN || (r >= 0 && (size_t)r < wcount)) {
+        ret = snd_pcm_writei(sndpcm->handle, data, wcount);
+        //
+        if(ret < 0)
+            ret = snd_pcm_recover(sndpcm->handle, ret, 0);
+        //
+        if (ret == -EAGAIN || (ret >= 0 && (size_t)ret < wcount)) {
             snd_pcm_wait(sndpcm->handle, 1000);
-        } else if (r == -EPIPE) {
+        } else if (ret == -EPIPE) {
             snd_pcm_prepare(sndpcm->handle);
             fprintf(stderr, "W-Error: Buffer Underrun\n");
-        } else if (r == -ESTRPIPE) {
+        } else if (ret == -ESTRPIPE) {
             fprintf(stderr, "W-Error: Need suspend\n");
-        } else if (r < 0) {
-            fprintf(stderr, "W-Error snd_pcm_writei: [%s]", snd_strerror(r));
+        } else if (ret < 0) {
+            fprintf(stderr, "W-Error snd_pcm_writei: [%s]", snd_strerror(ret));
             return -1;
         }
         //
-        if(wcount < r)
+        if(wcount < ret)
             break;
         //
-        if (r > 0) {
-            result += r;
-            wcount -= r;
-            data += r * sndpcm->bits_per_frame / 8;
+        if (ret > 0) {
+            result += ret;
+            wcount -= ret;
+            data += ret * sndpcm->bits_per_frame / 8;
         }
     }
     return result;
@@ -1064,41 +1071,57 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     divPow = (float)(WMIX_FREQ - freq)/freq;
     divCount = 0;
     //
-    wmix->thread_record += 1;
+    wmix->thread_sys += 1;
+    //
     while(wmix->run)
     {
-        if(wmix->recordback)
+        if(wmix->recordRun)
         {
-            //神奇的 SNDWAV_ReadPcm
-            //读取数据大小按 pak_size 为单位
-            ret = SNDWAV_ReadPcm(wmix->recordback, buffSize)*pak_size;
-            if(ret > 0)
+            if(wmix->recordback)
             {
-                wmix_mem_write2(wmix->recordback->data_buf, ret/2);
-                RECORD_DATA_TRANSFER();
-                wmix_mem_write(buff, buffSize2/2);
+                //神奇的 SNDWAV_ReadPcm
+                //读取数据大小按 pak_size 为单位
+                ret = SNDWAV_ReadPcm(wmix->recordback, buffSize)*pak_size;
+                if(ret > 0)
+                {
+                    wmix_mem_write2(wmix->recordback->data_buf, ret/2);
+                    RECORD_DATA_TRANSFER();
+                    wmix_mem_write(buff, buffSize2/2);
+                }
             }
+            else
+            {
+                if((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
+                {
+                    printf("wmix record: start\n");
+                    buffSize = wmix->recordback->chunk_size;
+                    buff = wmix->recordback->data_buf;
+                    continue;
+                }
+                else
+                    sleep(3);
+            }
+            delayus(10000);
         }
         else
         {
-            wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
             if(wmix->recordback)
             {
-                buffSize = wmix->recordback->chunk_size;
-                buff = wmix->recordback->data_buf;
+                printf("wmix record: clear\n");
+                wmix_alsa_release(wmix->recordback);
+                wmix->recordback = NULL;
             }
-            else
-                sleep(3);
+            delayus(10000);
         }
-        delayus(10000);
     }
-    wmix->thread_record -= 1;
     //
     if(wmix->recordback)
     {
         wmix_alsa_release(wmix->recordback);
         wmix->recordback = NULL;
     }
+    //
+    wmix->thread_sys -= 1;
 #endif
 }
 
@@ -1127,7 +1150,7 @@ void wmix_shmem_read_circle(WMixThread_Param *wmtp)
     //
     totalWait = bytes_p_second/2;
     //
-    wmix->thread_play += 1;
+    wmix->thread_sys += 1;
     //
     while(wmix->run)
     {
@@ -1164,12 +1187,12 @@ void wmix_shmem_read_circle(WMixThread_Param *wmtp)
         delayus(10000);
     }
     //
-    wmix->thread_play -= 1;
-    //
     if(wmix->debug) printf(">> SHMEM-PLAY: end <<\n");
     //
     if(rdce > 1)
         wmix->reduceMode = 1;
+    //
+    wmix->thread_sys -= 1;
 #endif
 }
 
@@ -2576,7 +2599,8 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     WMix_Msg msg;
     ssize_t ret;
     bool err_exit = false;
-    int clearTickTimeout = 0;
+    //刚启动,playRun和recordRun都为false,这里置9999,不再清理
+    int playTickTimeout = 9999, recordTickTimeout = 9999;
 
     //路径检查 //F_OK 是否存在 R_OK 是否有读权限 W_OK 是否有写权限 X_OK 是否有执行权限
     if(access(WMIX_MSG_PATH, F_OK) != 0)
@@ -2709,25 +2733,25 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             err_exit = true;
             break;
         }
-        //清tick
+        //长时间没有播放任务,关闭播放器
         if(wmix->thread_play == 0)
         {
-            //连续2秒没有播放线程,清tick
-            if(clearTickTimeout < 2000)
-                clearTickTimeout += 10;
+            //连续5秒没有播放线程,清tick
+            if(playTickTimeout < 5000)
+                playTickTimeout += 10;
             else
             {
                 //先关闭标志
-                if(clearTickTimeout < 3000)
+                if(playTickTimeout < 6000)
                 {
-                    clearTickTimeout += 10;
+                    playTickTimeout += 10;
                     wmix->playRun = false;
                 }
                 //再清理tick
-                else if(clearTickTimeout != 9999)
+                else if(playTickTimeout != 9999)
                 {
-                    printf("wmix clear\n");
-                    clearTickTimeout = 9999;
+                    printf("wmix play: clear\n");
+                    playTickTimeout = 9999;
                     wmix->playRun = false;
                     wmix->head.U8 = wmix->tail.U8 = wmix->start.U8;
                     wmix->tick = 0;
@@ -2736,8 +2760,30 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
         }
         else
         {
-            clearTickTimeout = 0;
+            playTickTimeout = 0;
+            if(!wmix->playRun)
+                printf("wmix play: start\n");
             wmix->playRun = true;
+        }
+        //长时间没有录音任务,关闭录音
+        if(wmix->thread_record == 0)
+        {
+            //连续5秒没有录音线程,清tick
+            if(recordTickTimeout < 5000)
+                recordTickTimeout += 10;
+            else
+            {
+                if(recordTickTimeout != 9999)
+                {
+                    recordTickTimeout = 9999;
+                    wmix->recordRun = false;
+                }
+            }
+        }
+        else
+        {
+            recordTickTimeout = 0;
+            wmix->recordRun = true;
         }
         //
         delayus(10000);
@@ -2746,8 +2792,6 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     msgctl(wmix->msg_fd, IPC_RMID, NULL);
     //
     if(wmix->debug) printf("wmix_msg_thread exit\n");
-    //线程计数
-    wmix->thread_sys -= 1;
     //
     if(wmtp->param)
         free(wmtp->param);
@@ -2758,6 +2802,8 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
         signal_callback(SIGINT);
         exit(0);
     }
+    //线程计数
+    wmix->thread_sys -= 1;
 }
 
 void wmix_play_thread(WMixThread_Param *wmtp)
@@ -2851,10 +2897,10 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         }
         else
         {
-#if(WMIX_MODE==0)
-            SNDWAV_WritePcm(playback, playback->chunk_size);
-            memset(playback->data_buf, 0, playback->chunk_bytes);
-#endif
+// #if(WMIX_MODE==0)
+//             SNDWAV_WritePcm(playback, playback->chunk_size);
+//             memset(playback->data_buf, 0, playback->chunk_bytes);
+// #endif
             delayus(10000);
             tt = 0;
         }
@@ -2862,12 +2908,12 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     // close(fd);
     //
     if(wmix->debug) printf("wmix_play_thread exit\n");
-    //线程计数
-    wmix->thread_sys -= 1;
     //
     if(wmtp->param)
         free(wmtp->param);
     free(wmtp);
+    //线程计数
+    wmix->thread_sys -= 1;
 }
 
 void wmix_exit(WMix_Struct *wmix)
@@ -2892,6 +2938,8 @@ void wmix_exit(WMix_Struct *wmix)
 #else
         if(wmix->playback)
 	        wmix_alsa_release(wmix->playback);
+        if(wmix->recordback)
+	        wmix_alsa_release(wmix->recordback);
 #endif
         //
         // pthread_mutex_destroy(&wmix->lock);
@@ -2917,7 +2965,7 @@ WMix_Struct *wmix_init(void)
     if(!playback)
         return NULL;
     //
-    SNDPCMContainer_t *recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
+    SNDPCMContainer_t *recordback = NULL;//wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
 
 #endif
     //
