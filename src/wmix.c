@@ -2828,7 +2828,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     //
 #if(WMIX_MODE==1)
     uint8_t write_buff[1024+32];
-    uint32_t pkg_size = 1024;
+    uint32_t pkg_size = 160;
 #else
     uint32_t divVal = WMIX_SAMPLE*WMIX_CHANNELS/8;
     SNDPCMContainer_t *playback = wmtp->wmix->playback;
@@ -2846,6 +2846,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             if(wmix->head.U8 >= wmix->end.U8)
                 wmix->head.U8 = wmix->start.U8;
             //
+#if(WMIX_MODE==0)
             if(tt > 0)
             {
                 t2 = getTickUs() - t1;
@@ -2853,11 +2854,12 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     tt -= t2;
                 delayus((unsigned int)(tt*0.8));
             }
+#endif
             t1 = getTickUs();
             //
 #if(WMIX_MODE==1)
             // for(count = countTotal = 0, dist.U8 = write_buff; wmix->tick < tmpTick;)
-            for(count = countTotal = 0, dist.U8 = write_buff; countTotal < pkg_size*3;)
+            for(count = countTotal = 0, dist.U8 = write_buff; countTotal < pkg_size*8;)
 #else
             memset(playback->data_buf, 0, playback->chunk_bytes);
             // for(count = 0, dist.U8 = playback->data_buf; wmix->tick < tmpTick;)
@@ -3054,7 +3056,11 @@ WMix_Point wmix_load_wavStream(
     int16_t repairBuff[64], repairBuffCount, repairTemp;
     float repairStep, repairStepSum;
     //
+#if(WMIX_MODE == 0)
     uint16_t correct = WMIX_CHANNELS*WMIX_FREQ*16/8/5;
+#else
+    uint16_t correct = 0;
+#endif
     //
     if(!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;
@@ -4034,9 +4040,31 @@ void help(char *argv0)
 }
 
 #if(WMIX_MERGE_MODE==2)
+void _wmix_loop(WMixThread_Param *wmtp)
+{
+    sleep(1);
+    while(1)
+    {
+        //--- 重启 ---
+        if(wmtp->wmix->run == 0 && 
+            wmtp->wmix->thread_sys == 0 && 
+            wmtp->wmix->thread_record == 0 && 
+            wmtp->wmix->thread_play == 0)
+        {
+            delayus(500000);
+            wmtp->wmix->run = 1;
+            wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_shmem_write_circle);
+            wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_shmem_read_circle);
+            wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_msg_thread);
+            wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_play_thread);
+        }
+        delayus(500000);
+    }
+}
 void wmix_start()
 {
     main_wmix = wmix_init();
+    wmix_throwOut_thread(main_wmix, 0, NULL, 0, &_wmix_loop);
 }
 #else
 int main(int argc, char **argv)
