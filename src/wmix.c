@@ -1743,7 +1743,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     char *path = (char*)&wmtp->param[6];
     char *msgPath;
     key_t msg_key;
-    int msg_fd;
+    int msg_fd = 0;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -1837,7 +1837,12 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     divPow = (float)(WMIX_FREQ - freq)/freq;
     divCount = 0;
     //
-    if(wmtp->wmix->debug) printf("<< RTP-SEND-AAC: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n\n", 
+    if(wmtp->wmix->debug) printf(
+        "<< RTP-SEND-AAC: %s:%d start >>\n"
+        "   通道数: %d\n"
+        "   采样位数: %d bit\n"
+        "   采样率: %d Hz\n"
+        "   每秒字节: %d Bytes\n", 
         path, port, chn, sample, freq, bytes_p_second2);
     //线程计数
     wmtp->wmix->thread_record += 1;
@@ -1851,7 +1856,11 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                 WMIX_MSG_BUFF_SIZE, 
                 0, IPC_NOWAIT) < 1 && 
                 errno != ENOMSG) //消息队列被关闭
+            {
+                if(wmtp->wmix->debug)
+                    printf("RTP-SEND-AAC exit: %d msgrecv err/%d\n", msg_fd, errno);
                 break;
+            }
         }
         //
 #if(WMIX_MODE==1)
@@ -1915,6 +1924,8 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record -= 1;
     //
+    if(msg_fd)
+        msgctl(msg_fd, IPC_RMID, NULL);
     if(msgPath)
         remove(msgPath);
     free(buff);
@@ -1934,7 +1945,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     char *path = (char*)&wmtp->param[6];
     char *msgPath;
     key_t msg_key;
-    int msg_fd;
+    int msg_fd = 0;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -2008,7 +2019,11 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     buffSize2 = WMIX_CHANNELS*WMIX_SAMPLE/8*1024;
     totalWait = buffSize2*4;
     //
-    if(wmtp->wmix->debug) printf("<< RTP-RECV: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n\n", 
+    if(wmtp->wmix->debug) printf(
+        "<< RTP-RECV: %s:%d start >>\n"
+        "   通道数: %d\n"
+        "   采样位数: %d bit\n"
+        "   采样率: %d Hz\n", 
         path, port, chn, sample, freq);
     //
     src.U8 = buff;
@@ -2026,7 +2041,11 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 WMIX_MSG_BUFF_SIZE, 
                 0, IPC_NOWAIT) < 1 && 
                 errno != ENOMSG) //消息队列被关闭
+            {
+                if(wmtp->wmix->debug)
+                    printf("RTP-RECV exit: %d msgrecv err/%d\n", msg_fd, errno);
                 break;
+            }
         }
         //往aacBuff读入数据
         ret = rtp_recv(ss, &rtpPacket, &retSize);
@@ -2087,6 +2106,8 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     //
     if(wmtp->wmix->debug) printf(">> RTP-RECV: %s:%d end <<\n", path, port);
     //删除文件
+    if(msg_fd)
+        msgctl(msg_fd, IPC_RMID, NULL);
     if(msgPath)
         remove(msgPath);
     close(ss->fd);
@@ -2113,7 +2134,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     char *path = (char*)&wmtp->param[6];
     char *msgPath;
     key_t msg_key;
-    int msg_fd;
+    int msg_fd = 0;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -2197,7 +2218,11 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     buffSize = 320;
     buff = malloc(2*WMIX_SAMPLE/8*1024);
     //
-    if(wmtp->wmix->debug) printf("<< RTP-SEND-PCM: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n\n", 
+    if(wmtp->wmix->debug) printf(
+        "<< RTP-SEND-PCM: %s:%d start >>\n"
+        "   通道数: %d\n"
+        "   采样位数: %d bit\n"
+        "   采样率: %d Hz\n", 
         path, port, chn, sample, freq);
     //线程计数
     wmtp->wmix->thread_record += 1;
@@ -2212,7 +2237,11 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 0, IPC_NOWAIT) < 1)
             {
                 if(errno != ENOMSG) //消息队列被关闭
+                {
+                    if(wmtp->wmix->debug)
+                        printf("RTP-SEND-PCM exit: %d msgrecv err/%d\n", msg_fd, errno);
                     break;
+                }
             }
             else
             {
@@ -2297,6 +2326,8 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record -= 1;
     //
+    if(msg_fd)
+        msgctl(msg_fd, IPC_RMID, NULL);
     if(msgPath)
         remove(msgPath);
 #if(WMIX_MODE==1)
@@ -2317,7 +2348,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     char *path = (char*)&wmtp->param[6];
     char *msgPath;
     key_t msg_key;
-    int msg_fd;
+    int msg_fd = 0;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -2381,7 +2412,11 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     totalPow = (double)buffSize2/buffSize;
     totalWait = 320*4;//buffSize2/2;
     //
-    if(wmtp->wmix->debug) printf("<< RTP-RECV-PCM: %s:%d start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n\n", 
+    if(wmtp->wmix->debug) printf(
+        "<< RTP-RECV-PCM: %s:%d start >>\n"
+        "   通道数: %d\n"
+        "   采样位数: %d bit\n"
+        "   采样率: %d Hz\n", 
         path, port, chn, sample, freq);
     //
     src.U8 = buff;
@@ -2400,7 +2435,11 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
                 0, IPC_NOWAIT) < 1)
             {
                 if(errno != ENOMSG) //消息队列被关闭
+                {
+                    if(wmtp->wmix->debug)
+                        printf("RTP-RECV-PCM exit: %d msgrecv err/%d\n", msg_fd, errno);
                     break;
+                }
             }
             else
             {
@@ -2476,6 +2515,8 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     //
     if(wmtp->wmix->debug) printf(">> RTP-RECV-PCM: %s:%d end <<\n", path, port);
     //删除文件
+    if(msg_fd)
+        msgctl(msg_fd, IPC_RMID, NULL);
     if(msgPath)
         remove(msgPath);
 #if(!RTP_ONE_SR)
@@ -2583,6 +2624,8 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
     if(queue >= 0)
         wmtp->wmix->queue.head += 1;
     //
+    if(msg_fd)
+        msgctl(msg_fd, IPC_RMID, NULL);
     if(msgPath)
         remove(msgPath);
     //线程计数
@@ -2740,7 +2783,8 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
         //在别的地方重开了该程序的副本
         else if(ret < 1 && errno != ENOMSG)
         {
-            fprintf(stderr, "wmix_msg_thread: process exist\n");
+            if(wmix->debug)
+                printf("wmix_msg_thread exit: %d msgrecv err/%d\n", wmix->msg_fd, errno);
             err_exit = true;
             break;
         }
@@ -3417,14 +3461,23 @@ void wmix_load_wav(
         return;
 	}
     //
-    if(wmix->debug) printf("<< PLAY-WAV: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n   tick: %d\n", 
+    if(wmix->debug) printf(
+        "<< PLAY-WAV: %s start >>\n"
+        "   通道数: %d\n"
+        "   采样位数: %d bit\n"
+        "   采样率: %d Hz\n"
+        "   每秒字节: %d Bytes\n"
+        "   重播间隔: %d sec\n"
+        "   tick: %d\n"
+        "   msgid: %d\n", 
         wavPath,
         wav.format.channels,
         wav.format.sample_length,
         wav.format.sample_rate,
         wav.format.bytes_p_second,
         repeat/10,
-        wmix->tick);
+        wmix->tick,
+        msg_fd);
     //独占 reduceMode
     if(rdce > 1 && wmix->reduceMode == 1)
     {
@@ -3465,8 +3518,7 @@ void wmix_load_wav(
     head.U8 = 0;
     tick = 0;
     //
-    while(wmix->run && 
-        loopWord == wmix->loopWord)
+    while(wmix->run && loopWord == wmix->loopWord)
     {
         //msg 检查
         if(msg_fd){
@@ -3474,7 +3526,11 @@ void wmix_load_wav(
                 WMIX_MSG_BUFF_SIZE, 
                 0, IPC_NOWAIT) < 1 && 
                 errno != ENOMSG) //消息队列被关闭
+            {
+                if(wmix->debug)
+                    printf("PLAY-WAV exit: %d msgrecv err/%d\n", msg_fd, errno);
                 break;
+            }
         }
         //播放文件
         ret = read(fd, buff, buffSize);
@@ -3509,7 +3565,11 @@ void wmix_load_wav(
             }
             //
             if(head.U8 == 0)
+            {
+                if(wmix->debug)
+                    printf("PLAY-WAV exit: head.U8 = 0\n");
                 break;
+            }
         }
         else if(repeat)
         {
@@ -3531,7 +3591,11 @@ void wmix_load_wav(
                         WMIX_MSG_BUFF_SIZE, 
                         0, IPC_NOWAIT) < 1 && 
                         errno != ENOMSG) //消息队列被关闭
+                    {
+                        if(wmix->debug)
+                            printf("PLAY-WAV exit: %d msgrecv err/%d\n", msg_fd, errno);
                         break;
+                    }
                 }
             }
             //
@@ -3622,7 +3686,13 @@ void wmix_load_aac(
     //
     bytes_p_second = chn*sample/8*freq;
     //
-    if(wmix->debug) printf("<< PLAY-AAC: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
+    if(wmix->debug) printf(
+        "<< PLAY-AAC: %s start >>\n"
+        "   通道数: %d\n"
+        "   采样位数: %d bit\n"
+        "   采样率: %d Hz\n"
+        "   每秒字节: %d Bytes\n"
+        "   重播间隔: %d sec\n", 
         aacPath,
         chn,
         sample,
@@ -3655,7 +3725,11 @@ void wmix_load_aac(
                 WMIX_MSG_BUFF_SIZE, 
                 0, IPC_NOWAIT) < 1 && 
                 errno != ENOMSG) //消息队列被关闭
+            {
+                if(wmix->debug)
+                    printf("PLAY-AAC exit: %d msgrecv err/%d\n", msg_fd, errno);
                 break;
+            }
         }
         //播放文件
         if(ret > 0)
@@ -3713,7 +3787,11 @@ void wmix_load_aac(
                         WMIX_MSG_BUFF_SIZE, 
                         0, IPC_NOWAIT) < 1 && 
                         errno != ENOMSG) //消息队列被关闭
+                    {
+                        if(wmix->debug)
+                            printf("PLAY-AAC exit: %d msgrecv err/%d\n", msg_fd, errno);
                         break;
+                    }
                 }
             }
             //
@@ -3809,7 +3887,13 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
         wmm->totalPow = (double)(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ)/wmm->bps;
         wmm->totalWait = wmm->bps*wmm->totalPow/3;
         //
-        if(wmm->wmix->debug) printf("<< PLAY-MP3: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\n", 
+        if(wmm->wmix->debug) printf(
+            "<< PLAY-MP3: %s start >>\n"
+            "   通道数: %d\n"
+            "   采样位数: %d bit\n"
+            "   采样率: %d Hz\n"
+            "   每秒字节: %d Bytes\n"
+            "   重播间隔: %d sec\n", 
             wmm->mp3Path,
             pcm->channels, 16,
             header->samplerate,
@@ -3827,7 +3911,12 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
             WMIX_MSG_BUFF_SIZE, 
             0, IPC_NOWAIT) < 1 && 
             errno != ENOMSG) //消息队列被关闭
+        {
+            if(wmm->wmix->debug)
+                printf("PLAY-MP3 exit: %d msgrecv err/%d\n", wmm->msg_fd, errno);
+            // break;
             return MAD_FLOW_STOP;
+        }
     }
     //
     if(pcm->channels == 2)
@@ -3916,7 +4005,11 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
                             WMIX_MSG_BUFF_SIZE, 
                             0, IPC_NOWAIT) < 1 && 
                             errno != ENOMSG) //消息队列被关闭
+                        {
+                            if(wmm->wmix->debug)
+                                printf("PLAY-MP3 exit: %d msgrecv err/%d\n", wmm->msg_fd, errno);
                             return MAD_FLOW_STOP;
+                        }
                     }
                 }
                 //重启 reduceMode
