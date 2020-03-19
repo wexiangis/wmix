@@ -1315,8 +1315,6 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
-void signal_get_SIGPIPE(int id){}
-
 void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 {
     char *path = (char*)&wmtp->param[4];
@@ -1369,8 +1367,6 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
     }
     //
     fd_write = open(path, O_WRONLY);
-    //
-    signal(SIGPIPE, signal_get_SIGPIPE);
     //
     bytes_p_second = WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ;
     bytes_p_second2 = chn*sample/8*freq;
@@ -4162,6 +4158,15 @@ void wmix_start()
     wmix_throwOut_thread(main_wmix, 0, NULL, 0, &_wmix_loop);
 }
 #else
+void wmix_getSignal(int id)
+{
+    printf("wmix signal: %d\n", id);
+    if(id == SIGINT)
+    {
+        wmix_exit(main_wmix);
+        exit(0);
+    }
+}
 int main(int argc, char **argv)
 {
     int i, volume = 10;
@@ -4181,6 +4186,9 @@ int main(int argc, char **argv)
     }
 
     main_wmix = wmix_init();
+    
+    signal(SIGPIPE, wmix_getSignal);
+    signal(SIGINT, wmix_getSignal);
 
     if(main_wmix)
     {
