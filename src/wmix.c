@@ -662,7 +662,9 @@ int SNDWAV_SetParams2(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels
         fprintf(stderr, "Error snd_pcm_hw_params_get_buffer_time_max\n");
         return -1;
     }
-    // if (buffer_time > 500000) buffer_time = 500000;
+
+    //ubuntu下该值会非常大,需限制
+    if (buffer_time > 500000) buffer_time = 500000;
     period_time = buffer_time / 4;
 
     if (snd_pcm_hw_params_set_buffer_time_near(sndpcm->handle, hwparams, &buffer_time, 0) < 0) {
@@ -3885,7 +3887,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     {
         wmm->bps = pcm->channels*16/8*header->samplerate;
         wmm->totalPow = (double)(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ)/wmm->bps;
-        wmm->totalWait = wmm->bps*wmm->totalPow/3;
+        wmm->totalWait = wmm->bps*wmm->totalPow/2;
         //
         if(wmm->wmix->debug) printf(
             "<< PLAY-MP3: %s start >>\n"

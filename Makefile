@@ -1,10 +1,10 @@
-cross:=arm-linux-gnueabihf
+# cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
 # 选择启用音频库 0/关 1/启用
-MAKE_MP3=0
-MAKE_AAC=0
+MAKE_MP3=1
+MAKE_AAC=1
 
 host:=
 cc:=gcc
@@ -83,7 +83,7 @@ sendRecvTest:
 	@$(cc) -Wall -o sendaac $(obj-sendaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 	@$(cc) -Wall -o recvaac $(obj-recvaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 
-libs: libalsa libmad libfaac libfaad
+libs: libmad libfaac libfaad
 	@echo "---------- all complete !! ----------"
 
 libalsa:
