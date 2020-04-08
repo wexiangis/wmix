@@ -198,7 +198,8 @@ void *_tmp_callback(void *path)
             if(access(path, F_OK) != 0)
             {
                 fprintf(stderr, "wmix_user: _tmp_callback path err\n");
-                while(read(fd, buff, 64) >= 0);
+                while(read(fd, buff, 64) >= 0)
+                    usleep(1000);
                 break;
             }
             sleep(1);
