@@ -132,7 +132,7 @@ void fun_write_fifo(void)
     int fd;
     ssize_t ret, total = 0;
     uint8_t buff[4096];
-    int stream = wmix_stream_open(1, 16, 22050, 0);
+    int stream = wmix_stream_open(1, 16, 22050, 0, NULL);
     if(stream > 0)
     {
         // fd = open("./music.wav", O_RDONLY);
@@ -173,7 +173,7 @@ void fun_read_fifo(void)
     size_t ret, total = 0;
     int fd;
     //
-    int fd_record = wmix_record_stream_open(chn, sample, freq);
+    int fd_record = wmix_record_stream_open(chn, sample, freq, NULL);
     size_t sum = chn*sample/8*freq*second;
 
     if(fd_record > 0)
@@ -220,8 +220,8 @@ void fun_wr_fifo(void)
     char buff[1024];
     size_t ret, total = 0;
     //
-    int fd = wmix_stream_open(chn, sample, freq, 3);
-    int fd_record = wmix_record_stream_open(chn, sample, freq);
+    int fd = wmix_stream_open(chn, sample, freq, 3, NULL);
+    int fd_record = wmix_record_stream_open(chn, sample, freq, NULL);
     size_t sum = chn*sample/8*freq*second;
 
     if(fd_record > 0 && fd > 0)
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
     uint8_t chn = 1;
     uint8_t sample = 16;
     uint16_t freq = 8000;
-    uint16_t second = 5;
+    uint16_t second = 20;
     //
     WAVContainer_t wav;
     char buff[1024];
@@ -281,6 +281,7 @@ int main(int argc, char **argv)
             ret = read(fd_record, buff, sizeof(buff));
             if(ret > 0)
             {
+                printf("read: %d\n", ret);
                 if(write(fd, buff, ret) < 1)
                     break;
                 total += ret;
@@ -288,20 +289,25 @@ int main(int argc, char **argv)
                     break;
             }
             else
+            {
+                printf("read err !\n");
                 break;
+            }
         }
         //
         close(fd_record);
         close(fd);
         printf("wav write end: %ld\n", total);
     }
+    else
+        printf("wmix_record_stream_open err !\n");
 }
 #elif(1)
 int main(int argc, char **argv)
 {
     int fd, stream;
     ssize_t ret, total = 0, readSize = 320;
-    uint8_t buff[8192];
+    uint8_t buff[8192], path[64];
     WAVContainer_t container;
     __time_t t1, t2;
 
@@ -314,7 +320,8 @@ int main(int argc, char **argv)
                 container.format.channels, 
                 container.format.sample_length, 
                 container.format.sample_rate, 
-                0);
+                0,
+                path);
             if(stream > 0)
             {
                 readSize = (ssize_t)(320*container.format.channels*((float)container.format.sample_rate/8000));
@@ -324,6 +331,12 @@ int main(int argc, char **argv)
                 t1 = t2 = getTickUs();
                 while(1)
                 {
+                    if(!wmix_check_path(path))
+                    {
+                        fprintf(stderr, "check path failed !!\n");
+                        break;
+                    }
+                    //
                     ret = read(fd, buff, readSize);
                     if(ret > 0)
                     {

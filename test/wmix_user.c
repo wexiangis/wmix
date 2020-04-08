@@ -184,7 +184,26 @@ void signal_get_SIGPIPE(int id){}
 
 void *_tmp_callback(void *path)
 {
-    open((char*)path, O_RDONLY | O_NONBLOCK);//防止下面的写open阻塞
+    char buff[64];
+    int fd = open((char*)path, O_RDONLY | O_NONBLOCK);//防止下面的写open阻塞
+    if(fd > 0)
+    {
+        while(1)
+        {
+            if(read(fd, buff, 0) < 0)
+            {
+                fprintf(stderr, "wmix_user: _tmp_callback read err\n");
+                break;
+            }
+            if(access(path, F_OK) != 0)
+            {
+                fprintf(stderr, "wmix_user: _tmp_callback path err\n");
+                while(read(fd, buff, 64) >= 0);
+                break;
+            }
+            sleep(1);
+        }
+    }
     return NULL;
 }
 
@@ -192,22 +211,23 @@ int wmix_stream_open(
     uint8_t channels,
     uint8_t sample,
     uint16_t freq,
-    uint8_t backgroundReduce)
+    uint8_t backgroundReduce,
+    char *path)
 {
     if(!freq || !channels || !sample)
         return 0;
     //
     int fd = 0;
     int timeout;
-    char *path;
+    char *_path;
     WMix_Msg msg;
     //msg初始化
     MSG_INIT();
     //路径创建
     memset(&msg, 0, sizeof(WMix_Msg));
-    path = (char*)&msg.value[4];
-    wmix_auto_path(path, 0);
-    // remove(path);
+    _path = (char*)&msg.value[4];
+    wmix_auto_path(_path, 0);
+    // remove(_path);
     //装填 message
     msg.type = 4 + backgroundReduce*0x100;
     msg.value[0] = channels;
@@ -222,10 +242,10 @@ int wmix_stream_open(
         if(timeout-- == 0)
             break;
         usleep(10000);
-    }while(access(path, F_OK) != 0);
+    }while(access(_path, F_OK) != 0);
     //
-    if(access(path, F_OK) != 0){
-        fprintf(stderr, "wmix_stream_init: %s timeout\n", path);
+    if(access(_path, F_OK) != 0){
+        fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
         return 0;
     }
     //
@@ -236,17 +256,20 @@ int wmix_stream_open(
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);//禁用线程同步, 线程运行结束后自动释放
     //抛出线程
-    pthread_create(&th, &attr, _tmp_callback, (void*)path);
+    pthread_create(&th, &attr, _tmp_callback, (void*)_path);
     //attr destroy
     pthread_attr_destroy(&attr);
 #else
     if(fork() == 0)
-        open(path, O_RDONLY | O_NONBLOCK);//防止下面的写阻塞打不开
+        open(_path, O_RDONLY | O_NONBLOCK);//防止下面的写阻塞打不开
     else
 #endif
-    fd = open(path, O_WRONLY);
+    fd = open(_path, O_WRONLY | O_NONBLOCK);
     //
     signal(SIGPIPE, signal_get_SIGPIPE);
+    //
+    if(path)
+        strcpy(path, _path);
     //
     return fd;
 }
@@ -254,22 +277,23 @@ int wmix_stream_open(
 int wmix_record_stream_open(
     uint8_t channels,
     uint8_t sample,
-    uint16_t freq)
+    uint16_t freq,
+    char *path)
 {
     if(!freq || !channels || !sample)
         return 0;
     //
     int fd = 0;
     int timeout;
-    char *path;
+    char *_path;
     WMix_Msg msg;
     //msg初始化
     MSG_INIT();
     //路径创建
     memset(&msg, 0, sizeof(WMix_Msg));
-    path = (char*)&msg.value[4];
-    wmix_auto_path(path, 0);
-    // remove(path);
+    _path = (char*)&msg.value[4];
+    wmix_auto_path(_path, 0);
+    // remove(_path);
     //装填 message
     msg.type = 6;
     msg.value[0] = channels;
@@ -284,14 +308,17 @@ int wmix_record_stream_open(
         if(timeout-- == 0)
             break;
         usleep(10000);
-    }while(access(path, F_OK) != 0);
+    }while(access(_path, F_OK) != 0);
     //
-    if(access(path, F_OK) != 0){
-        fprintf(stderr, "wmix_stream_init: %s timeout\n", path);
+    if(access(_path, F_OK) != 0){
+        fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
         return 0;
     }
     //
-    fd = open(path, O_RDONLY);
+    fd = open(_path, O_RDONLY);
+    //
+    if(path)
+        strcpy(path, _path);
     //
     return fd;
 }
@@ -593,4 +620,19 @@ void wmix_log(int b)
     msg.value[0] = b;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+}
+
+//============= id path =============
+
+void wmix_get_path(int id, char *path)
+{
+    wmix_auto_path(path, id);
+}
+
+bool wmix_check_path(char *path)
+{
+    if(access(path, F_OK) == 0)
+        return true;
+    else
+        return false;
 }

@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define WMIX_VERSION "V3.7 - 20200318"
+#define WMIX_VERSION "V3.7 - 20200408"
 
 //----- 设置音量 count/div 例如: 30% -> wmix_set_volume(3,10) -----
 //count: 音量  div: 分度
@@ -51,7 +51,8 @@ int wmix_stream_open(
     uint8_t channels,
     uint8_t sample,
     uint16_t freq,
-    uint8_t backgroundReduce);
+    uint8_t backgroundReduce,
+    char *path);
 
 //----- 录音 -----
 //成功返回fd(fifo的读取端)  失败返回0
@@ -66,7 +67,8 @@ int wmix_stream_open(
 int wmix_record_stream_open(
     uint8_t channels,
     uint8_t sample,
-    uint16_t freq);
+    uint16_t freq,
+    char *path);
 
 //----- 录音到文件 -----
 //channels: 声道数(取值1,2)
@@ -119,7 +121,13 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 
 int16_t wmix_mem_write(int16_t *dat, int16_t len);
 
+//
+void wmix_mem_open(void);
 void wmix_mem_close(void);
+
+//
+void wmix_get_path(int id, char *path);
+bool wmix_check_path(char *path);
 
 #ifdef __cplusplus
 };

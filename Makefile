@@ -1,4 +1,4 @@
-# cross:=arm-linux-gnueabihf
+cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
@@ -75,7 +75,7 @@ wmixmsg:
 	@$(cc) -Wall -o wmixMsg $(obj-wmixmsg) -lpthread
 
 fifo:
-	@$(cc) -Wall -o fifo -lpthread -I./test -I./src ./test/fifo.c ./test/wmix_user.c ./src/wav.c
+	@$(cc) -Wall -o fifo -lpthread -I./test -I./src ./test/fifo.c ./test/wmix_user.c ./src/wav.c -lpthread
 
 sendRecvTest:
 	@$(cc) -Wall -o sendpcm $(obj-sendpcm) -I./src
