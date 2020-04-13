@@ -545,6 +545,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
     int16_t w = *addr;
+    int timeout = 0;
     //
     if(!ai_circle)
     {
@@ -567,6 +568,11 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         {
             if(wait && ai_circle)
             {
+                if(timeout++ > 2000)//2秒超时
+                {
+                    wmix_mem_open();
+                    break;
+                }
                 usleep(1000);
                 continue;
             }
