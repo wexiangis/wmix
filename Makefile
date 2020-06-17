@@ -1,10 +1,12 @@
-cross:=arm-linux-gnueabihf
+# cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
 # 选择启用音频库 0/关 1/启用
-MAKE_MP3=1
-MAKE_AAC=1
+MAKE_MP3=0
+MAKE_AAC=0
+# 选择启用webrtc_vad人声识别 0/关 1/启用
+MAKE_WEBRTC_VAD=1
 
 host:=
 cc:=gcc
@@ -17,7 +19,7 @@ endif
 ROOT=$(shell pwd)
 
 # BASE
-obj-wmix+=./src/wmix.c \
+obj-wmix=./src/wmix.c \
 		./src/wmix.h \
 		./src/wav.c \
 		./src/wav.h \
@@ -25,18 +27,27 @@ obj-wmix+=./src/wmix.c \
 		./src/rtp.h \
 		./src/g711codec.c \
 		./src/g711codec.h
-obj-flags += -lm -lpthread -lasound -ldl
+obj-flags= -lm -lpthread -lasound -ldl
+targetlib= libalsa
 
 # MP3 LIB
 ifeq ($(MAKE_MP3),1)
 obj-wmix+=./src/id3.c ./src/id3.h
-obj-flags += -lmad
+obj-flags+= -lmad
+targetlib+= libmad
 endif
 
 # AAC LIB
 ifeq ($(MAKE_AAC),1)
 obj-wmix+=./src/aac.c ./src/aac.h
-obj-flags += -lfaac -lfaad
+obj-flags+= -lfaac -lfaad
+targetlib+= libfaac libfaad
+endif
+
+# WEBRTC_VAd LIB
+ifeq ($(MAKE_WEBRTC_VAD),1)
+obj-flags+= -lWebRtcVad
+targetlib+= libWebRtcVad
 endif
 
 obj-wmixmsg+=./test/wmix_user.c \
@@ -68,7 +79,7 @@ obj-recvaac+=./test/recvAAC.c \
 		./src/aac.h
 
 target: wmixmsg
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC)
+	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC) -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
@@ -83,7 +94,7 @@ sendRecvTest:
 	@$(cc) -Wall -o sendaac $(obj-sendaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 	@$(cc) -Wall -o recvaac $(obj-recvaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 
-libs: libmad libfaac libfaad
+libs: $(targetlib)
 	@echo "---------- all complete !! ----------"
 
 libalsa:
@@ -118,6 +129,14 @@ libfaad:
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/faad2-2.8.8 -rf
+
+libWebRtcVad:
+	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
+	cd $(ROOT)/libs/webrtc_cut && \
+	./build_so.sh $(cc) && \
+	cp ./install/* ../ -rf && \
+	cd - && \
+	rm $(ROOT)/libs/webrtc_cut -rf
 
 cleanall: clean
 	@rm -rf $(ROOT)/libs/* -rf

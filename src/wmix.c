@@ -11,15 +11,22 @@
 
 #include "wmix.h"
 #include "wav.h"
+
+#include "g711codec.h"
+#include "rtp.h"
+
 #if(WMIX_MP3)
 #include "mad.h"
 #include "id3.h"
 #endif
-#include "rtp.h"
+
 #if(WMIX_AAC)
 #include "aac.h"
 #endif
-#include "g711codec.h"
+
+#if(WMIX_WEBRTC_VAD)
+#include "webrtc_vad.h"
+#endif
 
 static WMix_Struct *main_wmix = NULL;
 
@@ -886,6 +893,16 @@ typedef struct{
     int16_t buff[AI_CIRCLE_BUFF_LEN+4];
 }ShmemAi_Circle;
 
+/*
+    共享内存使用说明：
+
+    "/tmp/wmix", 'O'： 单通道8000Hz客户端写入音频数据，这里读并播放
+
+    "/tmp/wmix", 'I'： 单通道8000Hz这里录音并写入，客户端读取录音数据
+
+    "/tmp/wmix", 'L'： 双通道44100Hz这里录音并写入，客户端读取或混音器自己的录音线程取用
+ */
+
 static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL, *ao_circleLocal = NULL;
 
 int wmix_mem_create(char *path, int flag, int size, void **mem)
@@ -1058,21 +1075,26 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     uint8_t *buff;
     float divCount, divPow;
     //转换目标格式
-    int chn = 1, freq = 8000;
-    //
-    int pak_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
-    //
+    int chn = 1, freq = 8000;// "/tmp/wmix", 'I' 共享内存写入音频参数
+#if(WMIX_WEBRTC_VAD)
+    VadInst* handle = NULL;
+    int timeoutms = 0;
+    int hitVoices = 0, reduce = 0;
+    int16_t *p16;
+#endif
+    //录音句柄已初始化
     if(wmix->recordback)
     {
-        buffSize = wmix->recordback->chunk_size;
+        // buffSize = wmix->recordback->chunk_size;
+        buffSize = WMIX_FREQ*WMIX_CHANNELS*WMIX_SAMPLE/8/1000*20/2;//按20ms的间隔采样
         buff = wmix->recordback->data_buf;
     }
-    //
+    //每帧字节数
     frame_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
-    //
+    //录音频率和目标频率的比值
     divPow = (float)(WMIX_FREQ - freq)/freq;
     divCount = 0;
-    //
+    //线程数+1
     wmix->thread_sys += 1;
     //
     while(wmix->run)
@@ -1082,10 +1104,43 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
             if(wmix->recordback)
             {
                 //神奇的 SNDWAV_ReadPcm
-                //读取数据大小按 pak_size 为单位
-                ret = SNDWAV_ReadPcm(wmix->recordback, buffSize)*pak_size;
+                //读取数据大小按 frame_size 为单位
+                ret = SNDWAV_ReadPcm(wmix->recordback, buffSize)*frame_size;
                 if(ret > 0)
                 {
+#if(WMIX_WEBRTC_VAD)
+                    // 人声识别,初始化
+                    if(handle == NULL){
+                        if(WebRtcVad_Create(&handle) == 0){
+                            if(WebRtcVad_Init(handle) == 0)
+                                WebRtcVad_set_mode(handle, 3);// 0~3,越大越激进
+                        }
+                    }
+                    if(handle)
+                    {
+                        // 人声识别,返回 -1/参数错误 0/没有声音 1/识别到人声(或者环境声音较大)
+                        hitVoices = WebRtcVad_Process(handle, WMIX_FREQ, (const int16_t*)wmix->recordback->data_buf, ret/2);
+                        // 没有识别到声音
+                        if(hitVoices == 0)
+                        {
+                            // reduce 逐渐增大,直至完全消声
+                            if(reduce < 8)
+                                reduce += 1;
+                        }
+                        // 识别到声音
+                        else{
+                            // reduce 逐渐恢复到0,直至最大音量
+                            if(reduce > 0)
+                                reduce -= 1;
+                        }
+                        // 2字节为1帧, 声音根据 reduce 的大小右移(声音变小)
+                        p16 = (int16_t*)wmix->recordback->data_buf;
+                        for(count = 0; count < ret/2; count++)
+                            p16[count] >>= reduce;
+                    }
+                    else
+                        hitVoices = reduce = 0;
+#endif
                     wmix_mem_write2(wmix->recordback->data_buf, ret/2);
                     RECORD_DATA_TRANSFER();
                     wmix_mem_write(buff, buffSize2/2);
@@ -1096,23 +1151,41 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 if((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
                 {
                     printf("wmix record: start\n");
-                    buffSize = wmix->recordback->chunk_size;
+                    // buffSize = wmix->recordback->chunk_size;
+                    buffSize = WMIX_FREQ*WMIX_CHANNELS*WMIX_SAMPLE/8/1000*20/2;//按20ms的间隔采样
                     buff = wmix->recordback->data_buf;
                     continue;
                 }
                 else
                     sleep(3);
             }
-            delayus(10000);
+            delayus(18000);
+
+#if(WMIX_WEBRTC_VAD)
+            timeoutms += 18;
+            if(timeoutms > 200){
+                timeoutms = 0;
+                if(hitVoices > 0)
+                    printf(" webrtc_vad: %d voices \r\n", hitVoices);
+            }
+#endif
         }
         else
         {
+            //录音句柄已初始化
             if(wmix->recordback)
             {
                 printf("wmix record: clear\n");
                 wmix_alsa_release(wmix->recordback);
                 wmix->recordback = NULL;
             }
+#if(WMIX_WEBRTC_VAD)
+            if(handle){
+                WebRtcVad_Free(handle);
+                handle = NULL;
+                hitVoices = 0;
+            }
+#endif
             delayus(10000);
         }
     }

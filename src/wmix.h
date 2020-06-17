@@ -17,6 +17,12 @@
 #define WMIX_AAC 0
 #endif
 
+#ifdef MAKE_WEBRTC_VAD
+#define WMIX_WEBRTC_VAD MAKE_WEBRTC_VAD
+#else
+#define WMIX_WEBRTC_VAD 0
+#endif
+
 //rtp发收同fd
 #if(WMIX_MODE!=1)
 #define RTP_ONE_SR 0
@@ -60,13 +66,24 @@ typedef struct SNDPCMContainer {
 #define WMIX_MSG_BUFF_SIZE 128
 
 #if(WMIX_MODE == 0)
-#define WMIX_CHANNELS    2
-#define WMIX_SAMPLE      16
-#define WMIX_FREQ        44100
+
+//WEBRTC_VAD人声识别只支持单声道
+#if(WMIX_WEBRTC_VAD)
+#define WMIX_CHANNELS    1
 #else
+#define WMIX_CHANNELS    2
+#endif
+
+#define WMIX_SAMPLE      16
+#define WMIX_FREQ        16000
+
+#else
+
+//hiaudio只支持单声道
 #define WMIX_CHANNELS    1
 #define WMIX_SAMPLE      16
 #define WMIX_FREQ        8000
+
 #endif
 
 typedef struct{
