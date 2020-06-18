@@ -8,7 +8,7 @@
 
 * make
 
-3. 主程序抛后台, -d 表示打印debug信息
+3. 主程序抛后台(先拷贝 ./libs/lib/*.so 到运行环境), -d 表示打印debug信息
 
 * wmix -d &
 
