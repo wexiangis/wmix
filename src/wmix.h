@@ -9,7 +9,8 @@
 //0/alsa 1/hi3516
 #define WMIX_MODE 0
 
-//选择启用,记得改Makefile取消库链接
+/* ---------- 接收来自Makefile的宏定义 ---------- */
+
 #ifdef MAKE_MP3
 #define WMIX_MP3 MAKE_MP3
 #else
@@ -28,12 +29,40 @@
 #define WMIX_WEBRTC_VAD 0
 #endif
 
+#ifdef MAKE_WEBRTC_AEC
+#define WMIX_WEBRTC_AEC MAKE_WEBRTC_AEC
+#else
+#define WMIX_WEBRTC_AEC 0
+#endif
+
+#ifdef MAKE_WEBRTC_AECM
+#define WMIX_WEBRTC_AECM MAKE_WEBRTC_AECM
+#else
+#define WMIX_WEBRTC_AECM 0
+#endif
+
+#ifdef MAKE_WEBRTC_NS
+#define WMIX_WEBRTC_NS MAKE_WEBRTC_NS
+#else
+#define WMIX_WEBRTC_NS 0
+#endif
+
+#ifdef MAKE_WEBRTC_AGC
+#define WMIX_WEBRTC_AGC MAKE_WEBRTC_AGC
+#else
+#define WMIX_WEBRTC_AGC 0
+#endif
+
+/* ---------- rtp ---------- */
+
 //rtp发收同fd
 #if(WMIX_MODE!=1)
 #define RTP_ONE_SR 0
 #else
 #define RTP_ONE_SR 1
 #endif
+
+/* ---------- alsa ---------- */
 
 #include <stdio.h>
 #include <stdint.h>
@@ -57,7 +86,7 @@ typedef struct SNDPCMContainer {
 } SNDPCMContainer_t;
 #endif
 
-//-------------------- Wav Mix --------------------------
+/* ---------- wmix ---------- */
 
 #include <pthread.h>
 #include <sys/ipc.h>
@@ -167,6 +196,8 @@ typedef struct{
     uint32_t onPlayCount;//当前排队总数
 }WMix_Struct;
 
+/* ---------- 原始的操作方式 ---------- */
+
 //设置音量
 int sys_volume_set(uint8_t count, uint8_t div);
 
@@ -177,7 +208,7 @@ int sys_volume_set(uint8_t count, uint8_t div);
 int record_wav(char *filename,uint32_t duration_time, uint8_t chn, uint8_t sample, uint16_t freq);
 #endif
 
-//-------------------- 混音方式播放 --------------------
+/* ---------- 混音器主要操作 ---------- */
 
 //-- 支持混音范围: 44100Hz及以下频率,采样为16bit的音频 --
 

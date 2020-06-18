@@ -33,6 +33,23 @@
 #include "webrtc_vad.h"
 #endif
 
+#if(WMIX_WEBRTC_AEC)
+#include "echo_cancellation.h"
+#endif
+
+#if(WMIX_WEBRTC_AECM)
+#include "echo_control_mobile.h"
+#endif
+
+#if(WMIX_WEBRTC_NS)
+#include "noise_suppression.h"
+#include "noise_suppression_x.h"
+#endif
+
+#if(WMIX_WEBRTC_AGC)
+#include "gain_control.h"
+#endif
+
 static WMix_Struct *main_wmix = NULL;
 
 static void signal_callback(int signo)

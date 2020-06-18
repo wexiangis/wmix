@@ -23,6 +23,9 @@ MAKE_WEBRTC_AECM=1
 # 选择启用webrtc_ns噪音抑制 0/关 1/启用
 MAKE_WEBRTC_NS=1
 
+# 选择启用webrtc_agc自动增益 0/关 1/启用
+MAKE_WEBRTC_AGC=1
+
 # speex开源音频库
 MAKE_SPEEX=0
 
@@ -93,6 +96,12 @@ endif
 ifeq ($(MAKE_WEBRTC_NS),1)
 obj-flags+= -lwebrtcns
 targetlib+= libwebrtcns
+endif
+
+# WEBRTC_AGC LIB
+ifeq ($(MAKE_WEBRTC_AGC),1)
+obj-flags+= -lwebrtcagc
+targetlib+= libwebrtcagc
 endif
 
 # SPEEX LIB
@@ -209,6 +218,14 @@ libwebrtcns:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
 	./build_ns_so.sh $(cc) && \
+	cp ./install/* ../ -rf && \
+	cd - && \
+	rm $(ROOT)/libs/webrtc_cut -rf
+
+libwebrtcagc:
+	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
+	cd $(ROOT)/libs/webrtc_cut && \
+	./build_agc_so.sh $(cc) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
