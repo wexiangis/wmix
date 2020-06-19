@@ -3,7 +3,7 @@
 # cross:=arm-himix100-linux
 
 # 置1时编译外部alsa库,否则使用编译器自带
-MAKE_ALSA=0
+MAKE_ALSA=1
 
 # 选择启用mp3播放支持 0/关 1/启用
 MAKE_MP3=0

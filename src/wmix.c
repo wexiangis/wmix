@@ -20,6 +20,7 @@
 
 #include "g711codec.h"
 #include "rtp.h"
+#include "webrtc.h"
 
 #if(WMIX_MP3)
 #include "mad.h"
@@ -705,14 +706,14 @@ int SNDWAV_SetParams2(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels
 
     printf("\n---- SNDWAV_SetParams2 -----\n"
     "  chunk_size: %d\n" //每次写入帧数
-    "  bits_per_frame/8: %ld Bytes\n" //每帧字节数
-    "  chunk_bytes: %ld Bytes\n" //每次读写字节数
+    "  bits_per_frame/8: %d Bytes\n" //每帧字节数
+    "  chunk_bytes: %d Bytes\n" //每次读写字节数
     "  buffer_size: %d Bytes\n" //缓冲区大小
     "  buffer_time: %d Bytes\n" //缓冲区大小
     "  period_time: %d Bytes\n", //缓冲区大小
         (int)sndpcm->chunk_size,
-        sndpcm->bits_per_frame/8,
-        sndpcm->chunk_bytes,
+        (int)(sndpcm->bits_per_frame/8),
+        (int)sndpcm->chunk_bytes,
         (int)sndpcm->buffer_size,
         buffer_time,
         period_time);
@@ -794,14 +795,6 @@ void wmix_alsa_release(SNDPCMContainer_t *playback)
 #endif
 
 //--------------------------------------- 混音方式播放 ---------------------------------------
-
-static uint32_t get_tick_err(uint32_t current, uint32_t last)
-{
-    if(current > last)
-        return current - last;
-    else
-        return last - current;
-}
 
 typedef struct{
     WMix_Struct *wmix;
@@ -1078,17 +1071,11 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     float divCount, divPow;
     //转换目标格式
     int chn = 1, freq = 8000;// "/tmp/wmix", 'I' 共享内存写入音频参数
-#if(WMIX_WEBRTC_VAD)
-    VadInst* handle = NULL;
-    int timeoutms = 0;
-    int hitVoices = 0, reduce = 0;
-    int16_t *p16;
-#endif
     //录音句柄已初始化
     if(wmix->recordback)
     {
         // buffSize = wmix->recordback->chunk_size;
-        buffSize = WMIX_FREQ*WMIX_CHANNELS*WMIX_SAMPLE/8/1000*20/2;//按20ms的间隔采样
+        buffSize = WMIX_FREQ*WMIX_CHANNELS/1000*WEBRTC_INTERVAL_MS;//按20ms的间隔采样
         buff = wmix->recordback->data_buf;
     }
     //每帧字节数
@@ -1101,6 +1088,13 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     //
     while(wmix->run)
     {
+        //失能释放
+        if(!wmix->webrtcEnable[WR_VAD] && wmix->webrtcPoint[WR_VAD])
+        {
+            vad_release(wmix->webrtcPoint[WR_VAD]);
+            wmix->webrtcPoint[WR_VAD] = NULL;
+        }
+        //
         if(wmix->recordRun || wmix->shmemRun > 0)
         {
             if(wmix->recordback)
@@ -1110,39 +1104,26 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 ret = SNDWAV_ReadPcm(wmix->recordback, buffSize)*frame_size;
                 if(ret > 0)
                 {
-#if(WMIX_WEBRTC_VAD)
-                    // 人声识别,初始化
-                    if(handle == NULL){
-                        if(WebRtcVad_Create(&handle) == 0){
-                            if(WebRtcVad_Init(handle) == 0)
-                                WebRtcVad_set_mode(handle, 3);// 0~3,越大越激进
-                        }
-                    }
-                    if(handle)
+                    if(wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
                     {
-                        // 人声识别,返回 -1/参数错误 0/没有声音 1/识别到人声(或者环境声音较大)
-                        hitVoices = WebRtcVad_Process(handle, WMIX_FREQ, (const int16_t*)wmix->recordback->data_buf, ret/2);
-                        // 没有识别到声音
-                        if(hitVoices == 0)
-                        {
-                            // reduce 逐渐增大,直至完全消声
-                            if(reduce < 8)
-                                reduce += 1;
-                        }
-                        // 识别到声音
-                        else{
-                            // reduce 逐渐恢复到0,直至最大音量
-                            if(reduce > 0)
-                                reduce -= 1;
-                        }
-                        // 2字节为1帧, 声音根据 reduce 的大小右移(声音变小)
-                        p16 = (int16_t*)wmix->recordback->data_buf;
-                        for(count = 0; count < ret/2; count++)
-                            p16[count] >>= reduce;
+                        aec_setFrameFar(
+                            wmix->webrtcPoint[WR_AEC],
+                            (int16_t*)wmix->recordback->data_buf,
+                            buffSize);
                     }
-                    else
-                        hitVoices = reduce = 0;
-#endif
+
+                    if(wmix->webrtcEnable[WR_VAD])
+                    {
+                        // 人声识别,初始化
+                        if(wmix->webrtcPoint[WR_VAD] == NULL)
+                            wmix->webrtcPoint[WR_VAD] = vad_init(WMIX_CHANNELS, WMIX_FREQ);
+                        if(wmix->webrtcPoint[WR_VAD])
+                            vad_process(
+                                wmix->webrtcPoint[WR_VAD],
+                                (int16_t*)wmix->recordback->data_buf,
+                                buffSize);
+                    }
+
                     wmix_mem_write2((int16_t*)wmix->recordback->data_buf, ret/2);
                     RECORD_DATA_TRANSFER();
                     wmix_mem_write((int16_t*)buff, buffSize2/2);
@@ -1154,23 +1135,15 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 {
                     printf("wmix record: start\n");
                     // buffSize = wmix->recordback->chunk_size;
-                    buffSize = WMIX_FREQ*WMIX_CHANNELS*WMIX_SAMPLE/8/1000*20/2;//按20ms的间隔采样
+                    buffSize = WMIX_FREQ*WMIX_CHANNELS/1000*WEBRTC_INTERVAL_MS;//按20ms的间隔采样
                     buff = wmix->recordback->data_buf;
                     continue;
                 }
                 else
                     sleep(3);
             }
+            //矫正到20ms
             delayus(18000);
-
-#if(WMIX_WEBRTC_VAD)
-            timeoutms += 18;
-            if(timeoutms > 200){
-                timeoutms = 0;
-                if(hitVoices > 0)
-                    printf(" webrtc_vad: %d voices \r\n", hitVoices);
-            }
-#endif
         }
         else
         {
@@ -1181,13 +1154,13 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 wmix_alsa_release(wmix->recordback);
                 wmix->recordback = NULL;
             }
-#if(WMIX_WEBRTC_VAD)
-            if(handle){
-                WebRtcVad_Free(handle);
-                handle = NULL;
-                hitVoices = 0;
+            if(wmix->webrtcEnable[WR_VAD])
+            {
+                if(wmix->webrtcPoint[WR_VAD]){
+                    vad_release(wmix->webrtcPoint[WR_VAD]);
+                    wmix->webrtcPoint[WR_VAD] = NULL;
+                }
             }
-#endif
             delayus(10000);
         }
     }
@@ -1491,7 +1464,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_wav_fifo_thread: wmix_record_wav_fifo_thread read err %ld\n", ret);
+            fprintf(stderr, "wmix_record_wav_fifo_thread: wmix_record_wav_fifo_thread read err %d\n", (int)ret);
             break;
         }
         else
@@ -1636,7 +1609,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_wav_thread: read err %ld\n", ret);
+            fprintf(stderr, "wmix_record_wav_thread: read err %d\n", (int)ret);
             break;
         }
         else
@@ -1789,7 +1762,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_aac_thread: read err %ld\n", ret);
+            fprintf(stderr, "wmix_record_aac_thread: read err %d\n", (int)ret);
             break;
         }
         else
@@ -1988,7 +1961,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_rtp_send_aac_thread: read err %ld\n", ret);
+            fprintf(stderr, "wmix_rtp_send_aac_thread: read err %d\n", (int)ret);
             break;
         }
     }
@@ -2390,7 +2363,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         }
         else
         {
-            fprintf(stderr, "wmix_rtp_send_pcma_thread: read err %ld\n", ret);
+            fprintf(stderr, "wmix_rtp_send_pcma_thread: read err %d\n", (int)ret);
             break;
         }
     }
@@ -2751,6 +2724,9 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
         ret = msgrcv(wmix->msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT);//返回队列中的第一个消息 非阻塞方式
         if(ret > 0)
         {
+            if(wmix->debug)
+                printf("\nwmix_msg_thread: msg %ld -- val[0] %d\n", msg.type&0xFF, msg.value[0]);
+
             switch(msg.type&0xFF)
             {
                 //音量设置
@@ -2841,6 +2817,34 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                         if(wmix->shmemRun < 0)
                             wmix->shmemRun = 0;
                     }
+                    break;
+                //开/关 webrtc.vad
+                case 15:
+                    if(msg.value[0])
+                        wmix->webrtcEnable[WR_VAD] = 1;
+                    else
+                        wmix->webrtcEnable[WR_VAD] = 0;
+                    break;
+                //开/关 webrtc.aec
+                case 16:
+                    if(msg.value[0])
+                        wmix->webrtcEnable[WR_AEC] = 1;
+                    else
+                        wmix->webrtcEnable[WR_AEC] = 0;
+                    break;
+                //开/关 webrtc.ns
+                case 17:
+                    if(msg.value[0])
+                        wmix->webrtcEnable[WR_NS] = 1;
+                    else
+                        wmix->webrtcEnable[WR_NS] = 0;
+                    break;
+                //开/关 webrtc.agc
+                case 18:
+                    if(msg.value[0])
+                        wmix->webrtcEnable[WR_AGC] = 1;
+                    else
+                        wmix->webrtcEnable[WR_AGC] = 0;
                     break;
                 //开关log
                 case 100:
@@ -2945,12 +2949,15 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     //
 #if(WMIX_MODE==1)
     uint8_t write_buff[1024+32];
-    uint32_t pkg_size = 160;
+    // uint32_t pkg_size = 160;
+    uint32_t pkg_size = WMIX_FREQ*WMIX_CHANNELS/1000*WEBRTC_INTERVAL_MS;
 #else
     uint32_t divVal = WMIX_SAMPLE*WMIX_CHANNELS/8;
     SNDPCMContainer_t *playback = wmtp->wmix->playback;
-    uint32_t pkg_size = playback->chunk_bytes;
+    // uint32_t pkg_size = playback->chunk_bytes;
+    uint32_t pkg_size = WMIX_FREQ*WMIX_CHANNELS/1000*WEBRTC_INTERVAL_MS;
 #endif
+    int16_t tmp_buff[WMIX_FREQ*WMIX_CHANNELS/1000*WEBRTC_INTERVAL_MS];
     // remove("/home/xxx.pcm");
     // int fd = open("/home/xxx.pcm", O_WRONLY|O_CREAT, 0666);
     //线程计数
@@ -3003,6 +3010,62 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 {
                     countTotal += count;
                     // write(fd, playback->data_buf, count);
+
+                    if(wmix->webrtcEnable[WR_AEC])
+                    {
+                        if(wmix->webrtcPoint[WR_AEC] == NULL)
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ);
+                        if(wmix->webrtcPoint[WR_AEC])
+                        {
+                            memset(tmp_buff, 0, sizeof(tmp_buff));
+                            //开始转换
+                            if(aec_process(
+                                wmix->webrtcPoint[WR_AEC],
+#if(WMIX_MODE==1)
+                                (int16_t*)write_buff,
+#else
+                                (int16_t*)playback->data_buf,
+#endif
+                                tmp_buff,
+                                pkg_size,
+                                WEBRTC_INTERVAL_MS) == 0)
+                            {
+                                //转换成功
+#if(WMIX_MODE==1)
+                                memcpy((int16_t*)write_buff, tmp_buff, pkg_size);
+#else
+                                memcpy((int16_t*)playback->data_buf, tmp_buff, pkg_size);
+#endif
+                            }
+                        }
+                    }
+
+                    if(wmix->webrtcEnable[WR_NS])
+                    {
+                        if(wmix->webrtcPoint[WR_NS] == NULL)
+                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
+                        if(wmix->webrtcPoint[WR_NS])
+                        {
+                            memset(tmp_buff, 0, sizeof(tmp_buff));
+                            //开始转换
+                            ns_process(
+                                wmix->webrtcPoint[WR_NS],
+#if(WMIX_MODE==1)
+                                (int16_t*)write_buff,
+#else
+                                (int16_t*)playback->data_buf,
+#endif
+                                tmp_buff,
+                                pkg_size);
+                            //转换结束
+#if(WMIX_MODE==1)
+                            memcpy((int16_t*)write_buff, tmp_buff, pkg_size);
+#else
+                            memcpy((int16_t*)playback->data_buf, tmp_buff, pkg_size);
+#endif
+                        }
+                    }
+
 #if(WMIX_MODE==1)
                     //写入数据
                     hiaudio_ao_write(write_buff, count);
@@ -3033,6 +3096,17 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 // #endif
             delayus(10000);
             tt = 0;
+        }
+        //失能释放
+        if(!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
+        {
+            aec_release(wmix->webrtcPoint[WR_AEC]);
+            wmix->webrtcPoint[WR_AEC] = NULL;
+        }
+        if(!wmix->webrtcEnable[WR_NS] && wmix->webrtcPoint[WR_NS])
+        {
+            ns_release(wmix->webrtcPoint[WR_NS]);
+            wmix->webrtcPoint[WR_NS] = NULL;
         }
     }
     // close(fd);
@@ -3116,12 +3190,22 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
     //
+    wmix->webrtcEnable[WR_VAD] = 1;//vad
+    wmix->webrtcEnable[WR_AEC] = 0;//aec
+    wmix->webrtcEnable[WR_NS] = 0;//ns
+    wmix->webrtcEnable[WR_AGC] = 0;//agc
+    //
     printf("\n---- WMix info -----\n"
     "   chn: %d\n"
     "   freq: %d Hz\n"
     "   sample: %d bit\n"
-    "   total: -- Bytes\n", 
-        WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE);
+    "   total: -- Bytes\n"
+    "   webrtc: vad/%d, aec/%d, ns/%d, agc/%d\n", 
+        WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE,
+        wmix->webrtcEnable[WR_VAD],
+        wmix->webrtcEnable[WR_AEC],
+        wmix->webrtcEnable[WR_NS],
+        wmix->webrtcEnable[WR_AGC]);
     
     signal(SIGINT, signal_callback);
     signal(SIGTERM, signal_callback);

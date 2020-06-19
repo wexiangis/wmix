@@ -36,6 +36,10 @@ void help(char *argv0)
         "  -rtpr ip port : 启动rtp接收播音,使用-rc,-rr可以配置通道和频率参数\n"
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
+        "  -vad 0/1 : 关/开 webrtc.vad\n"
+        "  -aec 0/1 : 关/开 webrtc.aec\n"
+        "  -ns 0/1 : 关/开 webrtc.ns\n"
+        "  -agc 0/1 : 关/开 webrtc.agc\n"
         "  -? --help : 显示帮助\n"
         "\n"
         "其它说明:\n"
@@ -56,6 +60,7 @@ void help(char *argv0)
 int main(int argc, char **argv)
 {
     int i;
+    bool helpFalg = true;
 
     bool record = false;//播音模式
     int interval = 0;
@@ -71,6 +76,9 @@ int main(int argc, char **argv)
     bool rtpr = false;
     int log = -1;
     bool reset = false;
+
+    int vad = 0, aec = 0, ns = 0, agc = 0;
+    bool _vad = false, _aec = false, _ns = false, _agc = false;
 
     char *filePath = NULL;
     char tmpPath[128] = {0};
@@ -154,6 +162,26 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%d", &port);
             rtpr = true;
         }
+        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &vad);
+            _vad = true;
+        }
+        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &aec);
+            _aec = true;
+        }
+        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &ns);
+            _ns = true;
+        }
+        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &agc);
+            _agc = true;
+        }
         else if(strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
@@ -178,25 +206,46 @@ int main(int argc, char **argv)
     if(volume >= 0 && volume < 11)
     {
         wmix_set_volume(volume, 10);
-        if(!filePath && !rtpr && !rtps)
-            return 0;
+        helpFalg = false;
     }
 
-    if(log >= 0)
+    if(log >= 0){
         wmix_log(log);
+        helpFalg = false;
+    }
+
+    if(_vad){
+        wmix_webrtc_vad(vad?true:false);
+        helpFalg = false;
+    }
+    if(_aec){
+        wmix_webrtc_aec(aec?true:false);
+        helpFalg = false;
+    }
+    if(_ns){
+        wmix_webrtc_ns(ns?true:false);
+        helpFalg = false;
+    }
+    if(_agc){
+        wmix_webrtc_agc(agc?true:false);
+        helpFalg = false;
+    }
 
     if(id >= 0)
     {
         wmix_play_kill(id);
-        if(!filePath && !rtpr && !rtps)
-            return 0;
+        helpFalg = false;
     }
     id = 0;
 
-    if(rtps)
+    if(rtps){
         id = wmix_rtp_send(ip, port, rc, rr, 0);
-    if(rtpr)
+        helpFalg = false;
+    }
+    if(rtpr){
         id = wmix_rtp_recv(ip, port, rc, rr, 0);
+        helpFalg = false;
+    }
 
     if(filePath && filePath[0] == '.')
     {
@@ -214,9 +263,10 @@ int main(int argc, char **argv)
             wmix_record(filePath, rc, 16, rr, rt, useAAC);
         else
             id = wmix_play(filePath, reduce, interval, order);
+        helpFalg = false;
     }
     
-    if(!filePath && !rtpr && !rtps && log < 0)
+    if(helpFalg)
     {
         printf("\nparam err !!\n");
         help(argv[0]);

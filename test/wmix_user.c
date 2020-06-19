@@ -38,6 +38,10 @@ typedef struct{
     //      12/rtp recv pcma
     //      13/录音aac文件
     //      14/开/关 shmem
+    //      15/开/关 webrtc.vad
+    //      16/开/关 webrtc.aec
+    //      17/开/关 webrtc.ns
+    //      18/开/关 webrtc.agc
     //      100/开关log
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
@@ -657,4 +661,35 @@ bool wmix_check_path(char *path)
         return true;
     else
         return false;
+}
+
+//============= webrtc modules =============
+
+void _wmix_webrtc_xxx(int id, bool on)
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT_VOID();
+    //装填 message
+    msg.type = id;
+    msg.value[0] = on?1:0;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+}
+
+void wmix_webrtc_vad(bool on)
+{
+    _wmix_webrtc_xxx(15, on);
+}
+void wmix_webrtc_aec(bool on)
+{
+    _wmix_webrtc_xxx(16, on);
+}
+void wmix_webrtc_ns(bool on)
+{
+    _wmix_webrtc_xxx(17, on);
+}
+void wmix_webrtc_agc(bool on)
+{
+    _wmix_webrtc_xxx(18, on);
 }

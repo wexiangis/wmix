@@ -61,7 +61,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V3.7 - 20200318"
+#define WMIX_VERSION "V4.0 - 20200619"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -71,9 +71,9 @@ typedef struct SNDPCMContainer {
 
 #if(WMIX_MODE == 0)
 
-#define WMIX_CHANNELS    2
+#define WMIX_CHANNELS    1
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        16000
+#define WMIX_FREQ        8000
 
 #else
 
@@ -100,6 +100,10 @@ typedef struct{
     //      12/rtp recv pcma
     //      13/录音aac文件
     //      14/开/关 shmem
+    //      15/开/关 webrtc.vad
+    //      16/开/关 webrtc.aec
+    //      17/开/关 webrtc.ns
+    //      18/开/关 webrtc.agc
     //      100/开关log
     //type[8,15]: reduce
     //type[16,23]: repeatInterval
@@ -122,6 +126,15 @@ typedef union
     int32_t *S32;
     uint32_t *U32;
 }WMix_Point;
+
+typedef enum{
+    WR_VAD = 0,
+    WR_AEC,
+    WR_NS,
+    WR_AGC,
+    
+    WR_TOTAL,
+}WEBRTC_MODULES;
 
 typedef struct{
     uint16_t head, tail;
@@ -158,6 +171,10 @@ typedef struct{
     bool debug;//打印log?
     WMix_Queue queue;//排队头尾标记
     uint32_t onPlayCount;//当前排队总数
+
+    //webrtc modules
+    int webrtcEnable[WR_TOTAL];
+    void *webrtcPoint[WR_TOTAL];
 }WMix_Struct;
 
 /* ---------- 原始的操作方式 ---------- */

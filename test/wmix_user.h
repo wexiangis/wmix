@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#define WMIX_VERSION "V3.7 - 20200408"
+#define WMIX_VERSION "V4.0 - 20200619"
 
 //----- 设置音量 count/div 例如: 30% -> wmix_set_volume(3,10) -----
 //count: 音量  div: 分度
@@ -133,6 +133,12 @@ void wmix_mem_close(void);
 //
 void wmix_get_path(int id, char *path);
 bool wmix_check_path(char *path);
+
+//
+void wmix_webrtc_vad(bool on);
+void wmix_webrtc_aec(bool on);
+void wmix_webrtc_ns(bool on);
+void wmix_webrtc_agc(bool on);
 
 #ifdef __cplusplus
 };
