@@ -47,7 +47,9 @@ obj-wmix=./src/wmix.c \
 		./src/rtp.c \
 		./src/rtp.h \
 		./src/g711codec.c \
-		./src/g711codec.h
+		./src/g711codec.h \
+		./src/webrtc.c \
+		./src/webrtc.h
 
 # -lxxx
 obj-flags= -lm -lpthread -lasound -ldl

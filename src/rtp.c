@@ -4,12 +4,16 @@
  *  rtp协议的数据打包、解包、udp发、收接口的封装
  * 
  **************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <arpa/inet.h>
-#include <fcntl.h>
-#include <stdio.h>
 
 #include "rtp.h"
 
@@ -96,7 +100,7 @@ int rtp_recv(SocketStruct *ss, RtpPacket* rtpPacket, uint32_t *dataSize)
     return ret;
 }
 
-SocketStruct* rtp_socket(uint8_t *ip, uint16_t port, uint8_t isServer)
+SocketStruct* rtp_socket(char *ip, uint16_t port, uint8_t isServer)
 {
     int fd;
     int ret;
@@ -106,7 +110,7 @@ SocketStruct* rtp_socket(uint8_t *ip, uint16_t port, uint8_t isServer)
     if(fd < 0)
     {
         fprintf(stderr, "socket err\n");
-        return -1;
+        return NULL;
     }
 
     //非阻塞设置
@@ -117,12 +121,12 @@ SocketStruct* rtp_socket(uint8_t *ip, uint16_t port, uint8_t isServer)
     ss->fd = fd;
     ss->addr.sin_family = AF_INET;
     ss->addr.sin_port = htons(port);
-    ss->addr.sin_addr.s_addr = inet_addr(ip);
+    ss->addr.sin_addr.s_addr = inet_addr((const char*)ip);
     ss->addrSize = sizeof(ss->addr);
 
     if(!isServer)
     {
-        ret = bind(fd, &ss->addr, ss->addrSize);
+        ret = bind(fd, (const struct sockaddr*)&ss->addr, ss->addrSize);
         if(fd < 0)
         {
             fprintf(stderr, "bind err\n");
@@ -137,7 +141,7 @@ SocketStruct* rtp_socket(uint8_t *ip, uint16_t port, uint8_t isServer)
 }
 
 
-void rtp_create_sdp(uint8_t *file, uint8_t *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
+void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
 {
     char buff[1024] = {0};
     char typeName[64] = {0};
@@ -191,8 +195,8 @@ void rtp_create_sdp(uint8_t *file, uint8_t *ip, uint16_t port, uint16_t chn, uin
     config |= chn; config <<= 3;
     config = ((config>>12)&0xF)*1000 + ((config>>8)&0xF)*100 + ((config>>4)&0xF)*10 + ((config>>0)&0xF);
     snprintf(buff, sizeof(buff), demo, port, type, type, typeName, freq, chn, type, config, ip);
-    remove(file);
-    if((fd = open(file, O_WRONLY|O_CREAT, 0666)) > 0)
+    remove((const char*)file);
+    if((fd = open((const char*)file, O_WRONLY|O_CREAT, 0666)) > 0)
     {
         write(fd, buff, strlen(buff));
         close(fd);
@@ -202,7 +206,7 @@ void rtp_create_sdp(uint8_t *file, uint8_t *ip, uint16_t port, uint16_t chn, uin
 //
 __time_t getTickUs(void)
 {
-    struct timespec tp={0};
+    // struct timespec tp={0};
     struct timeval  tv={0};
     gettimeofday(&tv,NULL);
     return tv.tv_sec*1000000u+tv.tv_usec;

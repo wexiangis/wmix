@@ -88,9 +88,9 @@ int rtp_send(SocketStruct *ss, RtpPacket* rtpPacket, uint32_t dataSize);
 
 int rtp_recv(SocketStruct *ss, RtpPacket* rtpPacket, uint32_t *dataSize);
 
-SocketStruct* rtp_socket(uint8_t *ip, uint16_t port, uint8_t isServer);
+SocketStruct* rtp_socket(char *ip, uint16_t port, uint8_t isServer);
 
-void rtp_create_sdp(uint8_t *file, uint8_t *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
+void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
 //系统当前毫秒数获取
 __time_t getTickUs(void);

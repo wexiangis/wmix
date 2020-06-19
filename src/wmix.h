@@ -23,36 +23,6 @@
 #define WMIX_AAC 0
 #endif
 
-#ifdef MAKE_WEBRTC_VAD
-#define WMIX_WEBRTC_VAD MAKE_WEBRTC_VAD
-#else
-#define WMIX_WEBRTC_VAD 0
-#endif
-
-#ifdef MAKE_WEBRTC_AEC
-#define WMIX_WEBRTC_AEC MAKE_WEBRTC_AEC
-#else
-#define WMIX_WEBRTC_AEC 0
-#endif
-
-#ifdef MAKE_WEBRTC_AECM
-#define WMIX_WEBRTC_AECM MAKE_WEBRTC_AECM
-#else
-#define WMIX_WEBRTC_AECM 0
-#endif
-
-#ifdef MAKE_WEBRTC_NS
-#define WMIX_WEBRTC_NS MAKE_WEBRTC_NS
-#else
-#define WMIX_WEBRTC_NS 0
-#endif
-
-#ifdef MAKE_WEBRTC_AGC
-#define WMIX_WEBRTC_AGC MAKE_WEBRTC_AGC
-#else
-#define WMIX_WEBRTC_AGC 0
-#endif
-
 /* ---------- rtp ---------- */
 
 //rtp发收同fd
@@ -101,13 +71,7 @@ typedef struct SNDPCMContainer {
 
 #if(WMIX_MODE == 0)
 
-//WEBRTC_VAD人声识别只支持单声道
-#if(WMIX_WEBRTC_VAD)
-#define WMIX_CHANNELS    1
-#else
 #define WMIX_CHANNELS    2
-#endif
-
 #define WMIX_SAMPLE      16
 #define WMIX_FREQ        16000
 

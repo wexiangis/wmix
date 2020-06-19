@@ -47,7 +47,6 @@ typedef struct{
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 }WMix_Msg;
 
-
 #define MSG_INIT() \
 key_t msg_key;\
 int msg_fd;\
@@ -57,6 +56,17 @@ if((msg_key = ftok(WMIX_MSG_PATH, WMIX_MSG_ID)) == -1){\
 }if((msg_fd = msgget(msg_key, 0666)) == -1){\
     fprintf(stderr, "wmix: msgget err\n");\
     return -1;\
+}
+
+#define MSG_INIT_VOID() \
+key_t msg_key;\
+int msg_fd;\
+if((msg_key = ftok(WMIX_MSG_PATH, WMIX_MSG_ID)) == -1){\
+    fprintf(stderr, "wmix: ftok err\n");\
+    return;\
+}if((msg_fd = msgget(msg_key, 0666)) == -1){\
+    fprintf(stderr, "wmix: msgget err\n");\
+    return;\
 }
 
 int wmix_set_volume(uint8_t count, uint8_t div)
@@ -338,7 +348,7 @@ int wmix_record(
     bool useAAC)
 {
     if(!wavPath)
-        return;
+        return -1;
     WMix_Msg msg;
     //msg初始化
     MSG_INIT();
@@ -354,7 +364,7 @@ int wmix_record(
     //
     if(strlen(wavPath) > WMIX_MSG_BUFF_SIZE - 7){
         fprintf(stderr, "wmix_play_wav: %s > max len (%d)\n", wavPath, WMIX_MSG_BUFF_SIZE - 7);
-        return ;
+        return -1;
     }
     strcpy((char*)&msg.value[6], wavPath);
     //发出
@@ -520,7 +530,7 @@ void wmix_mem_open(void)
         return;
     WMix_Msg msg;
     //msg初始化
-    MSG_INIT();
+    MSG_INIT_VOID();
     //装填 message
     msg.type = 14;
     msg.value[0] = 1;
@@ -536,7 +546,7 @@ void wmix_mem_close(void)
         return;
     WMix_Msg msg;
     //msg初始化
-    MSG_INIT();
+    MSG_INIT_VOID();
     //装填 message
     msg.type = 14;
     msg.value[0] = 0;
@@ -555,7 +565,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     if(!ai_circle)
     {
         wmix_mem_open();
-        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ai_circle);
+        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void**)&ai_circle);
         if(!ai_circle)
         {
             fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
@@ -600,7 +610,7 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     if(!ao_circle)
     {
         wmix_mem_open();
-        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), &ao_circle);
+        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), (void**)&ao_circle);
         if(!ao_circle)
         {
             fprintf(stderr, "wmix_mem_write: shm_create err !!\n");
@@ -626,7 +636,7 @@ void wmix_log(int b)
 {
     WMix_Msg msg;
     //msg初始化
-    MSG_INIT();
+    MSG_INIT_VOID();
     //装填 message
     msg.type = 100;
     msg.value[0] = b;

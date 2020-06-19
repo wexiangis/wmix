@@ -13,6 +13,7 @@
 #include <sys/msg.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <arpa/inet.h>
 
 #include "wmix.h"
 #include "wav.h"
@@ -27,27 +28,6 @@
 
 #if(WMIX_AAC)
 #include "aac.h"
-#endif
-
-#if(WMIX_WEBRTC_VAD)
-#include "webrtc_vad.h"
-#endif
-
-#if(WMIX_WEBRTC_AEC)
-#include "echo_cancellation.h"
-#endif
-
-#if(WMIX_WEBRTC_AECM)
-#include "echo_control_mobile.h"
-#endif
-
-#if(WMIX_WEBRTC_NS)
-#include "noise_suppression.h"
-#include "noise_suppression_x.h"
-#endif
-
-#if(WMIX_WEBRTC_AGC)
-#include "gain_control.h"
 #endif
 
 static WMix_Struct *main_wmix = NULL;
@@ -730,10 +710,10 @@ int SNDWAV_SetParams2(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels
     "  buffer_size: %d Bytes\n" //缓冲区大小
     "  buffer_time: %d Bytes\n" //缓冲区大小
     "  period_time: %d Bytes\n", //缓冲区大小
-        sndpcm->chunk_size,
+        (int)sndpcm->chunk_size,
         sndpcm->bits_per_frame/8,
         sndpcm->chunk_bytes,
-        sndpcm->buffer_size,
+        (int)sndpcm->buffer_size,
         buffer_time,
         period_time);
 
@@ -962,7 +942,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     //
     if(!ai_circle)
     {
-        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), &ai_circle);
+        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), (void**)&ai_circle);
         if(!ai_circle)
         {
             fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
@@ -1002,7 +982,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     //
     if(!ao_circleLocal)
     {
-        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), &ao_circleLocal);
+        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void**)&ao_circleLocal);
         if(!ao_circleLocal)
         {
             fprintf(stderr, "wmix_mem_read2: shm_create err !!\n");
@@ -1041,7 +1021,7 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     //
     if(!ao_circle)
     {
-        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), &ao_circle);
+        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void**)&ao_circle);
         if(!ao_circle)
         {
             fprintf(stderr, "wmix_mem_write: shm_create err !!\n");
@@ -1067,7 +1047,7 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
     //
     if(!ao_circleLocal)
     {
-        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), &ao_circleLocal);
+        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void**)&ao_circleLocal);
         if(!ao_circleLocal)
         {
             fprintf(stderr, "wmix_mem_write2: shm_create err !!\n");
@@ -1163,9 +1143,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     else
                         hitVoices = reduce = 0;
 #endif
-                    wmix_mem_write2(wmix->recordback->data_buf, ret/2);
+                    wmix_mem_write2((int16_t*)wmix->recordback->data_buf, ret/2);
                     RECORD_DATA_TRANSFER();
-                    wmix_mem_write(buff, buffSize2/2);
+                    wmix_mem_write((int16_t*)buff, buffSize2/2);
                 }
             }
             else
@@ -1313,7 +1293,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     uint32_t tick, second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
     uint8_t rdce = ((wmtp->flag>>8)&0xFF)+1, rdceIsMe = 0;
     //
-    int timeout;
+    // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordFifo;
     //
@@ -1486,7 +1466,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, false)*2;
+        ret = wmix_mem_read2((int16_t*)buff, buffSize/2, &record_addr, false)*2;
 #endif
         if(ret > 0)
         {
@@ -1511,7 +1491,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_wav_fifo_thread: wmix_record_wav_fifo_thread read err %d\n", ret);
+            fprintf(stderr, "wmix_record_wav_fifo_thread: wmix_record_wav_fifo_thread read err %ld\n", ret);
             break;
         }
         else
@@ -1625,7 +1605,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, false);
 #else
-        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, false)*2;
+        ret = wmix_mem_read2((int16_t*)buff, buffSize/2, &record_addr, false)*2;
 #endif
         if(ret > 0)
         {
@@ -1656,7 +1636,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_wav_thread: read err %d\n", ret);
+            fprintf(stderr, "wmix_record_wav_thread: read err %ld\n", ret);
             break;
         }
         else
@@ -1760,7 +1740,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, true)*2;
+        ret = wmix_mem_read2((int16_t*)buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -1809,7 +1789,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_record_aac_thread: read err %d\n", ret);
+            fprintf(stderr, "wmix_record_aac_thread: read err %ld\n", ret);
             break;
         }
         else
@@ -1959,7 +1939,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, true)*2;
+        ret = wmix_mem_read2((int16_t*)buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -2008,7 +1988,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         }
         else if(ret < 0)
         {
-            fprintf(stderr, "wmix_rtp_send_aac_thread: read err %d\n", ret);
+            fprintf(stderr, "wmix_rtp_send_aac_thread: read err %ld\n", ret);
             break;
         }
     }
@@ -2047,7 +2027,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint16_t port = (wmtp->param[4]<<8) | wmtp->param[5];
     uint32_t bytes_p_second;
     //
-    ssize_t ret = 0;
+    int ret = 0;
     uint8_t buff[8192];
     uint32_t buffSize, buffSize2;
     WMix_Point head, src;
@@ -2338,7 +2318,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
             }
             else
             {
-                printf("RTP-SEND-PCM: msg recv %d\n", msg.type);
+                printf("RTP-SEND-PCM: msg recv %ld\n", msg.type);
                 //控制信号
                 if(msg.type == 0)//运行
                     ctrl = 0;
@@ -2347,15 +2327,15 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 else if(msg.type == 2)//重连
                 {
                     port = (msg.value[0]<<8) | msg.value[1];
-                    path = msg.value[2];
+                    path = (char*)&msg.value[2];
                     //
                     pthread_mutex_lock(&rtp_sr->lock);
                     close(rtp_sr->fd);
                     rtp_sr->fd = socket(AF_INET, SOCK_DGRAM, 0);
                     rtp_sr->addr.sin_port = htons(port);
-                    rtp_sr->addr.sin_addr.s_addr = inet_addr(path);
+                    rtp_sr->addr.sin_addr.s_addr = (in_addr_t)inet_addr(path);
                     rtp_sr->addrSize = sizeof(rtp_sr->addr);
-                    bind(rtp_sr->fd, &rtp_sr->addr, rtp_sr->addrSize);
+                    bind(rtp_sr->fd, (const struct sockaddr*)&rtp_sr->addr, rtp_sr->addrSize);
                     pthread_mutex_unlock(&rtp_sr->lock);
                     //
                     ctrl = 0;
@@ -2368,7 +2348,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 #if(WMIX_MODE==1)
         ret = hiaudio_ai_read(buff, buffSize, &record_addr, true);
 #else
-        ret = wmix_mem_read2(buff, buffSize/2, &record_addr, true)*2;
+        ret = wmix_mem_read2((int16_t*)buff, buffSize/2, &record_addr, true)*2;
 #endif
         if(ret > 0)
         {
@@ -2385,7 +2365,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 }
             }
             //
-            ret = PCM2G711a(buff, rtpPacket.payload, ret, 0);
+            ret = PCM2G711a((char*)buff, (char*)rtpPacket.payload, ret, 0);
             if(ctrl == 0)
             {
                 if(rtp_send(rtp_sr, &rtpPacket, ret) < ret)
@@ -2396,7 +2376,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                     pthread_mutex_lock(&rtp_sr->lock);
                     close(rtp_sr->fd);
                     rtp_sr->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                    bind(rtp_sr->fd, &rtp_sr->addr, rtp_sr->addrSize);
+                    bind(rtp_sr->fd, (const struct sockaddr*)&rtp_sr->addr, rtp_sr->addrSize);
                     pthread_mutex_unlock(&rtp_sr->lock);
                     //
                     continue;
@@ -2410,7 +2390,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         }
         else
         {
-            fprintf(stderr, "wmix_rtp_send_pcma_thread: read err %d\n", ret);
+            fprintf(stderr, "wmix_rtp_send_pcma_thread: read err %ld\n", ret);
             break;
         }
     }
@@ -2450,7 +2430,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     uint16_t port = (wmtp->param[4]<<8) | wmtp->param[5];
     uint32_t bytes_p_second;
     //
-    ssize_t ret = 0;
+    int ret = 0;
     uint8_t buff[1024];
     uint32_t buffSize, buffSize2;
     WMix_Point head, src;
@@ -2467,7 +2447,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     int retSize;
     //
-    int timeout;
+    // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
@@ -2536,7 +2516,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
             }
             else
             {
-                printf("RTP-RECV-PCM: msg recv %d\n", msg.type);
+                printf("RTP-RECV-PCM: msg recv %ld\n", msg.type);
                 //控制信号
                 if(msg.type == 0)//运行
                     ctrl = 0;
@@ -2545,7 +2525,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
                 else if(msg.type == 2)//重连
                 {
                     port = (msg.value[0]<<8) | msg.value[1];
-                    path = msg.value[2];
+                    path = (char*)&msg.value[2];
                     //
                     pthread_mutex_lock(&rtp_sr->lock);
                     close(rtp_sr->fd);
@@ -2553,7 +2533,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
                     rtp_sr->addr.sin_port = htons(port);
                     rtp_sr->addr.sin_addr.s_addr = inet_addr(path);
                     rtp_sr->addrSize = sizeof(rtp_sr->addr);
-                    bind(rtp_sr->fd, &rtp_sr->addr, rtp_sr->addrSize);
+                    bind(rtp_sr->fd, (const struct sockaddr*)&rtp_sr->addr, rtp_sr->addrSize);
                     pthread_mutex_unlock(&rtp_sr->lock);
                     //
                     ctrl = 0;
@@ -2573,9 +2553,9 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         if(!wmtp->wmix->run)
             break;
         //读rtp数据
-        ret = rtp_recv(rtp_sr, &rtpPacket, &retSize);
+        ret = rtp_recv(rtp_sr, &rtpPacket, (uint32_t*)&retSize);
         if(ret > 0 && retSize > 0)
-            ret = G711a2PCM(rtpPacket.payload, buff, retSize, 0);
+            ret = G711a2PCM((char*)rtpPacket.payload, (char*)buff, retSize, 0);
         else
             ret = -1;
         //播放文件
@@ -2633,7 +2613,6 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
     uint16_t len = strlen((char*)wmtp->param);
     //
     char *msgPath;
-    WMix_Msg msg;
     key_t msg_key;
     int msg_fd = 0;
     //
@@ -2958,7 +2937,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
     WMix_Point dist;
-    uint32_t count = 0, countTotal = 0, tmpTick;
+    uint32_t count = 0, countTotal = 0;
+    // uint32_t tmpTick;
     //
     __time_t t1 = 0, t2 = 0, tt = 0;
     double dataToTime = 1000000/(WMIX_CHANNELS*WMIX_SAMPLE/8*WMIX_FREQ);
@@ -4312,7 +4292,8 @@ int main(int argc, char **argv)
             if(path)
             {
                 wmix_throwOut_thread(main_wmix, 
-                    3, path, 
+                    3, 
+                    (uint8_t*)path, 
                     WMIX_MSG_BUFF_SIZE, 
                     &wmix_load_audio_thread);
             }
