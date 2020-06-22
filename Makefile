@@ -1,4 +1,4 @@
-cross:=arm-linux-gnueabihf
+# cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
