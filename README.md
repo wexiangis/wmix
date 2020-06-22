@@ -39,3 +39,5 @@
 * MAKE_AAC: 支持aac播放、录音, 依赖库 libfaac libfaad
 
 * MAKE_WEBRTC_VAD: 人声识别, 用于录音没人说话时主动静音, 依赖库 libWebRtcVad(裁剪自WebRtc库)
+
+* MAKE_WEBRTC_VAD: 人声识别, 用于录音没人说话时主动静音, 依赖库 libWebRtcVad(裁剪自WebRtc库)
