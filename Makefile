@@ -6,22 +6,20 @@
 MAKE_ALSA=1
 
 # 选择启用mp3播放支持 0/关 1/启用
-MAKE_MP3=1
+MAKE_MP3=0
 
 # 选择启用aac播放/录音 0/关 1/启用
-MAKE_AAC=1
+MAKE_AAC=0
 
 # 选择启用webrtc_vad人声识别 0/关 1/启用
 MAKE_WEBRTC_VAD=1
 
 # 选择启用webrtc_aec回声消除 0/关 1/启用
-MAKE_WEBRTC_AEC=0
-
-# 选择启用webrtc_aecm回声消除(移动版) 0/关 1/启用
-MAKE_WEBRTC_AECM=0
+# (需启用 MAKE_WEBRTC_VAD, 否则编译 wmix 时报错)
+MAKE_WEBRTC_AEC=1
 
 # 选择启用webrtc_ns噪音抑制 0/关 1/启用
-MAKE_WEBRTC_NS=1
+MAKE_WEBRTC_NS=0
 
 # 选择启用webrtc_agc自动增益 0/关 1/启用
 MAKE_WEBRTC_AGC=0
@@ -79,14 +77,8 @@ endif
 
 # WEBRTC_AEC LIB
 ifeq ($(MAKE_WEBRTC_AEC),1)
-obj-flags+= -lwebrtcaec
 targetlib+= libwebrtcaec
-endif
-
-# WEBRTC_AECM LIB
-ifeq ($(MAKE_WEBRTC_AECM),1)
-obj-flags+= -lwebrtcaecm
-targetlib+= libwebrtcaecm
+obj-flags+= -lwebrtcaec -lwebrtcaecm
 endif
 
 # WEBRTC_NS LIB
@@ -199,13 +191,6 @@ libwebrtcaec:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
 	./build_aec_so.sh $(cc) && \
-	cp ./install/* ../ -rf && \
-	cd - && \
-	rm $(ROOT)/libs/webrtc_cut -rf
-
-libwebrtcaecm:
-	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
-	cd $(ROOT)/libs/webrtc_cut && \
 	./build_aecm_so.sh $(cc) && \
 	cp ./install/* ../ -rf && \
 	cd - && \

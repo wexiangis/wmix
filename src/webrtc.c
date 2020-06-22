@@ -149,7 +149,7 @@ void vad_release(void *fp)
 
 #endif
 /* ==================== AEC 回声消除 ==================== */
-#if((WMIX_WEBRTC_AEC)||(WMIX_WEBRTC_AECM))
+#if(WMIX_WEBRTC_AEC)
 
 #include "echo_cancellation.h"
 #include "echo_control_mobile.h"

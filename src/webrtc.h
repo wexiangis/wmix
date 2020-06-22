@@ -12,8 +12,7 @@
 /* ----------   若要强制使能,手动置1   ---------- */
 
 #define WMIX_WEBRTC_VAD MAKE_WEBRTC_VAD
-#define WMIX_WEBRTC_AEC MAKE_WEBRTC_AEC
-#define WMIX_WEBRTC_AECM MAKE_WEBRTC_AECM
+#define WMIX_WEBRTC_AEC 1//MAKE_WEBRTC_AEC
 #define WMIX_WEBRTC_NS MAKE_WEBRTC_NS
 #define WMIX_WEBRTC_AGC MAKE_WEBRTC_AGC
 
@@ -29,7 +28,7 @@ void vad_release(void *fp);
 
 /* ==================== AEC 回声消除 ==================== */
 
-#if((WMIX_WEBRTC_AEC)||(WMIX_WEBRTC_AECM))
+#if(WMIX_WEBRTC_AEC)
 void* aec_init(int chn, int freq, int intervalMs);
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen);
 int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen);
