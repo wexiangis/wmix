@@ -3206,10 +3206,10 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
-    wmix->webrtcEnable[WR_VAD] = 0;
+    wmix->webrtcEnable[WR_VAD] = 1;
     wmix->webrtcEnable[WR_AEC] = 0;
-    wmix->webrtcEnable[WR_NS] = 0;
-    wmix->webrtcEnable[WR_NS_PA] = 0;
+    wmix->webrtcEnable[WR_NS] = 1;
+    wmix->webrtcEnable[WR_NS_PA] = 1;
     wmix->webrtcEnable[WR_AGC] = 0;
 
     printf("\n---- WMix info -----\n"
