@@ -36,10 +36,11 @@ void help(char *argv0)
         "  -rtpr ip port : 启动rtp接收播音,使用-rc,-rr可以配置通道和频率参数\n"
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
-        "  -vad 0/1 : 关/开 webrtc.vad\n"
-        "  -aec 0/1 : 关/开 webrtc.aec\n"
-        "  -ns 0/1 : 关/开 webrtc.ns\n"
-        "  -agc 0/1 : 关/开 webrtc.agc\n"
+        "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
+        "  -aec 0/1 : 关/开 webrtc.aec 回声消除\n"
+        "  -ns 0/1 : 关/开 webrtc.ns 噪音抑制(录音)\n"
+        "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
+        "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -? --help : 显示帮助\n"
         "\n"
         "其它说明:\n"
@@ -77,8 +78,8 @@ int main(int argc, char **argv)
     int log = -1;
     bool reset = false;
 
-    int vad = 0, aec = 0, ns = 0, agc = 0;
-    bool _vad = false, _aec = false, _ns = false, _agc = false;
+    int vad = 0, aec = 0, ns = 0, ns_pa = 0, agc = 0;
+    bool _vad = false, _aec = false, _ns = false, _ns_pa = false, _agc = false;
 
     char *filePath = NULL;
     char tmpPath[128] = {0};
@@ -177,6 +178,11 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%d", &ns);
             _ns = true;
         }
+        else if(strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &ns_pa);
+            _ns_pa = true;
+        }
         else if(strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i+1 < argc)
         {
             sscanf(argv[++i], "%d", &agc);
@@ -224,6 +230,10 @@ int main(int argc, char **argv)
     }
     if(_ns){
         wmix_webrtc_ns(ns?true:false);
+        helpFalg = false;
+    }
+    if(_ns_pa){
+        wmix_webrtc_ns_pa(ns_pa?true:false);
         helpFalg = false;
     }
     if(_agc){

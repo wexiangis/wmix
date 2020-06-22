@@ -22,32 +22,41 @@
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
+typedef enum{
+    WMT_VOLUME = 1,         //设置音量
+    WMT_PLYAY_MUTEX = 2,    //互斥播放文件
+    WMT_PLAY_MIX = 3,       //混音播放文件
+    WMT_FIFO_PLAY = 4,      //fifo播放wav流
+    WMT_RESET = 5,          //复位
+    WMT_FIFO_RECORD = 6,    //fifo录音wav流
+    WMT_RECORD_WAV = 7,     //录音wav文件
+    WMT_CLEAN_LIST = 8,     //清空播放列表
+    WMT_PLAY_FIRST = 9,     //排头播放
+    WMT_PLAY_LAST = 10,     //排尾播放
+    WMT_RTP_SEND_PCMA = 11, //rtp send pcma
+    WMT_RTP_RECV_PCMA = 12, //rtp recv pcma
+    WMT_RECORD_AAC = 13,    //录音aac文件
+    WMT_MEM_SW = 14,        //开/关 shmem
+    WMT_WEBRTC_VAD_SW = 15, //开/关 webrtc.vad 人声识别,录音辅助,没人说话时主动静音
+    WMT_WEBRTC_AEC_SW = 16, //开/关 webrtc.aec 回声消除
+    WMT_WEBRTC_NS_SW = 17,  //开/关 webrtc.ns 噪音抑制(录音)
+    WMT_WEBRTC_NS_PA_SW = 18,//开/关 webrtc.ns 噪音抑制(播音)
+    WMT_WEBRTC_AGC_SW = 19, //开/关 webrtc.agc 自动增益
+
+    WMT_LOG_SW = 100,       //开关log
+}WMIX_MSG_TYPE;
+
 typedef struct{
-    //type[0,7]:
-    //      1/设置音量
-    //      2/互斥播放文件
-    //      3/混音播放文件
-    //      4/fifo播放wav流
-    //      5/复位
-    //      6/fifo录音wav流
-    //      7/录音wav文件
-    //      8/清空播放列表
-    //      9/排头播放
-    //      10/排尾播放
-    //      11/rtp send pcma
-    //      12/rtp recv pcma
-    //      13/录音aac文件
-    //      14/开/关 shmem
-    //      15/开/关 webrtc.vad
-    //      16/开/关 webrtc.aec
-    //      17/开/关 webrtc.ns
-    //      18/开/关 webrtc.agc
-    //      100/开关log
-    //type[8,15]: reduce
-    //type[16,23]: repeatInterval
+    /*
+     *  type[0,7]: see WMIX_MSG_TYPE
+     *  type[8,15]: reduce
+     *  type[16,23]: repeatInterval
+     */
     long type;
-    //value(file/fifo): filePath + '\0' + msgPath
-    //value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
+    /*
+     *  value(file/fifo): filePath + '\0' + msgPath
+     *  value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
+     */
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 }WMix_Msg;
 
@@ -80,7 +89,7 @@ int wmix_set_volume(uint8_t count, uint8_t div)
     MSG_INIT();
     //装填 message
     memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = 1;
+    msg.type = WMT_VOLUME;
     if(count > div)
         msg.value[0] = div;
     else
@@ -137,13 +146,13 @@ int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, 
     memset(&msg, 0, sizeof(WMix_Msg));
     msg.type = backgroundReduce*0x100 + repeatInterval*0x10000;
     if(order < 0)
-        msg.type += 2;
+        msg.type += WMT_PLYAY_MUTEX;
     else if(order == 0)
-        msg.type += 10;
+        msg.type += WMT_PLAY_LAST;
     else if(order == 1)
-        msg.type += 9;
+        msg.type += WMT_PLAY_FIRST;
     else
-        msg.type += 3;
+        msg.type += WMT_PLAY_MIX;
     strcpy((char*)msg.value, wavOrMp3);
     strcpy((char*)&msg.value[strlen(wavOrMp3)+1], msgPath);
     //发出
@@ -160,7 +169,7 @@ int wmix_play_kill(int id)
         //msg初始化
         MSG_INIT();
         //装填 message
-        msg.type = 8;
+        msg.type = WMT_CLEAN_LIST;
         //发出
         msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
     }
@@ -249,7 +258,7 @@ int wmix_stream_open(
     wmix_auto_path(_path, 0);
     // remove(_path);
     //装填 message
-    msg.type = 4 + backgroundReduce*0x100;
+    msg.type = WMT_FIFO_PLAY + backgroundReduce*0x100;
     msg.value[0] = channels;
     msg.value[1] = sample;
     msg.value[2] = (freq>>8)&0xFF;
@@ -315,7 +324,7 @@ int wmix_record_stream_open(
     wmix_auto_path(_path, 0);
     // remove(_path);
     //装填 message
-    msg.type = 6;
+    msg.type = WMT_FIFO_RECORD;
     msg.value[0] = channels;
     msg.value[1] = sample;
     msg.value[2] = (freq>>8)&0xFF;
@@ -358,7 +367,7 @@ int wmix_record(
     MSG_INIT();
     //装填 message
     memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = useAAC?13:7;
+    msg.type = useAAC ? WMT_RECORD_AAC : WMT_RECORD_WAV;
     msg.value[0] = channels;
     msg.value[1] = sample;
     msg.value[2] = (freq>>8)&0xFF;
@@ -382,7 +391,7 @@ int wmix_reset(void)
     //msg初始化
     MSG_INIT();
     //装填 message
-    msg.type = 5;
+    msg.type = WMT_RESET;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
     return 0;
@@ -408,7 +417,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type)
     MSG_INIT();
     //装填 message
     memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = isSend?11:12;
+    msg.type = isSend ? WMT_RTP_SEND_PCMA : WMT_RTP_RECV_PCMA;
     msg.value[0] = chn;
     msg.value[1] = 16;
     msg.value[2] = (freq>>8)&0xff;
@@ -536,7 +545,7 @@ void wmix_mem_open(void)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = 14;
+    msg.type = WMT_MEM_SW;
     msg.value[0] = 1;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
@@ -552,7 +561,7 @@ void wmix_mem_close(void)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = 14;
+    msg.type = WMT_MEM_SW;
     msg.value[0] = 0;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
@@ -642,7 +651,7 @@ void wmix_log(int b)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = 100;
+    msg.type = WMT_LOG_SW;
     msg.value[0] = b;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
@@ -679,17 +688,21 @@ void _wmix_webrtc_xxx(int id, bool on)
 
 void wmix_webrtc_vad(bool on)
 {
-    _wmix_webrtc_xxx(15, on);
+    _wmix_webrtc_xxx(WMT_WEBRTC_VAD_SW, on);
 }
 void wmix_webrtc_aec(bool on)
 {
-    _wmix_webrtc_xxx(16, on);
+    _wmix_webrtc_xxx(WMT_WEBRTC_AEC_SW, on);
 }
 void wmix_webrtc_ns(bool on)
 {
-    _wmix_webrtc_xxx(17, on);
+    _wmix_webrtc_xxx(WMT_WEBRTC_NS_SW, on);
+}
+void wmix_webrtc_ns_pa(bool on)
+{
+    _wmix_webrtc_xxx(WMT_WEBRTC_NS_PA_SW, on);
 }
 void wmix_webrtc_agc(bool on)
 {
-    _wmix_webrtc_xxx(18, on);
+    _wmix_webrtc_xxx(WMT_WEBRTC_AGC_SW, on);
 }

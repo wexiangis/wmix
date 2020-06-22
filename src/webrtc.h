@@ -1,6 +1,6 @@
 /**************************************************
  * 
- *  二次封装webrtc旗下的vad、aec/aecm、ns、agc模块接口
+ *  二次封装webrtc旗下的vad、aec/aecm、ns/nsx、agc模块接口
  * 
  **************************************************/
 #ifndef _WEBRTC_H_
@@ -42,31 +42,28 @@
 
 #include <stdint.h>
 
-#define WEBRTC_INTERVAL_MS 20 //分包间隔ms
-
 /* ==================== VAD 人声识别模块 ==================== */
 
-void* vad_init(int chn, int freq);
+void* vad_init(int chn, int freq, int intervalMs);
 void vad_process(void *fp, int16_t *frame, int frameLen);
 void vad_release(void *fp);
 
 /* ==================== AEC 回声消除 ==================== */
 
-void* aec_init(int chn, int freq);
+void* aec_init(int chn, int freq, int intervalMs);
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen);
-int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, int intervalMs);
+int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen);
 void aec_release(void *fp);
 
 /* ==================== NS 噪音抑制 ==================== */
 
-void* ns_init(int chn, int freq);
-void ns_setAnalyze(void *fp, int16_t *frame);
+void* ns_init(int chn, int freq, int intervalMs);
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen);
 void ns_release(void *fp);
 
 /* ==================== AGC 自动增益 ==================== */
 
-void* agc_init(int chn, int freq);
+void* agc_init(int chn, int freq, int intervalMs);
 void agc_process(void *fp, int16_t *frame, int frameLen);
 void agc_release(void *fp);
 

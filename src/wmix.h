@@ -61,13 +61,15 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V4.0 - 20200619"
+#define WMIX_VERSION "V4.0 - 20200622"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
 #define WMIX_MSG_PATH_AUTHORITY "chmod 777 /tmp/wmix -R"
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
+
+#define WMIX_INTERVAL_MS 20 //录音、播音包间隔ms, 必须10的倍数
 
 #if(WMIX_MODE == 0)
 
@@ -84,32 +86,41 @@ typedef struct SNDPCMContainer {
 
 #endif
 
+typedef enum{
+    WMT_VOLUME = 1,         //设置音量
+    WMT_PLYAY_MUTEX = 2,    //互斥播放文件
+    WMT_PLAY_MIX = 3,       //混音播放文件
+    WMT_FIFO_PLAY = 4,      //fifo播放wav流
+    WMT_RESET = 5,          //复位
+    WMT_FIFO_RECORD = 6,    //fifo录音wav流
+    WMT_RECORD_WAV = 7,     //录音wav文件
+    WMT_CLEAN_LIST = 8,     //清空播放列表
+    WMT_PLAY_FIRST = 9,     //排头播放
+    WMT_PLAY_LAST = 10,     //排尾播放
+    WMT_RTP_SEND_PCMA = 11, //rtp send pcma
+    WMT_RTP_RECV_PCMA = 12, //rtp recv pcma
+    WMT_RECORD_AAC = 13,    //录音aac文件
+    WMT_MEM_SW = 14,        //开/关 shmem
+    WMT_WEBRTC_VAD_SW = 15, //开/关 webrtc.vad 人声识别,录音辅助,没人说话时主动静音
+    WMT_WEBRTC_AEC_SW = 16, //开/关 webrtc.aec 回声消除
+    WMT_WEBRTC_NS_SW = 17,  //开/关 webrtc.ns 噪音抑制(录音)
+    WMT_WEBRTC_NS_PA_SW = 18,//开/关 webrtc.ns 噪音抑制(播音)
+    WMT_WEBRTC_AGC_SW = 19, //开/关 webrtc.agc 自动增益
+
+    WMT_LOG_SW = 100,       //开关log
+}WMIX_MSG_TYPE;
+
 typedef struct{
-    //type[0,7]:
-    //      1/设置音量
-    //      2/互斥播放文件
-    //      3/混音播放文件
-    //      4/fifo播放wav流
-    //      5/复位
-    //      6/fifo录音wav流
-    //      7/录音wav文件
-    //      8/清空播放列表
-    //      9/排头播放
-    //      10/排尾播放
-    //      11/rtp send pcma
-    //      12/rtp recv pcma
-    //      13/录音aac文件
-    //      14/开/关 shmem
-    //      15/开/关 webrtc.vad
-    //      16/开/关 webrtc.aec
-    //      17/开/关 webrtc.ns
-    //      18/开/关 webrtc.agc
-    //      100/开关log
-    //type[8,15]: reduce
-    //type[16,23]: repeatInterval
+    /*
+     *  type[0,7]: see WMIX_MSG_TYPE
+     *  type[8,15]: reduce
+     *  type[16,23]: repeatInterval
+     */
     long type;
-    //value(file/fifo): filePath + '\0' + msgPath
-    //value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
+    /*
+     *  value(file/fifo): filePath + '\0' + msgPath
+     *  value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
+     */
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 }WMix_Msg;
 
@@ -128,10 +139,11 @@ typedef union
 }WMix_Point;
 
 typedef enum{
-    WR_VAD = 0,
-    WR_AEC,
-    WR_NS,
-    WR_AGC,
+    WR_VAD = 0,//人声识别
+    WR_AEC,//回声消除
+    WR_NS,//噪音抑制(录音)
+    WR_NS_PA,//噪音抑制(播音)
+    WR_AGC,//自动增益
     
     WR_TOTAL,
 }WEBRTC_MODULES;

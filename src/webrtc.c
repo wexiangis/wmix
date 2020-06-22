@@ -1,3 +1,8 @@
+/**************************************************
+ * 
+ *  二次封装webrtc旗下的vad、aec/aecm、ns/nsx、agc模块接口
+ * 
+ **************************************************/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +19,7 @@ typedef struct{
     VadInst* handle;
     int chn;
     int freq;
+    int intervalMs;
     int framePerPkg;//转换时每包帧数,等于chn*freq/1000*20ms
     int reduce;//消音减益
 }Vad_Struct;
@@ -24,10 +30,11 @@ typedef struct{
  *  param:
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000, 48000
+ *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return: 
  *      fp指针
  */
-void* vad_init(int chn, int freq)
+void* vad_init(int chn, int freq, int intervalMs)
 {
     Vad_Struct *vs = (Vad_Struct*)calloc(1, sizeof(Vad_Struct));
     if(WebRtcVad_Create(&vs->handle) == 0)
@@ -38,7 +45,8 @@ void* vad_init(int chn, int freq)
             {
                 vs->chn = chn;
                 vs->freq = freq;
-                vs->framePerPkg = 1*freq/1000*20;
+                vs->framePerPkg = 1*freq/1000*intervalMs;
+                vs->intervalMs = intervalMs;
                 vs->reduce = 4;//默认消音
                 printf("vad_init: chn/%d freq/%d framePerPkg/%d\r\n", chn, freq, vs->framePerPkg);
                 return vs;
@@ -146,11 +154,35 @@ void vad_release(void *fp)
 #include "echo_cancellation.h"
 #include "echo_control_mobile.h"
 
+// #undef WMIX_WEBRTC_AEC // do this switch to AECM
+
+#ifdef WMIX_WEBRTC_AEC
+#define AEC_FRAME_TYPE  float
+#define WebRtcAecX_Create(x)            WebRtcAec_Create(x)
+#define WebRtcAecX_Init(a, b, c)        WebRtcAec_Init(a, b, c)
+#define WebRtcAecX_set_config(x, y)     WebRtcAec_set_config(x, y)
+#define WebRtcAecX_BufferFarend(a, b, c)        WebRtcAec_BufferFarend(a, b, c)
+#define WebRtcAecX_Process(a, b, c, d, e, f, g) WebRtcAec_Process(a, b, c, d, e, f, g)
+#define WebRtcAecX_Free(x)              WebRtcAec_Free(x)
+#else
+#define AEC_FRAME_TYPE  int16_t
+#define WebRtcAecX_Create(x)            WebRtcAecm_Create(x)
+#define WebRtcAecX_Init(a, b, c)        WebRtcAecm_Init(a, b)
+#define WebRtcAecX_set_config(x, y)     (0)
+#define WebRtcAecX_BufferFarend(a, b, c)        WebRtcAecm_BufferFarend(a, b, c)
+#define WebRtcAecX_Process(a, b, c, d, e, f)    WebRtcAecm_Process(a, b, c, d, e, f)
+#define WebRtcAecX_Free(x)              WebRtcAecm_Free(x)
+#endif
+
 typedef struct{
     void* aecInst;
     int chn;
     int freq;
+    int intervalMs;
     int framePerPkg;//转换时每包帧数,等于chn*freq/1000*20ms
+    AEC_FRAME_TYPE *in[2];
+    AEC_FRAME_TYPE *out[2];
+    AEC_FRAME_TYPE *far;
 }Aec_Struct;
 
 /*
@@ -159,10 +191,11 @@ typedef struct{
  *  param:
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000, 48000
+ *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
  */
-void* aec_init(int chn, int freq)
+void* aec_init(int chn, int freq, int intervalMs)
 {
     Aec_Struct *as = (Aec_Struct*)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
@@ -171,32 +204,42 @@ void* aec_init(int chn, int freq)
         .metricsMode = kAecFalse,
         .delay_logging = kAecFalse,
     };
-    if(WebRtcAec_Create(&as->aecInst) == 0)
+    if(WebRtcAecX_Create(&as->aecInst) == 0)
     {
-        if(WebRtcAec_Init(as->aecInst, freq, freq) == 0)
+        if(WebRtcAecX_Init(as->aecInst, freq, freq) == 0)
         {
-            if(1)//WebRtcAec_set_config(as->aecInst, config) == 0)
+            if(WebRtcAecX_set_config(as->aecInst, config) == 0)
             {
                 as->chn = chn;
                 as->freq = freq;
-                as->framePerPkg = 1*freq/1000*20;
-                printf("aec_init: chn/%d freq/%d framePerPkg/%d\r\n", chn, freq, as->framePerPkg);
+                as->intervalMs = intervalMs;
+                as->framePerPkg = 1*freq/1000*intervalMs;//必须10ms每包
+                //单声道
+                as->in[0] = (AEC_FRAME_TYPE*)calloc(as->framePerPkg, sizeof(AEC_FRAME_TYPE));
+                as->out[0] = (AEC_FRAME_TYPE*)calloc(as->framePerPkg, sizeof(AEC_FRAME_TYPE));
+                //双声道
+                if(chn > 1){
+                    as->in[1] = (AEC_FRAME_TYPE*)calloc(as->framePerPkg, sizeof(AEC_FRAME_TYPE));
+                    as->out[1] = (AEC_FRAME_TYPE*)calloc(as->framePerPkg, sizeof(AEC_FRAME_TYPE));
+                }
+                as->far = (AEC_FRAME_TYPE*)calloc(as->framePerPkg, sizeof(AEC_FRAME_TYPE));
+                printf("aec_init: chn/%d freq/%d framePerPkg/%d x %d\r\n", chn, freq, as->framePerPkg, chn);
                 return as;
             }
 #ifdef WMIX_WEBRTC_DEBUG
             else
-                printf("WebRtcAec_set_config failed !!\r\n");
+                printf("WebRtcAecX_set_config failed !!\r\n");
 #endif
         }
 #ifdef WMIX_WEBRTC_DEBUG
         else
-            printf("WebRtcAec_Init failed !!\r\n");
+            printf("WebRtcAecX_Init failed !!\r\n");
 #endif
-        WebRtcAec_Free(as->aecInst);
+        WebRtcAecX_Free(as->aecInst);
     }
 #ifdef WMIX_WEBRTC_DEBUG
     else
-        printf("WebRtcAec_Create failed !!\r\n");
+        printf("WebRtcAecX_Create failed !!\r\n");
 #endif
     free(as);
     return NULL;
@@ -215,7 +258,34 @@ void* aec_init(int chn, int freq)
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
 {
     Aec_Struct *as = fp;
-    return WebRtcAec_BufferFarend(as->aecInst, (const float*)frameFar, (int16_t)frameLen);
+    int ret;
+    int cLen, cPkg, cChn, realFrameLen;
+    
+    realFrameLen = as->framePerPkg*as->chn;//双声道下的实际帧数
+
+    for(cLen = 0; cLen < frameLen; cLen += realFrameLen){
+        
+        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左声提取到到ns->far)
+        for(cPkg = 0; cPkg < as->framePerPkg;){
+            //取左声道数据
+            as->far[cPkg++] = (AEC_FRAME_TYPE)(*frameFar++);
+            //丢弃其它声道数据
+            for(cChn = 1; cChn < as->chn; cChn++)
+                frameFar++;
+        }
+        //开始处理
+        ret = WebRtcAecX_BufferFarend(
+            as->aecInst,
+            (const AEC_FRAME_TYPE*)as->far,
+            (int16_t)as->framePerPkg);
+        if(ret != 0){
+#ifdef WMIX_WEBRTC_DEBUG
+            printf("WebRtcAecX_BufferFarend failed !!, ret %d \r\n", ret);
+#endif
+            return ret;
+        }
+    }
+    return 0;
 }
 
 /*
@@ -225,23 +295,56 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
  *      frameNear <in> : 近端数据(即将要播放的音频数据)
  *      frameOut <out> : 处理好的播音数据
  *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*20ms 的倍数
- *      intervalMs <in> : 采样间隔时间ms
  *  return:
  *      0/OK
  *      -1/failed
  */
-int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, int intervalMs)
+int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen)
 {
     Aec_Struct *as = fp;
-    int count;
-    // float *pFloat;
-    // for(count = 0, pFloat = (float*)frameNear; count < frameLen; count++)
-    //     pFloat[count] = (float)frameNear[count];
-    return WebRtcAec_Process(
-        as->aecInst,
-        (const float* const*)frameNear, as->chn,
-        (float* const*)frameOut, (int16_t)frameLen,
-        intervalMs, 0);
+    int ret;
+    int cLen, cPkg, cChn, realFrameLen;
+    
+    realFrameLen = as->framePerPkg*as->chn;//双声道下的实际帧数
+
+    for(cLen = 0; cLen < frameLen; cLen += realFrameLen){
+        
+        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声拆分到ns->in[2])
+        for(cPkg = 0; cPkg < realFrameLen;)
+            for(cChn = 0; cChn < as->chn; cChn++)
+                as->in[cChn][cPkg++] = (AEC_FRAME_TYPE)(*frameNear++);
+        //开始处理
+#ifdef WMIX_WEBRTC_AEC
+        ret = WebRtcAecX_Process(
+            as->aecInst,
+            (const AEC_FRAME_TYPE* const*)as->in, //注意这里in和下面out是 AEC_FRAME_TYPE *in[2] 指针(即左右声道数据)
+            as->chn,
+            (AEC_FRAME_TYPE* const*)as->out,
+            as->framePerPkg,
+            as->intervalMs,
+            0);
+#else
+        ret = WebRtcAecX_Process(
+            as->aecInst,
+            (const AEC_FRAME_TYPE*)as->in[0],//仅单声道
+            NULL,
+            (AEC_FRAME_TYPE*)as->out[0],//仅单声道
+            as->framePerPkg,
+            intervalMs);
+#endif
+        if(ret != 0){
+#ifdef WMIX_WEBRTC_DEBUG
+            printf("WebRtcAecX_Process failed !!, ret %d \r\n", ret);
+#endif
+            return ret;
+        }
+        //提取输出数据
+        for(cPkg = 0; cPkg < realFrameLen;)
+            for(cChn = 0; cChn < as->chn; cChn++)
+                *frameOut++ = (int16_t)as->out[cChn][cPkg++];
+    }
+
+    return 0;
 }
 /*
  *  内存回收 
@@ -249,7 +352,14 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
 void aec_release(void *fp)
 {
     Aec_Struct *as = fp;
-    WebRtcAec_Free(as->aecInst);
+    WebRtcAecX_Free(as->aecInst);
+    free(as->in[0]);
+    free(as->out[0]);
+    if(as->chn > 1){
+        free(as->in[1]);
+        free(as->out[1]);
+    }
+    free(as->far);
     free(as);
 #ifdef WMIX_WEBRTC_DEBUG
     printf("aec_release\r\n");
@@ -262,13 +372,40 @@ void aec_release(void *fp)
 #include "noise_suppression.h"
 #include "noise_suppression_x.h"
 
-#define NS_AGGRESSIVE 3 // 效果激进程度 0~3
+// #define WMIX_WEBRTC_NSX // define this switch to NSX
+
+#ifdef WMIX_WEBRTC_NSX
+#define NSX_FRAME_TYPE  short
+#define WebRtcNsX_Create(x)    WebRtcNsx_Create(x)
+#define WebRtcNsX_Free(x)      WebRtcNsx_Free(x)
+#define WebRtcNsX_Init(x, y)   WebRtcNsx_Init(x, y)
+#define WebRtcNsX_set_policy(x,y)      WebRtcNsx_set_policy(x, y)
+#define WebRtcNsX_Analyze(x, y)
+#define WebRtcNsX_Process(a, b, c, d)  WebRtcNsx_Process(a, b, c, d)
+#else
+#define NSX_FRAME_TYPE  float
+#define WebRtcNsX_Create(x)    WebRtcNs_Create(x)
+#define WebRtcNsX_Free(x)      WebRtcNs_Free(x)
+#define WebRtcNsX_Init(x, y)   WebRtcNs_Init(x, y)
+#define WebRtcNsX_set_policy(x,y)      WebRtcNs_set_policy(x, y)
+#define WebRtcNsX_Analyze(x, y)        WebRtcNs_Analyze(x, y)
+#define WebRtcNsX_Process(a, b, c, d)  WebRtcNs_Process(a, b, c, d)
+#endif
+
+#define NS_AGGRESSIVE 2 // 效果激进程度 0~2
 
 typedef struct{
-    NsHandle* NS_inst;
+#ifdef WMIX_WEBRTC_NSX
+    NsxHandle* nsxInst;
+#else
+    NsHandle* nsxInst;
+#endif
     int chn;
     int freq;
+    int intervalMs;
     int framePerPkg;//转换时每包帧数,等于chn*freq/1000*20ms
+    NSX_FRAME_TYPE *in[2];
+    NSX_FRAME_TYPE *out[2];
 }Ns_Struct;
 
 /*
@@ -277,22 +414,32 @@ typedef struct{
  *  param:
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000, 48000
+ *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
  */
-void* ns_init(int chn, int freq)
+void* ns_init(int chn, int freq, int intervalMs)
 {
     Ns_Struct *ns = (Ns_Struct*)calloc(1, sizeof(Ns_Struct));
-    if(WebRtcNs_Create(&ns->NS_inst) == 0)
+    if(WebRtcNsX_Create(&ns->nsxInst) == 0)
     {
-        if(WebRtcNs_Init(ns->NS_inst, freq) == 0)
+        if(WebRtcNsX_Init(ns->nsxInst, freq) == 0)
         {
-            if(WebRtcNs_set_policy(ns->NS_inst, NS_AGGRESSIVE) == 0)
+            if(WebRtcNsX_set_policy(ns->nsxInst, NS_AGGRESSIVE) == 0)
             {
                 ns->chn = chn;
                 ns->freq = freq;
-                ns->framePerPkg = 1*freq/1000*10;//必须10ms每包
-                printf("ns_init: chn/%d freq/%d framePerPkg/%d\r\n", chn, freq, ns->framePerPkg);
+                ns->intervalMs = intervalMs;
+                ns->framePerPkg = 1*freq/1000*intervalMs;//必须10ms每包
+                //单声道
+                ns->in[0] = (NSX_FRAME_TYPE*)calloc(ns->framePerPkg, sizeof(NSX_FRAME_TYPE));
+                ns->out[0] = (NSX_FRAME_TYPE*)calloc(ns->framePerPkg, sizeof(NSX_FRAME_TYPE));
+                //双声道
+                if(chn > 1){
+                    ns->in[1] = (NSX_FRAME_TYPE*)calloc(ns->framePerPkg, sizeof(NSX_FRAME_TYPE));
+                    ns->out[1] = (NSX_FRAME_TYPE*)calloc(ns->framePerPkg, sizeof(NSX_FRAME_TYPE));
+                }
+                printf("ns_init: chn/%d freq/%d framePerPkg/%d x %d\r\n", chn, freq, ns->framePerPkg, chn);
                 return ns;
             }
 #ifdef WMIX_WEBRTC_DEBUG
@@ -304,7 +451,7 @@ void* ns_init(int chn, int freq)
         else
             printf("WebRtcNs_Init failed !!\r\n");
 #endif
-        WebRtcNs_Free(ns->NS_inst);
+        WebRtcNsX_Free(ns->nsxInst);
     }
 #ifdef WMIX_WEBRTC_DEBUG
     else
@@ -312,18 +459,6 @@ void* ns_init(int chn, int freq)
 #endif
     free(ns);
     return NULL;
-}
-
-/*
- *  xxxx
- * 
- *  param:
- *      frame <in>: xxx
- */
-void ns_setAnalyze(void *fp, int16_t *frame)
-{
-    Ns_Struct *ns = fp;
-    WebRtcNs_Analyze(ns->NS_inst, (const float*)frame);
 }
 
 /*
@@ -337,28 +472,30 @@ void ns_setAnalyze(void *fp, int16_t *frame)
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
 {
     Ns_Struct *ns = fp;
+    int cLen, cPkg, cChn, realFrameLen;
+    
+    realFrameLen = ns->framePerPkg*ns->chn;//双声道下的实际帧数
 
-    int count;
-    // float *pFloat;
-
-    for(count = 0; count < frameLen; count += ns->framePerPkg)
-        WebRtcNs_Process(
-            ns->NS_inst,
-            (const float* const*)&frame[count],
+    for(cLen = 0; cLen < frameLen; cLen += realFrameLen){
+        
+        //装载数据,把 int6_t 转为 NSX_FRAME_TYPE (双声道时,把左右声拆分到ns->in[2])
+        for(cPkg = 0; cPkg < realFrameLen;)
+            for(cChn = 0; cChn < ns->chn; cChn++)
+                ns->in[cChn][cPkg++] = (NSX_FRAME_TYPE)(*frame++);
+        //开始处理
+        WebRtcNsX_Analyze(
+            ns->nsxInst,
+            (const NSX_FRAME_TYPE*)ns->in[0]); //提供左声道的数据
+        WebRtcNsX_Process(
+            ns->nsxInst,
+            (const NSX_FRAME_TYPE* const*)ns->in, //注意这里in和下面out是 NSX_FRAME_TYPE *in[2] 指针(即左右声道数据)
             ns->chn,
-            (float* const*)&frameOut[count]);
-
-    // for(count = 0, pFloat = (float*)frame; count < frameLen; count++)
-    //     pFloat[count] = (float)frame[count];
-
-    // WebRtcNs_Process(
-    //     ns->NS_inst, 
-    //     (const float* const*)frame, 
-    //     ns->chn, 
-    //     (float* const*)frameOut);
-
-    // for(count = 0, pFloat = (float*)frameOut; count < frameLen; count++)
-    //     frameOut[count] = (int16_t)pFloat[count];
+            (NSX_FRAME_TYPE* const*)ns->out);
+        //提取输出数据
+        for(cPkg = 0; cPkg < realFrameLen;)
+            for(cChn = 0; cChn < ns->chn; cChn++)
+                *frameOut++ = (int16_t)ns->out[cChn][cPkg++];
+    }
 }
 
 /*
@@ -367,7 +504,13 @@ void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
 void ns_release(void *fp)
 {
     Ns_Struct *ns = fp;
-    WebRtcNs_Free(ns->NS_inst);
+    WebRtcNsX_Free(ns->nsxInst);
+    free(ns->in[0]);
+    free(ns->out[0]);
+    if(ns->chn > 1){
+        free(ns->in[1]);
+        free(ns->out[1]);
+    }
     free(ns);
 #ifdef WMIX_WEBRTC_DEBUG
     printf("ns_release\r\n");
@@ -385,10 +528,11 @@ void ns_release(void *fp)
  *  param:
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000, 48000
+ *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
  */
-void* agc_init(int chn, int freq)
+void* agc_init(int chn, int freq, int intervalMs)
 {
     return 0;
 }
@@ -443,7 +587,7 @@ void main(int argc, char **argv){
     VadInst* handle;
     void *aecInst;
     void *aecmInst;
-    NsHandle *NS_inst;
+    NsHandle *nsxInst;
     NsxHandle *nsxInst;
     void *agcInst;
     
@@ -462,11 +606,11 @@ void main(int argc, char **argv){
     // ---------- ns ---------
     
     // 创建句柄
-    ret = WebRtcNs_Create(&NS_inst);
+    ret = WebRtcNs_Create(&nsxInst);
     printf("WebRtcNs_Create: ret %d\r\n", ret);
     
     // 回收内存
-    ret = WebRtcNs_Free(NS_inst);
+    ret = WebRtcNs_Free(nsxInst);
     printf("WebRtcNs_Free: ret %d\r\n", ret);
     
     // ---------- nsx ---------
@@ -496,16 +640,16 @@ void main(int argc, char **argv){
     // ---------- aec ---------
     
     // 创建句柄
-    ret = WebRtcAec_Create(&aecInst);
-    printf("WebRtcAec_Create: ret %d\r\n", ret);
+    ret = WebRtcAecX_Create(&aecInst);
+    printf("WebRtcAecX_Create: ret %d\r\n", ret);
     
     // 初始化句柄
-    ret = WebRtcAec_Init(aecInst, 8000, 8000);
-    printf("WebRtcAec_Init: ret %d\r\n", ret);
+    ret = WebRtcAecX_Init(aecInst, 8000, 8000);
+    printf("WebRtcAecX_Init: ret %d\r\n", ret);
     
     // 回收内存
-    ret = WebRtcAec_Free(aecInst);
-    printf("WebRtcAec_Free: ret %d\r\n", ret);
+    ret = WebRtcAecX_Free(aecInst);
+    printf("WebRtcAecX_Free: ret %d\r\n", ret);
     
     // ---------- vad ---------
     

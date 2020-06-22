@@ -1,4 +1,4 @@
-# cross:=arm-linux-gnueabihf
+cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
@@ -40,16 +40,11 @@ endif
 ROOT=$(shell pwd)
 
 # BASE
-obj-wmix=./src/wmix.c \
-		./src/wmix.h \
-		./src/wav.c \
-		./src/wav.h \
-		./src/rtp.c \
-		./src/rtp.h \
-		./src/g711codec.c \
-		./src/g711codec.h \
-		./src/webrtc.c \
-		./src/webrtc.h
+obj-wmix+= ./src/wmix.c ./src/wmix.h
+obj-wmix+= ./src/wav.c ./src/wav.h
+obj-wmix+= ./src/rtp.c ./src/rtp.h
+obj-wmix+= ./src/g711codec.c ./src/g711codec.h
+obj-wmix+= ./src/webrtc.c ./src/webrtc.h
 
 # -lxxx
 obj-flags= -lm -lpthread -lasound -ldl
