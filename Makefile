@@ -19,10 +19,10 @@ MAKE_WEBRTC_VAD=1
 MAKE_WEBRTC_AEC=1
 
 # 选择启用webrtc_ns噪音抑制 0/关 1/启用
-MAKE_WEBRTC_NS=0
+MAKE_WEBRTC_NS=1
 
 # 选择启用webrtc_agc自动增益 0/关 1/启用
-MAKE_WEBRTC_AGC=0
+MAKE_WEBRTC_AGC=1
 
 # speex开源音频库
 MAKE_SPEEX=0
