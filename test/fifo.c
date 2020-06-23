@@ -321,7 +321,7 @@ int main(int argc, char **argv)
                 container.format.sample_length, 
                 container.format.sample_rate, 
                 0,
-                path);
+                (char*)path);
             if(stream > 0)
             {
                 readSize = (ssize_t)(320*container.format.channels*((float)container.format.sample_rate/8000));
@@ -331,7 +331,7 @@ int main(int argc, char **argv)
                 t1 = t2 = getTickUs();
                 while(1)
                 {
-                    if(!wmix_check_path(path))
+                    if(!wmix_check_path((char*)path))
                     {
                         fprintf(stderr, "check path failed !!\n");
                         break;
