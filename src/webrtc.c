@@ -46,8 +46,12 @@ void *vad_init(int chn, int freq, int intervalMs)
             {
                 vs->chn = chn;
                 vs->freq = freq;
-                vs->pkgFrame = freq / 1000 * intervalMs;
-                vs->intervalMs = intervalMs;
+                //采样间隔只能 10ms 或 20ms
+                if(intervalMs%20 == 0)
+                    vs->intervalMs = 20;
+                else
+                    vs->intervalMs = 10;
+                vs->pkgFrame = freq / 1000 * vs->intervalMs;
                 vs->reduce = 4; //默认消音
                 printf("vad_init: chn/%d freq/%d pkgFrame/%d\r\n", chn, freq, vs->pkgFrame);
                 return vs;
@@ -76,7 +80,7 @@ void *vad_init(int chn, int freq, int intervalMs)
  * 
  *  param:
  *      frame <in/out> : 录音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*20ms 的倍数
+ *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  */
 void vad_process(void *fp, int16_t *frame, int frameLen)
 {
@@ -89,15 +93,11 @@ void vad_process(void *fp, int16_t *frame, int frameLen)
     //实际 frame 的 int16_t 字数
     realFrameLen = frameLen * vs->chn;
 
+    pFrame = frame;
+    cPkg = realFrameLen;
     //多声道数据合并为单声道)
-    if (vs->chn == 1)
+    if (vs->chn > 1)
     {
-        pFrame = frame;
-        cPkg = realFrameLen;
-    }
-    else
-    {
-        pFrame = frame;
         for (cLen = cPkg = 0; cLen < realFrameLen;)
         {
             //取当前帧所有声道数据的总和
@@ -136,14 +136,12 @@ void vad_process(void *fp, int16_t *frame, int frameLen)
             pFrame[cReduce] >>= vs->reduce;
     }
 
-    //单声道恢复为多声道
-    if (vs->chn == 1)
-        ;
-    else
+    //单声道恢复为多声道, 这里要倒着拷贝
+    if (vs->chn > 1)
     {
-        for (cLen = cPkg = 0; cLen < realFrameLen; cPkg++)
+        for (cLen = realFrameLen -1, cPkg -= 1; cLen >= 0; cPkg--)
             for (cChn = 0; cChn < vs->chn; cChn++)
-                frame[cLen++] = pFrame[cPkg];
+                frame[cLen--] = pFrame[cPkg];
     }
 }
 
@@ -226,8 +224,12 @@ void *aec_init(int chn, int freq, int intervalMs)
             {
                 as->chn = chn;
                 as->freq = freq;
-                as->intervalMs = intervalMs;
-                as->pkgFrame = freq / 1000 * intervalMs; //必须10ms每包
+                //采样间隔只能 10ms 或 20ms
+                if(intervalMs%20 == 0)
+                    as->intervalMs = 20;
+                else
+                    as->intervalMs = 10;
+                as->pkgFrame = freq / 1000 * as->intervalMs; //必须10ms每包
                 //单声道
                 as->in[0] = (AEC_FRAME_TYPE *)calloc(as->pkgFrame, sizeof(AEC_FRAME_TYPE));
                 as->out[0] = (AEC_FRAME_TYPE *)calloc(as->pkgFrame, sizeof(AEC_FRAME_TYPE));
@@ -265,7 +267,7 @@ void *aec_init(int chn, int freq, int intervalMs)
  * 
  *  param:
  *      frameFar <in> : 远端音频数据(即录音数据)
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*20ms 的倍数
+ *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  *  return:
  *      0/OK
  *      -1/failed
@@ -317,7 +319,7 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
  *  param:
  *      frameNear <in> : 近端数据(即将要播放的音频数据)
  *      frameOut <out> : 处理好的播音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*20ms 的倍数
+ *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  *  return:
  *      0/OK
  *      -1/failed
@@ -446,11 +448,10 @@ typedef struct
  *  param:
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000, 48000
- *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
  */
-void *ns_init(int chn, int freq, int intervalMs)
+void *ns_init(int chn, int freq)
 {
     Ns_Struct *ns = (Ns_Struct *)calloc(1, sizeof(Ns_Struct));
     if (WebRtcNsX_Create(&ns->nsxInst) == 0)
@@ -461,8 +462,9 @@ void *ns_init(int chn, int freq, int intervalMs)
             {
                 ns->chn = chn;
                 ns->freq = freq;
-                ns->intervalMs = intervalMs;
-                ns->pkgFrame = freq / 1000 * intervalMs; //必须10ms每包
+                //必须10ms每包
+                ns->intervalMs = 10;
+                ns->pkgFrame = freq / 1000 * ns->intervalMs;
                 //单声道
                 ns->in[0] = (NSX_FRAME_TYPE *)calloc(ns->pkgFrame, sizeof(NSX_FRAME_TYPE));
                 ns->out[0] = (NSX_FRAME_TYPE *)calloc(ns->pkgFrame, sizeof(NSX_FRAME_TYPE));
@@ -498,9 +500,9 @@ void *ns_init(int chn, int freq, int intervalMs)
  *  噪音抑制
  * 
  *  param:
- *      frame <in> : 录音数据
- *      frameOut <out> : 录音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*20ms 的倍数
+ *      frame <in> : 音频数据,采样间隔必须10ms的整数倍数
+ *      frameOut <out> : 输出数据
+ *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  */
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
 {
@@ -581,7 +583,7 @@ void *agc_init(int chn, int freq, int intervalMs)
  * 
  *  param:
  *      frame <in/out> : 录音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*20ms 的倍数
+ *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  */
 void agc_process(void *fp, int16_t *frame, int frameLen)
 {

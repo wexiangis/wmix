@@ -1160,25 +1160,28 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
 #if (WMIX_MODE == 0)
     WMix_Struct *wmix = wmtp->wmix;
-    //
-    size_t frame_num, buffSize2, frame_size, count, ret;
     WMix_Point src, dist;
     uint8_t *buff;
+    size_t count, ret;
+    //音频转换中间参数
     float divCount, divPow;
-    //转换目标格式
-    int chn = 1, freq = 8000; // "/tmp/wmix", 'I' 共享内存写入音频参数
+    //转换目标格式, "/tmp/wmix", 'I' 共享内存写入音频参数
+    int chn = 1, freq = 8000;
+    //转换后的包大小
+    size_t buffSize2;
     //严格录音间隔
     __time_t tick1, tick2;
+    //采样时间间隔us
     int intervalUs = WMIX_INTERVAL_MS * 1000 - 2000;
+    //按20ms的间隔采样,每次帧数
+    size_t frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS;
+    //每帧字节数
+    size_t frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
+    //每包字节数
+    size_t buffSize = WMIX_FREQ * WMIX_CHANNELS * WMIX_SAMPLE / 8 / 1000 * WMIX_INTERVAL_MS;
     //录音句柄已初始化
     if (wmix->recordback)
-    {
-        // frame_num = wmix->recordback->chunk_size;
-        frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS; //按20ms的间隔采样,每次帧数
         buff = wmix->recordback->data_buf;
-    }
-    //每帧字节数
-    frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
     //录音频率和目标频率的比值
     divPow = (float)(WMIX_FREQ - freq) / freq;
     divCount = 0;
@@ -1209,7 +1212,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         {
             if (wmix->recordback)
             {
-                // frame_num*frame_size = 实际读取字节数
+                // frame_num*frame_size = buffSize 实际读取字节数
+                memset(wmix->recordback->data_buf, 0, buffSize);
                 ret = SNDWAV_ReadPcm(wmix->recordback, frame_num) * frame_size;
                 if (ret > 0)
                 {
@@ -1218,7 +1222,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_NS])
                     {
                         if (wmix->webrtcPoint[WR_NS] == NULL)
-                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
                         if (wmix->webrtcPoint[WR_NS])
                         {
                             //开始转换
@@ -1264,9 +1268,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 if ((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
                 {
                     printf("wmix record: start\n");
-                    // frame_num = wmix->recordback->chunk_size;
-                    frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS; //按20ms的间隔采样
                     buff = wmix->recordback->data_buf;
+                    //丢弃一包数据
+                    SNDWAV_ReadPcm(wmix->recordback, frame_num);
                     continue;
                 }
                 else
@@ -3244,8 +3248,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_NS_PA])
                     {
                         if (wmix->webrtcPoint[WR_NS_PA] == NULL)
-                            // wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
-                            wmix->webrtcPoint[WR_NS_PA] = ns_init(2, WMIX_FREQ, WMIX_INTERVAL_MS);
+                            wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
                         if (wmix->webrtcPoint[WR_NS_PA])
                         {
                             //开始转换
@@ -3391,9 +3394,9 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
-    wmix->webrtcEnable[WR_VAD] = 0;
+    wmix->webrtcEnable[WR_VAD] = 1;
     wmix->webrtcEnable[WR_AEC] = 0;
-    wmix->webrtcEnable[WR_NS] = 0;
+    wmix->webrtcEnable[WR_NS] = 1;
     wmix->webrtcEnable[WR_NS_PA] = 1;
     wmix->webrtcEnable[WR_AGC] = 0;
 

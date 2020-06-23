@@ -38,7 +38,7 @@ void aec_release(void *fp);
 /* ==================== NS 噪音抑制 ==================== */
 
 #if (WMIX_WEBRTC_NS)
-void *ns_init(int chn, int freq, int intervalMs);
+void *ns_init(int chn, int freq);
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen);
 void ns_release(void *fp);
 #endif

@@ -11,17 +11,8 @@
 
 /* ---------- 接收来自Makefile的宏定义 ---------- */
 
-#ifdef MAKE_MP3
 #define WMIX_MP3 MAKE_MP3
-#else
-#define WMIX_MP3 0
-#endif
-
-#ifdef MAKE_AAC
 #define WMIX_AAC MAKE_AAC
-#else
-#define WMIX_AAC 0
-#endif
 
 /* ---------- rtp ---------- */
 
@@ -69,13 +60,13 @@ typedef struct SNDPCMContainer {
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#define WMIX_INTERVAL_MS 20 //录音、播音包间隔ms, 必须10的倍数
+#define WMIX_INTERVAL_MS 40 //录音、播音包间隔ms, 必须10的倍数
 
 #if(WMIX_MODE == 0)
 
-#define WMIX_CHANNELS    1
+#define WMIX_CHANNELS    2
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        8000
+#define WMIX_FREQ        16000
 
 #else
 
@@ -138,6 +129,7 @@ typedef union
     uint32_t *U32;
 }WMix_Point;
 
+//webrtc modules
 typedef enum{
     WR_VAD = 0,//人声识别
     WR_AEC,//回声消除
@@ -148,6 +140,7 @@ typedef enum{
     WR_TOTAL,
 }WEBRTC_MODULES;
 
+//先进先出队列
 typedef struct{
     uint16_t head, tail;
 }WMix_Queue;
@@ -162,10 +155,10 @@ typedef struct{
     // pthread_mutex_t lock;//互斥锁
     //
     uint8_t run;//全局正常运行标志
-    uint8_t loopWord;//每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放
-    uint8_t loopWordRecord;
-    uint8_t loopWordFifo;
-    uint8_t loopWordRtp;
+    uint8_t loopWord;//全局播放循环标志(每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放)
+    uint8_t loopWordRecord;//全局录音循环标志
+    uint8_t loopWordFifo;//全局fifo循环标志
+    uint8_t loopWordRtp;//全局rtp循环标志
     uint32_t tick;//播放指针启动至今走过的字节数
     //
     uint32_t thread_sys;//线程计数 增加线程时+1 减少时-1 等于0时全部退出
@@ -176,8 +169,8 @@ typedef struct{
     bool recordRun;//指导 wmix_shmem_write_circle() 运行, thread_record=0 时暂停播放
     int shmemRun;
     //
-    key_t msg_key;
-    int msg_fd;
+    key_t msg_key;//接收来自客户端的消息
+    int msg_fd;//客户端消息句柄
     //
     uint8_t reduceMode;//背景消减模式
     bool debug;//打印log?
