@@ -41,6 +41,7 @@ void help(char *argv0)
         "  -ns 0/1 : 关/开 webrtc.ns 噪音抑制(录音)\n"
         "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
         "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
+        "  -rw 0/1 : 关/开 自收发测试\n"
         "  -? --help : 显示帮助\n"
         "\n"
         "其它说明:\n"
@@ -78,8 +79,8 @@ int main(int argc, char **argv)
     int log = -1;
     bool reset = false;
 
-    int vad = 0, aec = 0, ns = 0, ns_pa = 0, agc = 0;
-    bool _vad = false, _aec = false, _ns = false, _ns_pa = false, _agc = false;
+    int vad = 0, aec = 0, ns = 0, ns_pa = 0, agc = 0, rw = 0;
+    bool _vad = false, _aec = false, _ns = false, _ns_pa = false, _agc = false, _rw = false;
 
     char *filePath = NULL;
     char tmpPath[128] = {0};
@@ -188,6 +189,11 @@ int main(int argc, char **argv)
             sscanf(argv[++i], "%d", &agc);
             _agc = true;
         }
+        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-rw") && i+1 < argc)
+        {
+            sscanf(argv[++i], "%d", &rw);
+            _rw = true;
+        }
         else if(strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
@@ -238,6 +244,11 @@ int main(int argc, char **argv)
     }
     if(_agc){
         wmix_webrtc_agc(agc?true:false);
+        helpFalg = false;
+    }
+
+    if(_rw){
+        wmix_rw_test(rw?true:false);
         helpFalg = false;
     }
 

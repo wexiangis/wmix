@@ -326,11 +326,12 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
  *      frameNear <in> : 近端数据(即将要播放的音频数据)
  *      frameOut <out> : 处理好的播音数据
  *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      delayms <in> : 录播音估计延时间隔
  *  return:
  *      0/OK
  *      -1/failed
  */
-int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen)
+int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, int delayms)
 {
     Aec_Struct *as = fp;
     int ret;
@@ -358,7 +359,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen)
             as->chn,
             (AEC_FRAME_TYPE *const *)as->out,
             as->pkgFrame,
-            as->intervalMs,
+            delayms,
             0);
 #else
         ret = WebRtcAecX_Process(
@@ -367,7 +368,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen)
             NULL,
             (AEC_FRAME_TYPE *)as->out[0], //仅单声道
             as->pkgFrame,
-            intervalMs);
+            delayms);
 #endif
         if (ret != 0)
         {

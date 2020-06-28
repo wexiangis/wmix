@@ -42,6 +42,7 @@ typedef enum{
     WMT_WEBRTC_NS_SW = 17,  //开/关 webrtc.ns 噪音抑制(录音)
     WMT_WEBRTC_NS_PA_SW = 18,//开/关 webrtc.ns 噪音抑制(播音)
     WMT_WEBRTC_AGC_SW = 19, //开/关 webrtc.agc 自动增益
+    WMT_RW_TEST = 20,//自发收测试
 
     WMT_LOG_SW = 100,       //开关log
 }WMIX_MSG_TYPE;
@@ -705,4 +706,9 @@ void wmix_webrtc_ns_pa(bool on)
 void wmix_webrtc_agc(bool on)
 {
     _wmix_webrtc_xxx(WMT_WEBRTC_AGC_SW, on);
+}
+
+void wmix_rw_test(bool on)
+{
+    _wmix_webrtc_xxx(WMT_RW_TEST, on);
 }

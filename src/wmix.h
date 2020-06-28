@@ -52,7 +52,7 @@ typedef struct SNDPCMContainer {
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V4.0 - 20200622"
+#define WMIX_VERSION "V4.0 - 20200628"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -60,13 +60,13 @@ typedef struct SNDPCMContainer {
 #define WMIX_MSG_ID   'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#define WMIX_INTERVAL_MS 40 //录音、播音包间隔ms, 必须10的倍数
+#define WMIX_INTERVAL_MS 20 //录音、播音包间隔ms, 必须10的倍数
 
 #if(WMIX_MODE == 0)
 
-#define WMIX_CHANNELS    2
+#define WMIX_CHANNELS    1
 #define WMIX_SAMPLE      16
-#define WMIX_FREQ        16000
+#define WMIX_FREQ        8000
 
 #else
 
@@ -97,6 +97,7 @@ typedef enum{
     WMT_WEBRTC_NS_SW = 17,  //开/关 webrtc.ns 噪音抑制(录音)
     WMT_WEBRTC_NS_PA_SW = 18,//开/关 webrtc.ns 噪音抑制(播音)
     WMT_WEBRTC_AGC_SW = 19, //开/关 webrtc.agc 自动增益
+    WMT_RW_TEST = 20,//自收发测试
 
     WMT_LOG_SW = 100,       //开关log
 }WMIX_MSG_TYPE;
@@ -154,7 +155,7 @@ typedef struct{
     WMix_Point head, tail;//当前缓冲区读写指针
     // pthread_mutex_t lock;//互斥锁
     //
-    uint8_t run;//全局正常运行标志
+    bool run;//全局正常运行标志
     uint8_t loopWord;//全局播放循环标志(每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放)
     uint8_t loopWordRecord;//全局录音循环标志
     uint8_t loopWordFifo;//全局fifo循环标志
@@ -167,7 +168,7 @@ typedef struct{
     //
     bool playRun;//指导 play_thread() 运行, thread_play=0 时暂停播放
     bool recordRun;//指导 wmix_shmem_write_circle() 运行, thread_record=0 时暂停播放
-    int shmemRun;
+    int shmemRun;//共享内存录音服务标志
     //
     key_t msg_key;//接收来自客户端的消息
     int msg_fd;//客户端消息句柄
@@ -180,6 +181,9 @@ typedef struct{
     //webrtc modules
     int webrtcEnable[WR_TOTAL];
     void *webrtcPoint[WR_TOTAL];
+
+    //自收发测试
+    bool rwTest;
 }WMix_Struct;
 
 /* ---------- 原始的操作方式 ---------- */
