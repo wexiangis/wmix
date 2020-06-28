@@ -6,10 +6,10 @@
 MAKE_ALSA=1
 
 # 选择启用mp3播放支持 0/关 1/启用
-MAKE_MP3=0
+MAKE_MP3=1
 
 # 选择启用aac播放/录音 0/关 1/启用
-MAKE_AAC=0
+MAKE_AAC=1
 
 # 选择启用webrtc_vad人声识别 0/关 1/启用
 MAKE_WEBRTC_VAD=1

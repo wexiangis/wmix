@@ -30,14 +30,17 @@ typedef struct
  * 
  *  param:
  *      chn <in> : 声道数
- *      freq <in> : 8000, 16000, 32000, 48000
+ *      freq <in> : 8000, 16000, 32000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return: 
  *      fp指针
  */
 void *vad_init(int chn, int freq, int intervalMs)
 {
-    Vad_Struct *vs = (Vad_Struct *)calloc(1, sizeof(Vad_Struct));
+    Vad_Struct *vs;
+    if(freq > 32000)
+        return NULL;
+    vs = (Vad_Struct *)calloc(1, sizeof(Vad_Struct));
     if (WebRtcVad_Create(&vs->handle) == 0)
     {
         if (WebRtcVad_Init(vs->handle) == 0)
@@ -202,14 +205,17 @@ typedef struct
  * 
  *  param:
  *      chn <in> : 声道数
- *      freq <in> : 8000, 16000, 32000, 48000
+ *      freq <in> : 8000, 16000, 32000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
  */
 void *aec_init(int chn, int freq, int intervalMs)
 {
-    Aec_Struct *as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
+    Aec_Struct *as;
+    if(freq > 32000)
+        return NULL;
+    as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
         .nlpMode = kAecNlpModerate,
         .skewMode = kAecFalse,
@@ -447,13 +453,16 @@ typedef struct
  * 
  *  param:
  *      chn <in> : 声道数
- *      freq <in> : 8000, 16000, 32000, 48000
+ *      freq <in> : 8000, 16000, 32000
  *  return:
  *      fp指针
  */
 void *ns_init(int chn, int freq)
 {
-    Ns_Struct *ns = (Ns_Struct *)calloc(1, sizeof(Ns_Struct));
+    Ns_Struct *ns;
+    if(freq > 32000)
+        return NULL;
+    ns = (Ns_Struct *)calloc(1, sizeof(Ns_Struct));
     if (WebRtcNsX_Create(&ns->nsxInst) == 0)
     {
         if (WebRtcNsX_Init(ns->nsxInst, freq) == 0)
@@ -568,14 +577,18 @@ void ns_release(void *fp)
  * 
  *  param:
  *      chn <in> : 声道数
- *      freq <in> : 8000, 16000, 32000, 48000
+ *      freq <in> : 8000, 16000, 32000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
  */
 void *agc_init(int chn, int freq, int intervalMs)
 {
-    return 0;
+    
+    if(freq > 32000)
+        return NULL;
+    
+    return NULL;
 }
 
 /*

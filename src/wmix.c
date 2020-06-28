@@ -1230,7 +1230,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 {
                     //噪音抑制
 #if (WMIX_WEBRTC_NS)
-                    if (wmix->webrtcEnable[WR_NS])
+                    if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000)
                     {
                         if (wmix->webrtcPoint[WR_NS] == NULL)
                             wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
@@ -1257,7 +1257,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #endif
                     //人声识别
 #if (WMIX_WEBRTC_VAD)
-                    if (wmix->webrtcEnable[WR_VAD])
+                    if (wmix->webrtcEnable[WR_VAD] && WMIX_FREQ <= 32000)
                     {
                         // 人声识别,初始化
                         if (wmix->webrtcPoint[WR_VAD] == NULL)
@@ -3161,7 +3161,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 
                     //回声消除
 #if (WMIX_WEBRTC_AEC)
-                    if (wmix->webrtcEnable[WR_AEC])
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
@@ -3184,7 +3184,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 
                     //噪音抑制
 #if (WMIX_WEBRTC_NS)
-                    if (wmix->webrtcEnable[WR_NS_PA])
+                    if (wmix->webrtcEnable[WR_NS_PA] && WMIX_FREQ <= 32000)
                     {
                         if (wmix->webrtcPoint[WR_NS_PA] == NULL)
                             wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
