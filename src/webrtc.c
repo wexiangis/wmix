@@ -217,7 +217,7 @@ void *aec_init(int chn, int freq, int intervalMs)
         return NULL;
     as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
-        .nlpMode = kAecNlpModerate,
+        .nlpMode = kAecNlpAggressive,//kAecNlpModerate,
         .skewMode = kAecFalse,
         .metricsMode = kAecFalse,
         .delay_logging = kAecFalse,
@@ -293,12 +293,11 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
 
     for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
     {
-
         //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左声提取到到ns->far)
-        for (cPkg = 0; cPkg < as->pkgFrame;)
+        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
         {
             //取左声道数据
-            as->far[cPkg++] = (AEC_FRAME_TYPE)(*frameFar++);
+            as->far[cPkg] = (AEC_FRAME_TYPE)(*frameFar++);
             //丢弃其它声道数据
             for (cChn = 1; cChn < as->chn; cChn++)
                 frameFar++;
@@ -346,12 +345,11 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
 
     for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
     {
-
         //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声拆分到ns->in[2])
         for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
             for (cChn = 0; cChn < as->chn; cChn++)
                 as->in[cChn][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
-                //开始处理
+        //开始处理
 #ifdef WMIX_WEBRTC_AEC
         ret = WebRtcAecX_Process(
             as->aecInst,
@@ -385,6 +383,95 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
 
     return 0;
 }
+
+/*
+ *  二合一回声消除
+ * 
+ *  param:
+ *      frameFar <in> : 远端音频数据(即录音数据)
+ *      frameNear <in> : 近端数据(即将要播放的音频数据)
+ *      frameOut <out> : 处理好的播音数据
+ *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      delayms <in> : 录播音估计延时间隔
+ *  return:
+ *      0/OK
+ *      -1/failed
+ */
+int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameLen, int delayms)
+{
+    Aec_Struct *as = fp;
+    int ret;
+    int cLen, cPkg, cChn;
+    int realFrameLen, realPkgFrame;
+
+    //实际 frameFar 的 int16_t 字数
+    realFrameLen = frameLen * as->chn;
+
+    //实际每包数据的 int16_t 字数
+    realPkgFrame = as->pkgFrame * as->chn;
+
+    for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
+    {
+        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声拆分到ns->in[2])
+        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
+        {
+            //取左声道数据
+            as->far[cPkg] = (AEC_FRAME_TYPE)(*frameFar++);
+            as->in[0][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
+            //其它声道数据
+            for (cChn = 1; cChn < as->chn; cChn++)
+            {
+                as->in[cChn][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
+                frameFar++;//丢弃,far只要左声道
+            }
+        }
+        //开始处理
+        ret = WebRtcAecX_BufferFarend(
+            as->aecInst,
+            (const AEC_FRAME_TYPE *)as->far,
+            (int16_t)as->pkgFrame);
+        if (ret != 0)
+        {
+#ifdef WMIX_WEBRTC_DEBUG
+            printf("WebRtcAecX_BufferFarend failed !!, ret %d \r\n", ret);
+#endif
+            return ret;
+        }
+        //开始处理
+#ifdef WMIX_WEBRTC_AEC
+        ret = WebRtcAecX_Process(
+            as->aecInst,
+            (const AEC_FRAME_TYPE *const *)as->in, //注意这里in和下面out是 AEC_FRAME_TYPE *in[2] 指针(即左右声道数据)
+            as->chn,
+            (AEC_FRAME_TYPE *const *)as->out,
+            as->pkgFrame,
+            delayms,
+            0);
+#else
+        ret = WebRtcAecX_Process(
+            as->aecInst,
+            (const AEC_FRAME_TYPE *)as->in[0], //仅单声道
+            NULL,
+            (AEC_FRAME_TYPE *)as->out[0], //仅单声道
+            as->pkgFrame,
+            delayms);
+#endif
+        if (ret != 0)
+        {
+#ifdef WMIX_WEBRTC_DEBUG
+            printf("WebRtcAecX_Process failed !!, ret %d \r\n", ret);
+#endif
+            return ret;
+        }
+        //提取输出数据
+        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
+            for (cChn = 0; cChn < as->chn; cChn++)
+                *frameOut++ = (int16_t)as->out[cChn][cPkg];
+    }
+
+    return 0;
+}
+
 /*
  *  内存回收 
  */

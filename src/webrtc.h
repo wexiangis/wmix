@@ -32,6 +32,7 @@ void vad_release(void *fp);
 void *aec_init(int chn, int freq, int intervalMs);
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen);
 int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, int delayms);
+int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameLen, int delayms);
 void aec_release(void *fp);
 #endif
 

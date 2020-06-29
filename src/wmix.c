@@ -3166,6 +3166,8 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     wmix->thread_sys -= 1;
 }
 
+// #define AEC_FILE_STREAM_TEST
+
 void wmix_play_thread(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
@@ -3190,13 +3192,13 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     uint32_t frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS;
     //按时间间隔计算每次发包大小,字节数
     uint32_t pkg_size = WMIX_FREQ * WMIX_CHANNELS * WMIX_SAMPLE / 8 / 1000 * WMIX_INTERVAL_MS;
-
+#ifdef AEC_FILE_STREAM_TEST
     int i, ret;
     int16_t *p1, *p2;
     uint8_t fileBuff[WMIX_FREQ * WMIX_CHANNELS * WMIX_SAMPLE / 8 / 1000 * WMIX_INTERVAL_MS];
     int fd = open("./audio/1x8000.wav", O_RDONLY);
     lseek(fd, 44, SEEK_SET);
-
+#endif
     //线程计数
     wmix->thread_sys += 1;
     //wmix 运行标志
@@ -3267,8 +3269,10 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
+#ifdef AEC_FILE_STREAM_TEST
+                            memcpy(recordPkgBuff, playBuff, pkg_size);
+
                             memset(fileBuff, 0, sizeof(fileBuff));
-                            // memset(playBuff, 0, sizeof(fileBuff));
                             ret = read(fd, fileBuff, pkg_size);
                             if(ret < pkg_size)
                                 lseek(fd, 44, SEEK_SET);
@@ -3276,15 +3280,10 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                             p2 = (int16_t *)playBuff;
                             for(i = 0; i < frame_num; i++)
                                 p2[i] += p1[i];
-                            
-                            //传入录音数据
-                            aec_setFrameFar(
+#endif
+                            aec_process2(
                                 wmix->webrtcPoint[WR_AEC],
-                                (int16_t *)playBuff,//recordPkgBuff,
-                                frame_num);
-                            //开始转换
-                            aec_process(
-                                wmix->webrtcPoint[WR_AEC],
+                                (int16_t*)recordPkgBuff,
                                 (int16_t *)playBuff,
                                 (int16_t *)playBuff,
                                 frame_num,
@@ -3367,6 +3366,9 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         }
 #endif
     }
+#ifdef AEC_FILE_STREAM_TEST
+    close(fd);
+#endif
     //
 #ifdef WMIX_RECORD_PLAY_SYNC
     wmix_shmem_write_circle(wmtp);
@@ -3456,8 +3458,8 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
-    wmix->webrtcEnable[WR_VAD] = 1;
-    wmix->webrtcEnable[WR_AEC] = 1;
+    wmix->webrtcEnable[WR_VAD] = 0;
+    wmix->webrtcEnable[WR_AEC] = 0;
     wmix->webrtcEnable[WR_NS] = 1;
     wmix->webrtcEnable[WR_NS_PA] = 1;
     wmix->webrtcEnable[WR_AGC] = 0;
