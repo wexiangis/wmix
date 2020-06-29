@@ -217,7 +217,7 @@ void *aec_init(int chn, int freq, int intervalMs)
         return NULL;
     as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
-        .nlpMode = kAecNlpAggressive,//kAecNlpModerate,
+        .nlpMode = kAecNlpModerate,
         .skewMode = kAecFalse,
         .metricsMode = kAecFalse,
         .delay_logging = kAecFalse,

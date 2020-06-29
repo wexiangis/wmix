@@ -1225,13 +1225,13 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         }
 #endif
         //失能释放
-// #if (WMIX_WEBRTC_AEC)
-//         if (!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
-//         {
-//             aec_release(wmix->webrtcPoint[WR_AEC]);
-//             wmix->webrtcPoint[WR_AEC] = NULL;
-//         }
-// #endif
+#if (WMIX_WEBRTC_AEC)
+        if (!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
+        {
+            aec_release(wmix->webrtcPoint[WR_AEC]);
+            wmix->webrtcPoint[WR_AEC] = NULL;
+        }
+#endif
         //有录音线程或有客户端在用mem(内存共享)数据录音
         if (wmix->recordRun || wmix->shmemRun > 0 || wmix->rwTest)
         {
@@ -1252,32 +1252,28 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 {
                     memcpy(recordPkgBuff, buff, ret);
 
+#if (WMIX_WEBRTC_AEC)
                     //回声消除
-// #if (WMIX_WEBRTC_AEC)
-//                     if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
-//                     {
-//                         if (wmix->webrtcPoint[WR_AEC] == NULL)
-//                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
-//                         if (wmix->webrtcPoint[WR_AEC])
-//                         {
-//                             //传入录音数据
-//                             aec_setFrameFar(
-//                                 wmix->webrtcPoint[WR_AEC],
-//                                 (int16_t *)playPkgBuff,
-//                                 frame_num);
-//                             //开始转换
-//                             aec_process(
-//                                 wmix->webrtcPoint[WR_AEC],
-//                                 (int16_t *)buff,
-//                                 (int16_t *)buff,
-//                                 frame_num,
-//                                 5);
-//                         }
-//                     }
-// #endif
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
+                    {
+                        if (wmix->webrtcPoint[WR_AEC] == NULL)
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                        if (wmix->webrtcPoint[WR_AEC])
+                        {
+                            //开始转换
+                            aec_process2(
+                                wmix->webrtcPoint[WR_AEC],
+                                (int16_t *)playPkgBuff,//要消除的数据,即 播音数据
+                                (int16_t *)buff,//混杂的数据,即 播音数据 + 人说话声音
+                                (int16_t *)buff,//输出的数据,得 人说话声音
+                                frame_num,
+                                WMIX_INTERVAL_MS/2);//评估回声时延
+                        }
+                    }
+#endif
 
-                    //噪音抑制
 #if (WMIX_WEBRTC_NS)
+                    //噪音抑制
                     if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000)
                     {
                         if (wmix->webrtcPoint[WR_NS] == NULL)
@@ -1293,8 +1289,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                         }
                     }
 #endif
-                    //人声识别
+
 #if (WMIX_WEBRTC_VAD)
+                    //人声识别
                     if (wmix->webrtcEnable[WR_VAD] && WMIX_FREQ <= 32000)
                     {
                         // 人声识别,初始化
@@ -1334,6 +1331,11 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     //转换格式为单声道8000Hz并存到共享内存
                     RECORD_DATA_TRANSFER();
                     wmix_mem_write((int16_t *)buff, buffSize2 / 2);
+                }
+                else
+                {
+                    //没录到声音
+                    memset(recordPkgBuff, 0, frame_num*frame_size);
                 }
             }
             else
@@ -3166,7 +3168,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     wmix->thread_sys -= 1;
 }
 
-// #define AEC_FILE_STREAM_TEST
+// #define AEC_FILE_STREAM_TEST //回声消除,文件流干扰测试
 
 void wmix_play_thread(WMixThread_Param *wmtp)
 {
@@ -3192,6 +3194,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     uint32_t frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS;
     //按时间间隔计算每次发包大小,字节数
     uint32_t pkg_size = WMIX_FREQ * WMIX_CHANNELS * WMIX_SAMPLE / 8 / 1000 * WMIX_INTERVAL_MS;
+
 #ifdef AEC_FILE_STREAM_TEST
     int i, ret;
     int16_t *p1, *p2;
@@ -3199,6 +3202,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     int fd = open("./audio/1x8000.wav", O_RDONLY);
     lseek(fd, 44, SEEK_SET);
 #endif
+
     //线程计数
     wmix->thread_sys += 1;
     //wmix 运行标志
@@ -3257,43 +3261,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     //发包计数
                     countTotal += pkg_size;
 
-#ifdef WMIX_RECORD_PLAY_SYNC
-                    wmix_shmem_write_circle(wmtp);
-#endif
-
-                    //回声消除
-#if (WMIX_WEBRTC_AEC)
-                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
-                    {
-                        if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
-                        if (wmix->webrtcPoint[WR_AEC])
-                        {
-#ifdef AEC_FILE_STREAM_TEST
-                            memcpy(recordPkgBuff, playBuff, pkg_size);
-
-                            memset(fileBuff, 0, sizeof(fileBuff));
-                            ret = read(fd, fileBuff, pkg_size);
-                            if(ret < pkg_size)
-                                lseek(fd, 44, SEEK_SET);
-                            p1 = (int16_t *)fileBuff;
-                            p2 = (int16_t *)playBuff;
-                            for(i = 0; i < frame_num; i++)
-                                p2[i] += p1[i];
-#endif
-                            aec_process2(
-                                wmix->webrtcPoint[WR_AEC],
-                                (int16_t*)recordPkgBuff,
-                                (int16_t *)playBuff,
-                                (int16_t *)playBuff,
-                                frame_num,
-                                WMIX_INTERVAL_MS/2);
-                        }
-                    }
-#endif
-
-                    //噪音抑制
 #if (WMIX_WEBRTC_NS)
+                    //噪音抑制
                     if (wmix->webrtcEnable[WR_NS_PA] && WMIX_FREQ <= 32000)
                     {
                         if (wmix->webrtcPoint[WR_NS_PA] == NULL)
@@ -3310,6 +3279,38 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     }
 #endif
 
+#ifdef AEC_FILE_STREAM_TEST
+#if (WMIX_WEBRTC_AEC)
+                    //回声消除,文件流干扰测试
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
+                    {
+                        if (wmix->webrtcPoint[WR_AEC] == NULL)
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                        if (wmix->webrtcPoint[WR_AEC])
+                        {
+                            memset(fileBuff, 0, sizeof(fileBuff));
+                            ret = read(fd, fileBuff, pkg_size);
+                            if(ret < pkg_size)
+                                lseek(fd, 44, SEEK_SET);
+                            p1 = (int16_t *)fileBuff;
+                            p2 = (int16_t *)playBuff;
+                            for(i = 0; i < frame_num; i++)
+                            {
+                                // p1[i] >>= 1;
+                                p2[i] += p1[i];
+                            }
+                            aec_process2(
+                                wmix->webrtcPoint[WR_AEC],
+                                (int16_t*)fileBuff,
+                                (int16_t *)playBuff,
+                                (int16_t *)playBuff,
+                                frame_num,
+                                0);//WMIX_INTERVAL_MS/2);
+                        }
+                    }
+#endif
+#endif
+
                     memcpy(playPkgBuff, playBuff, pkg_size);
 
                     //开始播放
@@ -3317,6 +3318,12 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     hiaudio_ao_write((int16_t*)playBuff, frame_num);
 #else
                     SNDWAV_WritePcm(playback, frame_num);
+#endif
+
+#ifndef AEC_FILE_STREAM_TEST
+#ifdef WMIX_RECORD_PLAY_SYNC
+                    wmix_shmem_write_circle(wmtp);
+#endif
 #endif
 
                     //重置数据和指针
@@ -3349,14 +3356,6 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             delayus(WMIX_INTERVAL_MS*1000);
             tickT = 0;
         }
-        //失能释放
-#if (WMIX_WEBRTC_AEC)
-        if (!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
-        {
-            aec_release(wmix->webrtcPoint[WR_AEC]);
-            wmix->webrtcPoint[WR_AEC] = NULL;
-        }
-#endif
         //失能释放
 #if (WMIX_WEBRTC_NS)
         if (!wmix->webrtcEnable[WR_NS_PA] && wmix->webrtcPoint[WR_NS_PA])
@@ -3459,9 +3458,9 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
     wmix->webrtcEnable[WR_VAD] = 0;
-    wmix->webrtcEnable[WR_AEC] = 0;
-    wmix->webrtcEnable[WR_NS] = 1;
-    wmix->webrtcEnable[WR_NS_PA] = 1;
+    wmix->webrtcEnable[WR_AEC] = 1;
+    wmix->webrtcEnable[WR_NS] = 0;
+    wmix->webrtcEnable[WR_NS_PA] = 0;
     wmix->webrtcEnable[WR_AGC] = 0;
 
     printf("\n---- WMix info -----\n"
