@@ -77,6 +77,8 @@ typedef struct SNDPCMContainer {
 
 #endif
 
+#define WMIX_PKG_SIZE   (WMIX_FREQ * WMIX_CHANNELS * WMIX_SAMPLE / 8 / 1000 * WMIX_INTERVAL_MS)
+
 typedef enum{
     WMT_VOLUME = 1,         //设置音量
     WMT_PLYAY_MUTEX = 2,    //互斥播放文件
