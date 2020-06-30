@@ -13,7 +13,7 @@
 #define RTP_IP "127.0.0.1"
 #define RTP_PORT 9832
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     int fd;
     int ret;
@@ -23,34 +23,34 @@ int main(int argc, char* argv[])
 
     int readSize = RTP_PCMA_PKT_SIZE;
 
-    if(argc != 2)
+    if (argc != 2)
     {
         printf("Usage: %s <save file>\n", argv[0]);
         return -1;
     }
 
     remove(argv[1]);
-    fd = open(argv[1], O_WRONLY|O_CREAT, 0666);
-    if(fd < 0)
+    fd = open(argv[1], O_WRONLY | O_CREAT, 0666);
+    if (fd < 0)
     {
         printf("failed to open %s\n", argv[1]);
         return -1;
     }
 
     ss = rtp_socket(RTP_IP, RTP_PORT, 0);
-    if(!ss)
+    if (!ss)
     {
         printf("failed to create udp socket\n");
         close(fd);
         return -1;
     }
 
-    while(1)
+    while (1)
     {
         ret = rtp_recv(ss, &rtpPacket, &readSize);
-        if(ret > 0)
+        if (ret > 0)
         {
-            printf("rtp_recv: %d / %d + %d\n", ret, ret-readSize, readSize);
+            printf("rtp_recv: %d / %d + %d\n", ret, ret - readSize, readSize);
             ret = G711a2PCM(rtpPacket.payload, buff, readSize, 0);
             write(fd, buff, ret);
             continue;

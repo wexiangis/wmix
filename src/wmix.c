@@ -2356,7 +2356,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             }
         }
         //往aacBuff读入数据
-        ret = rtp_recv(ss, &rtpPacket, (uint32_t*)&retSize);
+        ret = rtp_recv(ss, &rtpPacket, (uint32_t *)&retSize);
         if (ret > 0)
         {
             memcpy(&aacBuff[7], &rtpPacket.payload[4], retSize);
@@ -2365,7 +2365,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 &aacDec,
                 aacBuff, retSize + 7,
                 buff, &datUse,
-                (int*)&chn, (int*)&freq);
+                (int *)&chn, (int *)&freq);
         }
         else
             retLen = -1;
@@ -4151,7 +4151,7 @@ void wmix_load_aac(
         return;
     }
     //初始化解码器
-    ret = aac_decode2(&aacDec, fd, out, (int*)&chn, (int*)&freq);
+    ret = aac_decode2(&aacDec, fd, out, (int *)&chn, (int *)&freq);
     if (ret < 0)
     {
         fprintf(stderr, "aac_decode2: err\n");
@@ -4300,7 +4300,7 @@ void wmix_load_aac(
         else
             break;
         //
-        ret = aac_decode2(&aacDec, fd, out, (int*)&chn, (int*)&freq);
+        ret = aac_decode2(&aacDec, fd, out, (int *)&chn, (int *)&freq);
     }
     //
     close(fd);

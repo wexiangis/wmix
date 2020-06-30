@@ -21,7 +21,8 @@
  ******************************************************************************/
 static char *WAV_P_FmtString(uint16_t fmt)
 {
-    switch (fmt) {
+    switch (fmt)
+    {
     case WAV_FMT_PCM:
         return "PCM";
         break;
@@ -51,21 +52,21 @@ static void WAV_P_PrintHeader(WAVContainer_t *container)
 {
     printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
     printf("File Magic:         [%c%c%c%c]\n",
-        (char)(container->header.magic),
-        (char)(container->header.magic>>8),
-        (char)(container->header.magic>>16),
-        (char)(container->header.magic>>24));
+           (char)(container->header.magic),
+           (char)(container->header.magic >> 8),
+           (char)(container->header.magic >> 16),
+           (char)(container->header.magic >> 24));
     printf("File Length:        [%d]\n", container->header.length);
     printf("File Type:          [%c%c%c%c]\n",
-        (char)(container->header.type),
-        (char)(container->header.type>>8),
-        (char)(container->header.type>>16),
-        (char)(container->header.type>>24));
+           (char)(container->header.type),
+           (char)(container->header.type >> 8),
+           (char)(container->header.type >> 16),
+           (char)(container->header.type >> 24));
     printf("Fmt Magic:          [%c%c%c%c]\n",
-        (char)(container->format.magic),
-        (char)(container->format.magic>>8),
-        (char)(container->format.magic>>16),
-        (char)(container->format.magic>>24));
+           (char)(container->format.magic),
+           (char)(container->format.magic >> 8),
+           (char)(container->format.magic >> 16),
+           (char)(container->format.magic >> 24));
     printf("Fmt Size:           [%d]\n", container->format.fmt_size);
     printf("Fmt Format:         [%s]\n", WAV_P_FmtString(container->format.format));
     printf("Fmt Channels:       [%d]\n", container->format.channels);
@@ -74,10 +75,10 @@ static void WAV_P_PrintHeader(WAVContainer_t *container)
     printf("Fmt Blocks_align:   [%d]\n", container->format.blocks_align);
     printf("Fmt Sample_length:  [%d]\n", container->format.sample_length);
     printf("Chunk Type:         [%c%c%c%c]\n",
-        (char)(container->chunk.type),
-        (char)(container->chunk.type>>8),
-        (char)(container->chunk.type>>16),
-        (char)(container->chunk.type>>24));
+           (char)(container->chunk.type),
+           (char)(container->chunk.type >> 8),
+           (char)(container->chunk.type >> 16),
+           (char)(container->chunk.type >> 24));
     printf("Chunk Length:       [%d]\n", container->chunk.length);
     printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
 }
@@ -96,7 +97,8 @@ static int WAV_P_CheckValid(WAVContainer_t *container)
         container->format.magic != WAV_FMT ||
         container->format.fmt_size != LE_INT(16) ||
         (container->format.channels != LE_SHORT(1) && container->format.channels != LE_SHORT(2)) ||
-        container->chunk.type != WAV_DATA) {
+        container->chunk.type != WAV_DATA)
+    {
 
         fprintf(stderr, "non standard wav file.\n");
         WAV_P_PrintHeader(container);
@@ -115,11 +117,12 @@ static int WAV_P_CheckValid(WAVContainer_t *container)
  ******************************************************************************/
 int WAV_ReadHeader(int fd, WAVContainer_t *container)
 {
-    assert((fd >=0) && container);
+    assert((fd >= 0) && container);
 
     if (read(fd, &container->header, sizeof(container->header)) != sizeof(container->header) ||
         read(fd, &container->format, sizeof(container->format)) != sizeof(container->format) ||
-        read(fd, &container->chunk, sizeof(container->chunk)) != sizeof(container->chunk)) {
+        read(fd, &container->chunk, sizeof(container->chunk)) != sizeof(container->chunk))
+    {
 
         fprintf(stderr, "Error WAV_ReadHeader\n");
         return -1;
@@ -144,14 +147,15 @@ int WAV_ReadHeader(int fd, WAVContainer_t *container)
  ******************************************************************************/
 int WAV_WriteHeader(int fd, WAVContainer_t *container)
 {
-    assert((fd >=0) && container);
+    assert((fd >= 0) && container);
 
     if (WAV_P_CheckValid(container) < 0)
         return -1;
 
     if (write(fd, &container->header, sizeof(container->header)) != sizeof(container->header) ||
         write(fd, &container->format, sizeof(container->format)) != sizeof(container->format) ||
-        write(fd, &container->chunk, sizeof(container->chunk)) != sizeof(container->chunk)) {
+        write(fd, &container->chunk, sizeof(container->chunk)) != sizeof(container->chunk))
+    {
 
         fprintf(stderr, "Error WAV_WriteHeader\n");
         return -1;
@@ -171,9 +175,9 @@ int WAV_WriteHeader(int fd, WAVContainer_t *container)
  * 返回: 0：正常 -1:错误
  * 说明: 无
  ******************************************************************************/
-void WAV_Params(WAVContainer_t *wav,uint32_t duration_time, uint8_t chn, uint8_t sample, uint16_t freq)
+void WAV_Params(WAVContainer_t *wav, uint32_t duration_time, uint8_t chn, uint8_t sample, uint16_t freq)
 {
-    if(!wav)
+    if (!wav)
         return;
     //写wav文件头
     wav->header.magic = WAV_RIFF;
@@ -185,9 +189,8 @@ void WAV_Params(WAVContainer_t *wav,uint32_t duration_time, uint8_t chn, uint8_t
     wav->format.channels = chn;
     wav->format.sample_rate = freq;
     wav->format.sample_length = sample;
-    wav->format.blocks_align = chn*sample/8;
-    wav->format.bytes_p_second = wav->format.blocks_align*freq;
-    wav->chunk.length = duration_time*wav->format.bytes_p_second;
+    wav->format.blocks_align = chn * sample / 8;
+    wav->format.bytes_p_second = wav->format.blocks_align * freq;
+    wav->chunk.length = duration_time * wav->format.bytes_p_second;
     wav->header.length = wav->chunk.length + sizeof(wav->chunk) + sizeof(wav->format) + sizeof(wav->header) - 8;
-
 }

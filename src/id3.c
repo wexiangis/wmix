@@ -15,10 +15,10 @@
 
 #include "id3.h"
 
-typedef union{
+typedef union {
     uint32_t value;
     char str[4];
-}ID3_TAG;
+} ID3_TAG;
 
 const ID3_TAG tag[] = {
     {.str = "AENC"},
@@ -94,8 +94,7 @@ const ID3_TAG tag[] = {
     {.str = "WORS"},
     {.str = "WPAY"},
     {.str = "WPUB"},
-    {.str = "WXXX"}
-};
+    {.str = "WXXX"}};
 
 unsigned int id3_len(char *filePath)
 {
@@ -104,23 +103,24 @@ unsigned int id3_len(char *filePath)
     unsigned char buff[128];
     //
     fd = open(filePath, O_RDONLY);
-    if(fd <= 0){
+    if (fd <= 0)
+    {
         fprintf(stderr, "id3_len: open %s err\n", filePath);
         return 0;
     }
     //
     ret = read(fd, buff, 128);
     //ID3V2.1~4
-    if(ret > 9 &&
+    if (ret > 9 &&
         buff[0] == 'I' &&
         buff[1] == 'D' &&
         buff[2] == '3')
-        ret = ((buff[6]<<21)|(buff[7]<<14)|(buff[8]<<7)|buff[9]) + 10;
+        ret = ((buff[6] << 21) | (buff[7] << 14) | (buff[8] << 7) | buff[9]) + 10;
     //ID3V1.1
-    else if(ret > 127 &&
-        buff[0] == 'T' &&
-        buff[1] == 'A' &&
-        buff[2] == 'G')
+    else if (ret > 127 &&
+             buff[0] == 'T' &&
+             buff[1] == 'A' &&
+             buff[2] == 'G')
         ret = 128;
     else
         ret = 0;
@@ -129,8 +129,8 @@ unsigned int id3_len(char *filePath)
     return ret;
 }
 
-unsigned int id3_info(char *filePath, void *privateData, 
-    void (*callback)(void *privateData, char type[4], char *info, int len))
+unsigned int id3_info(char *filePath, void *privateData,
+                      void (*callback)(void *privateData, char type[4], char *info, int len))
 {
 
     return 0;

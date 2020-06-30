@@ -9,17 +9,18 @@
 #include <stdint.h>
 
 //aac的头字段,共7字节
-typedef struct{
-    uint32_t syncword;  //12 bit 同步字 '1111 1111 1111'，说明一个ADTS帧的开始
-    uint32_t id;        //1 bit MPEG 标示符， 0 for MPEG-4，1 for MPEG-2
-    uint32_t layer;     //2 bit 总是'00'
+typedef struct
+{
+    uint32_t syncword;          //12 bit 同步字 '1111 1111 1111'，说明一个ADTS帧的开始
+    uint32_t id;                //1 bit MPEG 标示符， 0 for MPEG-4，1 for MPEG-2
+    uint32_t layer;             //2 bit 总是'00'
     uint32_t protectionAbsent;  //1 bit 1表示没有crc，0表示有crc
     uint32_t profile;           //2 bit 表示使用哪个级别的AAC
     uint32_t samplingFreqIndex; //4 bit 表示使用的采样频率
     uint32_t privateBit;        //1 bit
-    uint32_t channelCfg; //3 bit 表示声道数
-    uint32_t originalCopy;      //1 bit 
-    uint32_t home;              //1 bit 
+    uint32_t channelCfg;        //3 bit 表示声道数
+    uint32_t originalCopy;      //1 bit
+    uint32_t home;              //1 bit
 
     /*下面的为改变的参数即每一帧都不同*/
     uint32_t copyrightIdentificationBit;   //1 bit
@@ -33,7 +34,7 @@ typedef struct{
      * 表示说ADTS帧中有一个AAC数据块并不是说没有。(一个AAC原始帧包含一段时间内1024个采样及相关数据)
      */
     uint32_t numberOfRawDataBlockInFrame; //2 bit
-}AacHeader;
+} AacHeader;
 
 extern int aac_freqList[13];
 
@@ -48,7 +49,7 @@ int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate,
 
 #define FAAX_ENABLE 1
 
-#if(FAAX_ENABLE)
+#if (FAAX_ENABLE)
 
 //aac解码为pcm
 //aacDec: 解码器句柄,值为NULL时自动初始化
@@ -57,7 +58,7 @@ int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate,
 //out: 输出pcm数据长度,建议长度8192
 //bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
 //返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
-int aac_decode(void **aacDec, uint8_t* in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq);
+int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq);
 
 //aac解码为pcm
 //aacDec: 解码器句柄,值为NULL时自动初始化
@@ -78,7 +79,7 @@ void aac_decodeRelease(void **aacDec);
 //inLen: 2048*chn
 //out: 长度大于等于4096
 //outSize: 4096
-int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq);
+int aac_encode(void **aacEnc, uint8_t *in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq);
 //文件
 void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq);
 void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq);

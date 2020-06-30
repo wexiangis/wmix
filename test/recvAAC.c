@@ -13,7 +13,7 @@
 #define RTP_IP "127.0.0.1"
 #define RTP_PORT 9832
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     int fd;
     int ret;
@@ -23,37 +23,37 @@ int main(int argc, char* argv[])
     AacHeader AacHeader;
     RtpPacket rtpPacket;
 
-    if(argc != 2)
+    if (argc != 2)
     {
         printf("Usage: %s <save file>\n", argv[0]);
         return -1;
     }
 
     remove(argv[1]);
-    fd = open(argv[1], O_WRONLY|O_CREAT, 0666);
-    if(fd < 0)
+    fd = open(argv[1], O_WRONLY | O_CREAT, 0666);
+    if (fd < 0)
     {
         printf("failed to open %s\n", argv[1]);
         return -1;
     }
 
     ss = rtp_socket(RTP_IP, RTP_PORT, 0);
-    if(!ss)
+    if (!ss)
     {
         printf("failed to create udp socket\n");
         close(fd);
         return -1;
     }
 
-    while(1)
+    while (1)
     {
         ret = rtp_recv(ss, &rtpPacket, &dataSize);
-        if(ret > 0)
+        if (ret > 0)
         {
-            printf("rtp_recv: %d / %d + %d\n", ret, ret-dataSize, dataSize);
+            printf("rtp_recv: %d / %d + %d\n", ret, ret - dataSize, dataSize);
             aac_createHeader(aacBuff, 2, 44100, 0x7FF, dataSize);
             memcpy(&aacBuff[7], &rtpPacket.payload[4], dataSize);
-            write(fd, aacBuff, dataSize+7);
+            write(fd, aacBuff, dataSize + 7);
             continue;
         }
 

@@ -55,8 +55,8 @@ void help(char *argv0)
         "  %s ./music.wav\n"
         "  %s ./music.wav -t 1\n"
         "  %s ./music.wav -r ./record.wav\n"
-        "\n"
-        ,argv0, WMIX_VERSION, argv0, argv0, argv0, argv0);
+        "\n",
+        argv0, WMIX_VERSION, argv0, argv0, argv0, argv0);
 }
 
 int main(int argc, char **argv)
@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     int i;
     bool helpFalg = true;
 
-    bool record = false;//播音模式
+    bool record = false; //播音模式
     int interval = 0;
     int reduce = 0;
     int volume = -1;
@@ -86,119 +86,119 @@ int main(int argc, char **argv)
     char tmpPath[128] = {0};
     char tmpPath2[128] = {0};
 
-    if(argc < 2)
+    if (argc < 2)
     {
         help(argv[0]);
         return 0;
     }
 
-    for(i = 1; i < argc; i++)
+    for (i = 1; i < argc; i++)
     {
-        if(strlen(argv[i]) == 2 && strstr(argv[i], "-r"))
+        if (strlen(argv[i]) == 2 && strstr(argv[i], "-r"))
         {
             record = true;
             useAAC = false;
         }
-        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-log") && i+1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-log") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &log);
         }
-        else if(strlen(argv[i]) == 5 && strstr(argv[i], "-raac"))
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-raac"))
         {
             record = true;
             useAAC = true;
         }
-        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-rt") && i+1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rt") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &rt);
         }
-        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-rc") && i+1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rc") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &rc);
         }
-        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-rr") && i+1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rr") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &rr);
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-b"))
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-b"))
         {
             order = -1;
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-m"))
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-m"))
         {
             order = 2;
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-i"))
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-i"))
         {
             order = 1;
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-l"))
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-l"))
         {
             order = 0;
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-t") && i+1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-t") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &interval);
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-d") && i+1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-d") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &reduce);
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-v") && i+1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-v") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &volume);
         }
-        else if(strlen(argv[i]) == 2 && strstr(argv[i], "-k") && i+1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-k") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &id);
         }
-        else if(strlen(argv[i]) == 5 && strstr(argv[i], "-rtps") && i+2 < argc)
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtps") && i + 2 < argc)
         {
             ip = argv[++i];
             sscanf(argv[++i], "%d", &port);
             rtps = true;
         }
-        else if(strlen(argv[i]) == 5 && strstr(argv[i], "-rtpr") && i+2 < argc)
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtpr") && i + 2 < argc)
         {
             ip = argv[++i];
             sscanf(argv[++i], "%d", &port);
             rtpr = true;
         }
-        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i+1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &vad);
             _vad = true;
         }
-        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i+1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &aec);
             _aec = true;
         }
-        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i+1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &ns);
             _ns = true;
         }
-        else if(strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i+1 < argc)
+        else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &ns_pa);
             _ns_pa = true;
         }
-        else if(strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i+1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &agc);
             _agc = true;
         }
-        else if(strlen(argv[i]) == 3 && strstr(argv[i], "-rw") && i+1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rw") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &rw);
             _rw = true;
         }
-        else if(strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
+        else if (strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
         }
-        else if(strstr(argv[i], "-?") || strstr(argv[i], "-help"))
+        else if (strstr(argv[i], "-?") || strstr(argv[i], "-help"))
         {
             help(argv[0]);
             return 0;
@@ -209,68 +209,77 @@ int main(int argc, char **argv)
         }
     }
 
-    if(reset)
+    if (reset)
     {
         wmix_reset();
         return 0;
     }
 
-    if(volume >= 0 && volume < 11)
+    if (volume >= 0 && volume < 11)
     {
         wmix_set_volume(volume, 10);
         helpFalg = false;
     }
 
-    if(log >= 0){
+    if (log >= 0)
+    {
         wmix_log(log);
         helpFalg = false;
     }
 
-    if(_vad){
-        wmix_webrtc_vad(vad?true:false);
+    if (_vad)
+    {
+        wmix_webrtc_vad(vad ? true : false);
         helpFalg = false;
     }
-    if(_aec){
-        wmix_webrtc_aec(aec?true:false);
+    if (_aec)
+    {
+        wmix_webrtc_aec(aec ? true : false);
         helpFalg = false;
     }
-    if(_ns){
-        wmix_webrtc_ns(ns?true:false);
+    if (_ns)
+    {
+        wmix_webrtc_ns(ns ? true : false);
         helpFalg = false;
     }
-    if(_ns_pa){
-        wmix_webrtc_ns_pa(ns_pa?true:false);
+    if (_ns_pa)
+    {
+        wmix_webrtc_ns_pa(ns_pa ? true : false);
         helpFalg = false;
     }
-    if(_agc){
-        wmix_webrtc_agc(agc?true:false);
+    if (_agc)
+    {
+        wmix_webrtc_agc(agc ? true : false);
         helpFalg = false;
     }
 
-    if(_rw){
-        wmix_rw_test(rw?true:false);
+    if (_rw)
+    {
+        wmix_rw_test(rw ? true : false);
         helpFalg = false;
     }
 
-    if(id >= 0)
+    if (id >= 0)
     {
         wmix_play_kill(id);
         helpFalg = false;
     }
     id = 0;
 
-    if(rtps){
+    if (rtps)
+    {
         id = wmix_rtp_send(ip, port, rc, rr, 0);
         helpFalg = false;
     }
-    if(rtpr){
+    if (rtpr)
+    {
         id = wmix_rtp_recv(ip, port, rc, rr, 0);
         helpFalg = false;
     }
 
-    if(filePath && filePath[0] == '.')
+    if (filePath && filePath[0] == '.')
     {
-        if(getcwd(tmpPath, sizeof(tmpPath)))
+        if (getcwd(tmpPath, sizeof(tmpPath)))
         {
             snprintf(tmpPath2, sizeof(tmpPath2), "%s/%s", tmpPath, filePath);
             filePath = tmpPath2;
@@ -278,23 +287,23 @@ int main(int argc, char **argv)
         }
     }
 
-    if(filePath && filePath[0])
+    if (filePath && filePath[0])
     {
-        if(record)
+        if (record)
             wmix_record(filePath, rc, 16, rr, rt, useAAC);
         else
             id = wmix_play(filePath, reduce, interval, order);
         helpFalg = false;
     }
-    
-    if(helpFalg)
+
+    if (helpFalg)
     {
         printf("\nparam err !!\n");
         help(argv[0]);
         return -1;
     }
 
-    if(id > 0)
+    if (id > 0)
         printf("id: %d\n", id);
 
     return id;
