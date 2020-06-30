@@ -4,6 +4,9 @@
  * 
  **************************************************/
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "aac.h"
 
 int aac_freqList[13] = {96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350};
@@ -55,7 +58,7 @@ int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate,
 
 int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show)
 {
-    static int frame_number = 0;
+    // static int frame_number = 0;
     memset(res,0,sizeof(*res));
 
     if ((in[0] == 0xFF)&&((in[1] & 0xF0) == 0xF0))
@@ -157,7 +160,7 @@ int aac_decode(void **aacDec, uint8_t* in, int inLen, uint8_t *out, int *bytesCo
     {
         hDecoder = NeAACDecOpen();
         //初始化解码器
-        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, freq, chn);
+        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, (unsigned long*)freq, (unsigned char*)chn);
         //
         *aacDec = hDecoder;
     }
@@ -214,7 +217,7 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
     {
         hDecoder = NeAACDecOpen();
         //初始化解码器
-        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, freq, chn);
+        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, (unsigned long*)freq, (unsigned char*)chn);
         //
         *aacDec = hDecoder;
     }
@@ -297,7 +300,7 @@ void aac_decodeRelease(void **aacDec)
 //outSize: 4096
 int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq)
 {
-    uint32_t nPCMBitSize = 16;
+    // uint32_t nPCMBitSize = 16;
     uint32_t nInputSamples = 0;
     uint32_t nMaxOutputBytes = 0;
     faacEncHandle hEncoder;
@@ -308,7 +311,7 @@ int aac_encode(void **aacEnc, uint8_t* in, int inLen, uint8_t *out, uint32_t out
     hEncoder = *((faacEncHandle*)aacEnc);
     if(hEncoder == NULL)
     {
-        hEncoder = faacEncOpen(freq, chn, &nInputSamples, &nMaxOutputBytes);
+        hEncoder = faacEncOpen((unsigned long)freq, (unsigned int)chn, (unsigned long*)&nInputSamples, (unsigned long*)&nMaxOutputBytes);
         if(!hEncoder)
         {
             fprintf(stderr, "aac_encode: faacEncOpen err chn/%d, freq/%d\n", chn, freq);

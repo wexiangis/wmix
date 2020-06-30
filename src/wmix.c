@@ -1159,8 +1159,26 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
     return i;
 }
 
-// recordPkgBuff cache
-static uint8_t recordPkgBuff[WMIX_PKG_SIZE];
+// recordPkgBuff FIFO
+#define RECORD_BUFF_PKG_NUM 3
+static uint8_t _recordPkgBuff[RECORD_BUFF_PKG_NUM][WMIX_PKG_SIZE];
+static int _recordPkgBuff_head = 0, _recordPkgBuff_tail = 0;
+// 入栈
+void recordPkgBuff_add(uint8_t *pkgBuff)
+{
+    memcpy(_recordPkgBuff[_recordPkgBuff_tail++], pkgBuff, WMIX_PKG_SIZE);
+    if (_recordPkgBuff_tail >= RECORD_BUFF_PKG_NUM)
+        _recordPkgBuff_tail = 0;
+}
+// 出栈
+uint8_t *recordPkgBuff_get()
+{
+    uint8_t *ret = _recordPkgBuff[_recordPkgBuff_head++];
+    if (_recordPkgBuff_head >= RECORD_BUFF_PKG_NUM)
+        _recordPkgBuff_head = 0;
+    return ret;
+}
+
 // playPkgBuff FIFO
 #define PLAY_BUFF_PKG_NUM 3
 static uint8_t _playPkgBuff[PLAY_BUFF_PKG_NUM][WMIX_PKG_SIZE];
@@ -1269,7 +1287,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #endif
                 if (ret > 0)
                 {
-                    memcpy(recordPkgBuff, buff, ret);
+                    recordPkgBuff_add(buff);
 
 #if (WMIX_WEBRTC_AEC)
                     //回声消除
@@ -1354,12 +1372,16 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 else
                 {
                     //没录到声音
-                    memset(recordPkgBuff, 0, frame_num * frame_size);
+                    memset(buff, 0, frame_num * frame_size);
+                    recordPkgBuff_add(buff);
                 }
             }
             else
             {
-                memset(recordPkgBuff, 0, sizeof(recordPkgBuff));
+                //没录到声音
+                memset(buff, 0, frame_num * frame_size);
+                recordPkgBuff_add(buff);
+
 #if (WMIX_MODE == 0)
                 if ((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
                 {
@@ -1391,7 +1413,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         }
         else
         {
-            memset(recordPkgBuff, 0, sizeof(recordPkgBuff));
+            //没录到声音
+            memset(buff, 0, frame_num * frame_size);
+            recordPkgBuff_add(buff);
 
             //无录音任务释放录音句柄
 #if (WMIX_MODE == 0)
@@ -2253,14 +2277,14 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint8_t rdce = 2, rdceIsMe = 0;
     //aac解码句柄
     void *aacDec = NULL;
-    int readLen, datUse = 0, retLen;
+    int datUse = 0, retLen;
     unsigned char aacBuff[2048];
     //
     SocketStruct *ss;
     RtpPacket rtpPacket;
     int retSize;
     //
-    int timeout;
+    // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
@@ -2332,7 +2356,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             }
         }
         //往aacBuff读入数据
-        ret = rtp_recv(ss, &rtpPacket, &retSize);
+        ret = rtp_recv(ss, &rtpPacket, (uint32_t*)&retSize);
         if (ret > 0)
         {
             memcpy(&aacBuff[7], &rtpPacket.payload[4], retSize);
@@ -2341,7 +2365,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 &aacDec,
                 aacBuff, retSize + 7,
                 buff, &datUse,
-                &chn, &freq);
+                (int*)&chn, (int*)&freq);
         }
         else
             retLen = -1;
@@ -4127,7 +4151,7 @@ void wmix_load_aac(
         return;
     }
     //初始化解码器
-    ret = aac_decode2(&aacDec, fd, out, &chn, &freq);
+    ret = aac_decode2(&aacDec, fd, out, (int*)&chn, (int*)&freq);
     if (ret < 0)
     {
         fprintf(stderr, "aac_decode2: err\n");
@@ -4276,7 +4300,7 @@ void wmix_load_aac(
         else
             break;
         //
-        ret = aac_decode2(&aacDec, fd, out, &chn, &freq);
+        ret = aac_decode2(&aacDec, fd, out, (int*)&chn, (int*)&freq);
     }
     //
     close(fd);
