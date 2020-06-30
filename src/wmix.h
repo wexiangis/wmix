@@ -53,7 +53,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V4.0 - 20200628"
+#define WMIX_VERSION "V4.1 - 20200630"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
