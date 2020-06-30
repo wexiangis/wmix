@@ -1159,43 +1159,101 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
     return i;
 }
 
+//回声消除,时间间隔估算
+#define AEC_INTERVAL_MS  (WMIX_INTERVAL_MS)
+
+//FIFO 循环缓冲区包数量
+#define AEC_FIFO_PKG_NUM (AEC_INTERVAL_MS/WMIX_INTERVAL_MS + 2)
+
 // recordPkgBuff FIFO
-#define RECORD_BUFF_PKG_NUM 3
-static uint8_t _recordPkgBuff[RECORD_BUFF_PKG_NUM][WMIX_PKG_SIZE];
-static int _recordPkgBuff_head = 0, _recordPkgBuff_tail = 0;
+static uint8_t recordPkgBuff[WMIX_PKG_SIZE];
+static uint8_t _recordPkgBuff[AEC_FIFO_PKG_NUM][WMIX_PKG_SIZE];
+static int _recordPkgBuff_count = 0;
 // 入栈
 void recordPkgBuff_add(uint8_t *pkgBuff)
 {
-    memcpy(_recordPkgBuff[_recordPkgBuff_tail++], pkgBuff, WMIX_PKG_SIZE);
-    if (_recordPkgBuff_tail >= RECORD_BUFF_PKG_NUM)
-        _recordPkgBuff_tail = 0;
+    memcpy(_recordPkgBuff[_recordPkgBuff_count++], pkgBuff, WMIX_PKG_SIZE);
+    if (_recordPkgBuff_count >= AEC_FIFO_PKG_NUM)
+        _recordPkgBuff_count = 0;
 }
-// 出栈
-uint8_t *recordPkgBuff_get()
+// 出栈, delayms: 延后时长
+uint8_t* recordPkgBuff_get(uint8_t *buff, int delayms)
 {
-    uint8_t *ret = _recordPkgBuff[_recordPkgBuff_head++];
-    if (_recordPkgBuff_head >= RECORD_BUFF_PKG_NUM)
-        _recordPkgBuff_head = 0;
+    uint8_t *ret = buff;
+    //包偏移
+    int pkgCount = _recordPkgBuff_count - (delayms / WMIX_INTERVAL_MS);
+    //字节偏移
+    int byteCount = (int)((float)((delayms % WMIX_INTERVAL_MS) * WMIX_FRAME_NUM) / WMIX_INTERVAL_MS) * WMIX_FRAME_SIZE;
+    //范围限制
+    if(pkgCount >= AEC_FIFO_PKG_NUM)
+        pkgCount = AEC_FIFO_PKG_NUM;
+    else if(pkgCount < 0)
+        pkgCount = 0;
+    //与当前的相对位置
+    pkgCount = _recordPkgBuff_count - pkgCount;
+    //循环
+    if(pkgCount >= AEC_FIFO_PKG_NUM)
+        pkgCount -= AEC_FIFO_PKG_NUM;
+    else if(pkgCount < 0)
+        pkgCount += AEC_FIFO_PKG_NUM;
+    //包偏移 + 帧偏移
+    if(byteCount > 0)
+    {
+        if(pkgCount == 0)
+            memcpy(buff, _recordPkgBuff[AEC_FIFO_PKG_NUM - 1] - byteCount, byteCount);
+        else
+            memcpy(buff, _recordPkgBuff[pkgCount - 1] - byteCount, byteCount);
+        buff += byteCount;
+    }
+    //剩余偏移量
+    memcpy(buff, _recordPkgBuff[pkgCount], WMIX_PKG_SIZE - byteCount);
+
     return ret;
 }
 
 // playPkgBuff FIFO
-#define PLAY_BUFF_PKG_NUM 3
-static uint8_t _playPkgBuff[PLAY_BUFF_PKG_NUM][WMIX_PKG_SIZE];
-static int _playPkgBuff_head = 0, _playPkgBuff_tail = 0;
+static uint8_t playPkgBuff[WMIX_PKG_SIZE];
+static uint8_t _playPkgBuff[AEC_FIFO_PKG_NUM][WMIX_PKG_SIZE];
+static int _playPkgBuff_count = 0;
 // 入栈
 void playPkgBuff_add(uint8_t *pkgBuff)
 {
-    memcpy(_playPkgBuff[_playPkgBuff_tail++], pkgBuff, WMIX_PKG_SIZE);
-    if (_playPkgBuff_tail >= PLAY_BUFF_PKG_NUM)
-        _playPkgBuff_tail = 0;
+    memcpy(_playPkgBuff[_playPkgBuff_count++], pkgBuff, WMIX_PKG_SIZE);
+    if (_playPkgBuff_count >= AEC_FIFO_PKG_NUM)
+        _playPkgBuff_count = 0;
 }
-// 出栈
-uint8_t *playPkgBuff_get()
+// 出栈, delayms: 延后时长
+uint8_t* playPkgBuff_get(uint8_t *buff, int delayms)
 {
-    uint8_t *ret = _playPkgBuff[_playPkgBuff_head++];
-    if (_playPkgBuff_head >= PLAY_BUFF_PKG_NUM)
-        _playPkgBuff_head = 0;
+    uint8_t *ret = buff;
+    //包偏移
+    int pkgCount = _playPkgBuff_count - (delayms / WMIX_INTERVAL_MS);
+    //字节偏移
+    int byteCount = (int)((float)((delayms % WMIX_INTERVAL_MS) * WMIX_FRAME_NUM) / WMIX_INTERVAL_MS) * WMIX_FRAME_SIZE;
+    //范围限制
+    if(pkgCount >= AEC_FIFO_PKG_NUM)
+        pkgCount = AEC_FIFO_PKG_NUM;
+    else if(pkgCount < 0)
+        pkgCount = 0;
+    //与当前的相对位置
+    pkgCount = _playPkgBuff_count - pkgCount;
+    //循环
+    if(pkgCount >= AEC_FIFO_PKG_NUM)
+        pkgCount -= AEC_FIFO_PKG_NUM;
+    else if(pkgCount < 0)
+        pkgCount += AEC_FIFO_PKG_NUM;
+    //包偏移 + 帧偏移
+    if(byteCount > 0)
+    {
+        if(pkgCount == 0)
+            memcpy(buff, _playPkgBuff[AEC_FIFO_PKG_NUM - 1] - byteCount, byteCount);
+        else
+            memcpy(buff, _playPkgBuff[pkgCount - 1] - byteCount, byteCount);
+        buff += byteCount;
+    }
+    //剩余偏移量
+    memcpy(buff, _playPkgBuff[pkgCount], WMIX_PKG_SIZE - byteCount);
+    
     return ret;
 }
 
@@ -1219,9 +1277,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     int intervalUs = WMIX_INTERVAL_MS * 1000 - 2000;
 #endif
     //按20ms的间隔采样,每次帧数
-    size_t frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS;
+    size_t frame_num = WMIX_FRAME_NUM;
     //每帧字节数
-    size_t frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
+    size_t frame_size = WMIX_FRAME_SIZE;
     //每包字节数
     size_t buffSize = WMIX_PKG_SIZE;
 #if (WMIX_MODE == 0)
@@ -1298,13 +1356,21 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                         if (wmix->webrtcPoint[WR_AEC])
                         {
                             //开始转换
-                            aec_process2(
+                            // aec_process2(
+                            //     wmix->webrtcPoint[WR_AEC],
+                            //     (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                            //     (int16_t *)buff,              //混杂的数据,即 播音数据 + 人说话声音
+                            //     (int16_t *)buff,              //输出的数据,得 人说话声音
+                            //     frame_num,
+                            //     0); //评估回声时延
+
+                            aec_process3(
                                 wmix->webrtcPoint[WR_AEC],
-                                (int16_t *)playPkgBuff_get(), //要消除的数据,即 播音数据
+                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
                                 (int16_t *)buff,              //混杂的数据,即 播音数据 + 人说话声音
                                 (int16_t *)buff,              //输出的数据,得 人说话声音
                                 frame_num,
-                                WMIX_INTERVAL_MS / 2); //评估回声时延
+                                0.5); //评估回声时延
                         }
                     }
 #endif
@@ -1711,7 +1777,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
+    frame_size = WMIX_FRAME_SIZE;
 #if (WMIX_CHANNELS == 1)
     buffSize = sizeof(buff) / 2;
 #else
@@ -1838,7 +1904,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
+    frame_size = WMIX_FRAME_SIZE;
 #if (WMIX_CHANNELS == 1)
     buffSize = sizeof(buff) / 2;
 #else
@@ -1966,7 +2032,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
+    frame_size = WMIX_FRAME_SIZE;
     //
     buffSize = WMIX_CHANNELS * WMIX_SAMPLE / 8 * 1024;
     buffSizeR = chn * sample / 8 * 1024;
@@ -2139,7 +2205,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_CHANNELS * WMIX_SAMPLE / 8;
+    frame_size = WMIX_FRAME_SIZE;
     //每次从ai读取字节数
     buffSize = WMIX_CHANNELS * WMIX_SAMPLE / 8 * 1024;
     buffSizeR = chn * sample / 8 * 1024;
@@ -3229,10 +3295,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #else
     SNDPCMContainer_t *playback = wmtp->wmix->playback;
 #endif
-    //每帧字节数
-    // uint32_t frame_size = WMIX_CHANNELS*WMIX_SAMPLE/8;
     //按时间间隔计算每次发包大小,帧数
-    uint32_t frame_num = WMIX_FREQ / 1000 * WMIX_INTERVAL_MS;
+    uint32_t frame_num = WMIX_FRAME_NUM;
     //按时间间隔计算每次发包大小,字节数
     uint32_t pkg_size = WMIX_PKG_SIZE;
 
