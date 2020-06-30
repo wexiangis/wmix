@@ -65,7 +65,7 @@ typedef struct SNDPCMContainer
 
 #if (WMIX_MODE == 0)
 
-#define WMIX_CHANNELS 1
+#define WMIX_CHANNELS 2
 #define WMIX_SAMPLE 16
 #define WMIX_FREQ 8000
 

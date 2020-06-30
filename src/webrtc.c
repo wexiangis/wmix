@@ -284,6 +284,7 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
+    int32_t temp32;
 
     //实际 frameFar 的 int16_t 字数
     realFrameLen = frameLen * as->chn;
@@ -293,14 +294,13 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
 
     for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
     {
-        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左声提取到到ns->far)
+        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右合并到ns->far)
         for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
         {
-            //取左声道数据
-            as->far[cPkg] = (AEC_FRAME_TYPE)(*frameFar++);
-            //丢弃其它声道数据
-            for (cChn = 1; cChn < as->chn; cChn++)
-                frameFar++;
+            for (cChn = temp32 = 0; cChn < as->chn; cChn++)
+                temp32 += (*frameFar++);
+            //合并多声道数据
+            as->far[cPkg] = (AEC_FRAME_TYPE)(temp32/as->chn);
         }
         //开始处理
         ret = WebRtcAecX_BufferFarend(
@@ -336,6 +336,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
+    int32_t temp32;
 
     //实际 frameFar 的 int16_t 字数
     realFrameLen = frameLen * as->chn;
@@ -345,16 +346,20 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
 
     for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
     {
-        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声拆分到ns->in[2])
+        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声合并到ns->in[0])
         for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
-            for (cChn = 0; cChn < as->chn; cChn++)
-                as->in[cChn][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
+        {
+            for (cChn = temp32 = 0; cChn < as->chn; cChn++)
+                temp32 += (*frameNear++);
+            //合并多声道数据
+            as->in[0][cPkg] = as->in[1][cPkg] = (AEC_FRAME_TYPE)(temp32/as->chn);
+        }
         //开始处理
 #ifdef WMIX_WEBRTC_AEC
         ret = WebRtcAecX_Process(
             as->aecInst,
             (const AEC_FRAME_TYPE *const *)as->in, //注意这里in和下面out是 AEC_FRAME_TYPE *in[2] 指针(即左右声道数据)
-            as->chn,
+            1,//as->chn,//只支持单声道
             (AEC_FRAME_TYPE *const *)as->out,
             as->pkgFrame,
             delayms,
@@ -378,7 +383,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
         //提取输出数据
         for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
             for (cChn = 0; cChn < as->chn; cChn++)
-                *frameOut++ = (int16_t)as->out[cChn][cPkg];
+                *frameOut++ = (int16_t)as->out[0][cPkg];
     }
 
     return 0;
@@ -403,6 +408,7 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
+    int32_t temp32, temp32s;
 
     //实际 frameFar 的 int16_t 字数
     realFrameLen = frameLen * as->chn;
@@ -412,18 +418,18 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
 
     for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
     {
-        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声拆分到ns->in[2])
+        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声合并到ns->in[0])
         for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
         {
-            //取左声道数据
-            as->far[cPkg] = (AEC_FRAME_TYPE)(*frameFar++);
-            as->in[0][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
             //其它声道数据
-            for (cChn = 1; cChn < as->chn; cChn++)
+            for (cChn = temp32 = temp32s = 0; cChn < as->chn; cChn++)
             {
-                as->in[cChn][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
-                frameFar++;//丢弃,far只要左声道
+                temp32 += (*frameFar++);
+                temp32s += (*frameNear++);
             }
+            //取左声道数据
+            as->far[cPkg] = (AEC_FRAME_TYPE)(temp32/as->chn);
+            as->in[0][cPkg] = as->in[1][cPkg] = (AEC_FRAME_TYPE)(temp32s/as->chn);
         }
         //开始处理
         ret = WebRtcAecX_BufferFarend(
@@ -442,7 +448,7 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
         ret = WebRtcAecX_Process(
             as->aecInst,
             (const AEC_FRAME_TYPE *const *)as->in, //注意这里in和下面out是 AEC_FRAME_TYPE *in[2] 指针(即左右声道数据)
-            as->chn,
+            1,//as->chn,//只支持单声道
             (AEC_FRAME_TYPE *const *)as->out,
             as->pkgFrame,
             delayms,
@@ -466,7 +472,7 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
         //提取输出数据
         for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
             for (cChn = 0; cChn < as->chn; cChn++)
-                *frameOut++ = (int16_t)as->out[cChn][cPkg];
+                *frameOut++ = (int16_t)as->out[0][cPkg];
     }
 
     return 0;
