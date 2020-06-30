@@ -1160,7 +1160,7 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
 }
 
 //回声消除,时间间隔估算
-#define AEC_INTERVAL_MS  (WMIX_INTERVAL_MS)
+#define AEC_INTERVAL_MS  400//(WMIX_INTERVAL_MS)
 
 //FIFO 循环缓冲区包数量
 #define AEC_FIFO_PKG_NUM (AEC_INTERVAL_MS/WMIX_INTERVAL_MS + 2)
@@ -1257,6 +1257,9 @@ uint8_t* playPkgBuff_get(uint8_t *buff, int delayms)
     return ret;
 }
 
+//保存AEC 左(录音) 右(播音) 声道数据,用于校正AEC时延
+// #define AEC_SYNC_SAVE_FILE
+
 void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
@@ -1290,6 +1293,15 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #else
     uint8_t buff[WMIX_PKG_SIZE];
 #endif
+
+#ifdef AEC_SYNC_SAVE_FILE
+    static int fd = 0;
+    int16_t *pL, *pR;
+    int aec_sync_c;
+    if(fd == 0)
+        fd = open("/tmp/aec.pcm", O_WRONLY|O_CREAT, 0666);
+#endif
+
     //录音频率和目标频率的比值
     divPow = (float)(WMIX_FREQ - freq) / freq;
     divCount = 0;
@@ -1347,34 +1359,6 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 {
                     recordPkgBuff_add(buff);
 
-#if (WMIX_WEBRTC_AEC)
-                    //回声消除
-                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
-                    {
-                        if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
-                        if (wmix->webrtcPoint[WR_AEC])
-                        {
-                            //开始转换
-                            // aec_process2(
-                            //     wmix->webrtcPoint[WR_AEC],
-                            //     (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
-                            //     (int16_t *)buff,              //混杂的数据,即 播音数据 + 人说话声音
-                            //     (int16_t *)buff,              //输出的数据,得 人说话声音
-                            //     frame_num,
-                            //     0); //评估回声时延
-
-                            aec_process3(
-                                wmix->webrtcPoint[WR_AEC],
-                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
-                                (int16_t *)buff,              //混杂的数据,即 播音数据 + 人说话声音
-                                (int16_t *)buff,              //输出的数据,得 人说话声音
-                                frame_num,
-                                0.5); //评估回声时延
-                        }
-                    }
-#endif
-
 #if (WMIX_WEBRTC_NS)
                     //噪音抑制
                     if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000)
@@ -1389,6 +1373,45 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                                 (int16_t *)buff,
                                 (int16_t *)buff,
                                 frame_num);
+                        }
+                    }
+#endif
+
+#if (WMIX_WEBRTC_AEC)
+                    //回声消除
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
+                    {
+                        if (wmix->webrtcPoint[WR_AEC] == NULL)
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                        if (wmix->webrtcPoint[WR_AEC])
+                        {
+                            //开始转换
+                            aec_process2(
+                                wmix->webrtcPoint[WR_AEC],
+                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                                (int16_t *)buff,              //混杂的数据,即 播音数据 + 人说话声音
+                                (int16_t *)buff,              //输出的数据,得 人说话声音
+                                frame_num,
+                                0); //评估回声时延
+
+                            // aec_process3(
+                            //     wmix->webrtcPoint[WR_AEC],
+                            //     (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                            //     (int16_t *)buff,              //混杂的数据,即 播音数据 + 人说话声音
+                            //     (int16_t *)buff,              //输出的数据,得 人说话声音
+                            //     frame_num,
+                            //     1);
+
+#ifdef AEC_SYNC_SAVE_FILE
+                            playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS);
+                            pL = (int16_t*)buff;
+                            pR = (int16_t*)playPkgBuff;
+                            for(aec_sync_c = 0; aec_sync_c < frame_num; aec_sync_c++)
+                            {
+                                write(fd, pL++, 2);
+                                write(fd, pR++, 2);
+                            }
+#endif
                         }
                     }
 #endif
@@ -1518,6 +1541,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         tick1 = getTickUs();
 #endif
     }
+#ifdef AEC_SYNC_SAVE_FILE
+    close(fd);
+#endif
     //
 #if (WMIX_MODE == 0)
     if (wmix->recordback)
@@ -3565,7 +3591,7 @@ WMix_Struct *wmix_init(void)
 
     wmix->webrtcEnable[WR_VAD] = 0;
     wmix->webrtcEnable[WR_AEC] = 1;
-    wmix->webrtcEnable[WR_NS] = 0;
+    wmix->webrtcEnable[WR_NS] = 1;
     wmix->webrtcEnable[WR_NS_PA] = 0;
     wmix->webrtcEnable[WR_AGC] = 0;
 
