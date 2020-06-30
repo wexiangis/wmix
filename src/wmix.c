@@ -1264,7 +1264,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
     WMix_Point src, dist;
-    static WMix_Point rwTestSrc, rwTestHead;
+    static WMix_Point rwTestSrc = {.U8 = 0}, rwTestHead = {.U8 = 0};
     static uint32_t tick = 0;
     size_t count, ret;
     //音频转换中间参数
