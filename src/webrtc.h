@@ -11,10 +11,10 @@
 /* ---------- 接收来自Makefile的宏定义 ---------- */
 /* ----------   若要强制使能,手动置1   ---------- */
 
-#define WMIX_WEBRTC_VAD 1 //MAKE_WEBRTC_VAD
-#define WMIX_WEBRTC_AEC 1 //MAKE_WEBRTC_AEC
-#define WMIX_WEBRTC_NS  1 //MAKE_WEBRTC_NS
-#define WMIX_WEBRTC_AGC 1 //MAKE_WEBRTC_AGC
+#define WMIX_WEBRTC_VAD MAKE_WEBRTC_VAD
+#define WMIX_WEBRTC_AEC MAKE_WEBRTC_AEC
+#define WMIX_WEBRTC_NS  MAKE_WEBRTC_NS
+#define WMIX_WEBRTC_AGC MAKE_WEBRTC_AGC
 
 #include <stdint.h>
 

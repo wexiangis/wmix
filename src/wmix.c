@@ -3326,6 +3326,11 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     lseek(fd, 44, SEEK_SET);
 #endif
 
+#if (WMIX_MODE == 1)
+    playBuff = write_buff;
+#else
+    playBuff = playback->data_buf;
+#endif
     //线程计数
     wmix->thread_sys += 1;
     //wmix 运行标志
@@ -3470,14 +3475,25 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         }
         else
         {
-            memset(playPkgBuff, 0, pkg_size);
-            playPkgBuff_add(playPkgBuff);
+            memset(playBuff, 0, pkg_size);
+            playPkgBuff_add(playBuff);
+
+            //开始播放
+#if (WMIX_MODE == 1)
+            hiaudio_ao_write((int16_t *)playBuff, frame_num);
+#else
+            SNDWAV_WritePcm(playback, frame_num);
+#endif
 
 #ifdef WMIX_RECORD_PLAY_SYNC
             wmix_shmem_write_circle(wmtp);
 #endif
-            //没在播放状态的延时
-            delayus(WMIX_INTERVAL_MS * 1000);
+
+            //没在播放状态的延时,矫正到20ms
+            tick2 = getTickUs();
+            if (tick2 > tick1 && tick2 - tick1 < WMIX_INTERVAL_MS)
+                delayus(WMIX_INTERVAL_MS - (tick2 - tick1));
+            tick1 = getTickUs();
             tickT = 0;
         }
         //失能释放
@@ -3570,8 +3586,6 @@ WMix_Struct *wmix_init(void)
     // pthread_mutex_init(&wmix->lock, NULL);
 
     wmix->run = true;
-    // wmix->playRun = true;
-    // wmix->recordRun = true;
     wmix->reduceMode = 1;
 
 #ifndef WMIX_RECORD_PLAY_SYNC
