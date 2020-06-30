@@ -1438,15 +1438,15 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 else
                 {
                     //没录到声音
-                    memset(buff, 0, frame_num * frame_size);
-                    recordPkgBuff_add(buff);
+                    memset(recordPkgBuff, 0, frame_num * frame_size);
+                    recordPkgBuff_add(recordPkgBuff);
                 }
             }
             else
             {
                 //没录到声音
-                memset(buff, 0, frame_num * frame_size);
-                recordPkgBuff_add(buff);
+                memset(recordPkgBuff, 0, frame_num * frame_size);
+                recordPkgBuff_add(recordPkgBuff);
 
 #if (WMIX_MODE == 0)
                 if ((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
@@ -1480,8 +1480,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         else
         {
             //没录到声音
-            memset(buff, 0, frame_num * frame_size);
-            recordPkgBuff_add(buff);
+            memset(recordPkgBuff, 0, frame_num * frame_size);
+            recordPkgBuff_add(recordPkgBuff);
 
             //无录音任务释放录音句柄
 #if (WMIX_MODE == 0)
@@ -3452,8 +3452,8 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         }
         else
         {
-            memset(playBuff, 0, pkg_size);
-            playPkgBuff_add(playBuff);
+            memset(playPkgBuff, 0, pkg_size);
+            playPkgBuff_add(playPkgBuff);
 
 #ifdef WMIX_RECORD_PLAY_SYNC
             wmix_shmem_write_circle(wmtp);
