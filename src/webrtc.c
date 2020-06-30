@@ -205,7 +205,7 @@ typedef struct
  * 
  *  param:
  *      chn <in> : 声道数
- *      freq <in> : 8000, 16000, 32000
+ *      freq <in> : 8000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
@@ -213,7 +213,7 @@ typedef struct
 void *aec_init(int chn, int freq, int intervalMs)
 {
     Aec_Struct *as;
-    if(freq > 32000)
+    if(freq > 8000)
         return NULL;
     as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
@@ -718,6 +718,19 @@ void ns_release(void *fp)
 #if (WMIX_WEBRTC_AGC)
 #include "gain_control.h"
 
+#define AGC_AGGRESSIVE 2 // 效果激进程度 0~2
+
+typedef struct
+{
+    void *agcInst;
+    int chn;
+    int freq;
+    int intervalMs;
+    int pkgFrame; //转换时每包帧数,等于chn*freq/1000*20ms
+    int16_t *in[2];
+    int16_t *out[2];
+} Agc_Struct;
+
 /*
  *  初始化
  * 
@@ -730,10 +743,54 @@ void ns_release(void *fp)
  */
 void *agc_init(int chn, int freq, int intervalMs)
 {
-    
+    Agc_Struct *as;
+    WebRtcAgcConfig config = {
+        .targetLevelDbfs = 3,
+        .compressionGaindB = 9,
+        .limiterEnable = kAgcTrue,
+    };
     if(freq > 32000)
         return NULL;
-    
+    as = (Agc_Struct *)calloc(1, sizeof(Agc_Struct));
+    if (WebRtcAgc_Create(&as->agcInst) == 0)
+    {
+        if (WebRtcAgc_Init(as->agcInst, 0, 50, 0, freq) == 0)
+        {
+            if (WebRtcAgc_set_config(as->agcInst, config) == 0)
+            {
+                as->chn = chn;
+                as->freq = freq;
+                //必须10ms每包
+                as->intervalMs = 10;
+                as->pkgFrame = freq / 1000 * as->intervalMs;
+                //单声道
+                as->in[0] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
+                as->out[0] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
+                //双声道
+                if (chn > 1)
+                {
+                    as->in[1] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
+                    as->out[1] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
+                }
+                printf("agc_init: chn/%d freq/%d pkgFrame/%d x %d\r\n", chn, freq, as->pkgFrame, chn);
+                return as;
+            }
+#ifdef WMIX_WEBRTC_DEBUG
+            else
+                printf("WebRtcAgc_set_config failed !!\r\n");
+#endif
+        }
+#ifdef WMIX_WEBRTC_DEBUG
+        else
+            printf("WebRtcAgc_Init failed !!\r\n");
+#endif
+        WebRtcAgc_Free(as->agcInst);
+    }
+#ifdef WMIX_WEBRTC_DEBUG
+    else
+        printf("WebRtcAgc_Create failed !!\r\n");
+#endif
+    free(as);
     return NULL;
 }
 
@@ -754,133 +811,19 @@ void agc_process(void *fp, int16_t *frame, int frameLen)
  */
 void agc_release(void *fp)
 {
-    ;
+    Agc_Struct *as = fp;
+    WebRtcAgc_Free(as->agcInst);
+    free(as->in[0]);
+    free(as->out[0]);
+    if (as->chn > 1)
+    {
+        free(as->in[1]);
+        free(as->out[1]);
+    }
+    free(as);
+#ifdef WMIX_WEBRTC_DEBUG
+    printf("agc_release\r\n");
+#endif
 }
 
 #endif
-/* ******************** example ********************
-
-#include <stdio.h>
-// vad
-#include "webrtc_vad.h"
-//aec
-#include "echo_cancellation.h"
-//aecm
-#include "echo_control_mobile.h"
-//ns
-#include "noise_suppression.h"
-#include "noise_suppression_x.h"
-//agc
-#include "gain_control.h"
-
-void help(char *name){
-    printf("\r\n"
-        "Usage: \r\n"
-        "\r\n"
-        );
-}
-
-void main(int argc, char **argv){
-    
-    int ret = 0;
-    
-    VadInst* handle;
-    void *aecInst;
-    void *aecmInst;
-    NsHandle *nsxInst;
-    NsxHandle *nsxInst;
-    void *agcInst;
-    
-    int16_t audio_frame[160] = {0};
-    
-    // ---------- agc ---------
-    
-    // 创建句柄
-    ret = WebRtcAgc_Create(&agcInst);
-    printf("WebRtcAgc_Create: ret %d\r\n", ret);
-    
-    // 回收内存
-    ret = WebRtcAgc_Free(agcInst);
-    printf("WebRtcAgc_Free: ret %d\r\n", ret);
-    
-    // ---------- ns ---------
-    
-    // 创建句柄
-    ret = WebRtcNs_Create(&nsxInst);
-    printf("WebRtcNs_Create: ret %d\r\n", ret);
-    
-    // 回收内存
-    ret = WebRtcNs_Free(nsxInst);
-    printf("WebRtcNs_Free: ret %d\r\n", ret);
-    
-    // ---------- nsx ---------
-    
-    // 创建句柄
-    ret = WebRtcNsx_Create(&nsxInst);
-    printf("WebRtcNsx_Create: ret %d\r\n", ret);
-    
-    // 回收内存
-    ret = WebRtcNsx_Free(nsxInst);
-    printf("WebRtcNsx_Free: ret %d\r\n", ret);
-    
-    // ---------- aecm ---------
-    
-    // 创建句柄
-    ret = WebRtcAecm_Create(&aecmInst);
-    printf("WebRtcAecm_Create: ret %d\r\n", ret);
-    
-    // 初始化句柄
-    ret = WebRtcAecm_Init(aecmInst, 8000);
-    printf("WebRtcAecm_Init: ret %d\r\n", ret);
-    
-    // 回收内存
-    ret = WebRtcAecm_Free(aecmInst);
-    printf("WebRtcAecm_Free: ret %d\r\n", ret);
-    
-    // ---------- aec ---------
-    
-    // 创建句柄
-    ret = WebRtcAecX_Create(&aecInst);
-    printf("WebRtcAecX_Create: ret %d\r\n", ret);
-    
-    // 初始化句柄
-    ret = WebRtcAecX_Init(aecInst, 8000, 8000);
-    printf("WebRtcAecX_Init: ret %d\r\n", ret);
-    
-    // 回收内存
-    ret = WebRtcAecX_Free(aecInst);
-    printf("WebRtcAecX_Free: ret %d\r\n", ret);
-    
-    // ---------- vad ---------
-    
-    // 创建句柄
-    ret = WebRtcVad_Create(&handle);
-    printf("WebRtcVad_Create: ret %d\r\n", ret);
-    
-    // 初始化句柄
-    ret = WebRtcVad_Init(handle);
-    printf("WebRtcVad_Init: ret %d\r\n", ret);
-    
-    // 设置模式
-    // 0 (High quality) - 3 (Highly aggressive), 数字越大越激进
-    ret = WebRtcVad_set_mode(handle, 0);
-    printf("WebRtcVad_set_mode: ret %d\r\n", ret);
-
-    // 数据处理
-    // 8000Hz 20ms 采样间隔时, 每包160帧, 每帧2字节
-    ret = WebRtcVad_Process(handle, 8000, audio_frame, 160);
-    printf("WebRtcVad_Process: ret %d\r\n", ret);
-    
-    // 采样频率8000/16000/32000/48000Hz 和 每次解析帧数的组合 frame_length 是否合法
-    // 即 WebRtcVad_Process(x,x,frame_length) 里面的 frame_length
-    // 示例:
-    //     8000Hz, 16bit, 间隔20ms, 则 frame_length = 8000/1000*20 = 160 frame (每帧2字节,用的 int16_t*)
-    //     16000Hz, 16bit, 间隔30ms, 则 frame_length = 16000/1000*30 = 480 frame
-    ret = WebRtcVad_ValidRateAndFrameLength(8000, 160);
-    printf("WebRtcVad_ValidRateAndFrameLength: ret %d\r\n", ret);
-    
-    // 回收内存
-    WebRtcVad_Free(handle);
-}
-
-******************** example ******************** */
