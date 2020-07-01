@@ -1386,8 +1386,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #endif
 
 #if (WMIX_WEBRTC_AEC)
-                    //回声消除
-                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ == 8000)
+                    //回声消除 (16000Hz时要求CPU算力较高)
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
@@ -3425,7 +3425,6 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             if (wmix->head.U8 >= wmix->end.U8)
                 wmix->head.U8 = wmix->start.U8;
 
-#if (WMIX_MODE == 0)
             //理论延时还没用完
             if (tickT > 0)
             {
@@ -3437,7 +3436,6 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                 //通过调小 *0.8 值修复卡顿
                 delayus((unsigned int)(tickT * 0.8));
             }
-#endif
             tick1 = getTickUs();
 
 #if (WMIX_MODE == 1)
@@ -3572,9 +3570,10 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #endif
 
             //没在播放状态的延时,矫正到20ms
+            tickT = WMIX_INTERVAL_MS * 1000 - 2000;
             tick2 = getTickUs();
-            if (tick2 > tick1 && tick2 - tick1 < WMIX_INTERVAL_MS)
-                delayus(WMIX_INTERVAL_MS - (tick2 - tick1));
+            if (tick2 > tick1 && tick2 - tick1 < tickT)
+                delayus(tickT - (tick2 - tick1));
             tick1 = getTickUs();
             tickT = 0;
         }
@@ -3685,9 +3684,9 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
-    wmix->webrtcEnable[WR_VAD] = 0;
-    wmix->webrtcEnable[WR_AEC] = 0;
-    wmix->webrtcEnable[WR_NS] = 0;
+    wmix->webrtcEnable[WR_VAD] = 1;
+    wmix->webrtcEnable[WR_AEC] = 1;
+    wmix->webrtcEnable[WR_NS] = 1;
     wmix->webrtcEnable[WR_NS_PA] = 0;
     wmix->webrtcEnable[WR_AGC] = 1;
 

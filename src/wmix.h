@@ -11,17 +11,22 @@
 
 /* ---------- 接收来自Makefile的宏定义 ---------- */
 
+#ifdef MAKE_MP3
 #define WMIX_MP3 MAKE_MP3
+#else
+#define WMIX_MP3 1
+#endif
+
+#ifdef MAKE_AAC
 #define WMIX_AAC MAKE_AAC
+#else
+#define WMIX_AAC 1
+#endif
 
 /* ---------- rtp ---------- */
 
 //rtp发收同fd
-#if (WMIX_MODE != 1)
-#define RTP_ONE_SR 0
-#else
 #define RTP_ONE_SR 1
-#endif
 
 /* ---------- alsa ---------- */
 
@@ -61,13 +66,13 @@ typedef struct SNDPCMContainer
 #define WMIX_MSG_ID 'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#define WMIX_INTERVAL_MS 20 //录音、播音包间隔ms, 必须10的倍数
+#define WMIX_INTERVAL_MS 20 //录播音包间隔ms, 必须10的倍数且>=10
 
 #if (WMIX_MODE == 0)
 
 #define WMIX_CHANNELS 2
 #define WMIX_SAMPLE 16
-#define WMIX_FREQ 16000
+#define WMIX_FREQ 8000
 
 #else
 

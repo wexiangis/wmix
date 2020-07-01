@@ -50,13 +50,18 @@ void *vad_init(int chn, int freq, int intervalMs)
                 vs->chn = chn;
                 vs->freq = freq;
                 //采样间隔只能 10ms 或 20ms
-                if(intervalMs%20 == 0)
-                    vs->intervalMs = 20;
+                if(freq <= 16000)
+                {
+                    if(intervalMs%20 == 0)
+                        vs->intervalMs = 20;
+                    else
+                        vs->intervalMs = 10;
+                }
                 else
                     vs->intervalMs = 10;
                 vs->pkgFrame = freq / 1000 * vs->intervalMs;
                 vs->reduce = 4; //默认消音
-                printf("vad_init: chn/%d freq/%d pkgFrame/%d\r\n", chn, freq, vs->pkgFrame);
+                printf("vad_init: chn/%d freq/%d intervalMs/%d pkgFrame/%d\r\n", chn, freq, vs->intervalMs, vs->pkgFrame);
                 return vs;
             }
 #ifdef WMIX_WEBRTC_DEBUG
@@ -205,7 +210,7 @@ typedef struct
  * 
  *  param:
  *      chn <in> : 声道数
- *      freq <in> : 8000
+ *      freq <in> : 8000, 16000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
  *  return:
  *      fp指针
@@ -213,7 +218,7 @@ typedef struct
 void *aec_init(int chn, int freq, int intervalMs)
 {
     Aec_Struct *as;
-    if(freq > 8000)
+    if(freq > 16000)
         return NULL;
     as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
@@ -231,8 +236,13 @@ void *aec_init(int chn, int freq, int intervalMs)
                 as->chn = chn;
                 as->freq = freq;
                 //采样间隔只能 10ms 或 20ms
-                if(intervalMs%20 == 0)
-                    as->intervalMs = 20;
+                if(freq <= 8000)
+                {
+                    if(intervalMs%20 == 0)
+                        as->intervalMs = 20;
+                    else
+                        as->intervalMs = 10;
+                }
                 else
                     as->intervalMs = 10;
                 as->pkgFrame = freq / 1000 * as->intervalMs; //必须10ms每包
@@ -246,7 +256,7 @@ void *aec_init(int chn, int freq, int intervalMs)
                     as->out[1] = (AEC_FRAME_TYPE *)calloc(as->pkgFrame, sizeof(AEC_FRAME_TYPE));
                 }
                 as->far = (AEC_FRAME_TYPE *)calloc(as->pkgFrame, sizeof(AEC_FRAME_TYPE));
-                printf("aec_init: chn/%d freq/%d pkgFrame/%d x %d\r\n", chn, freq, as->pkgFrame, chn);
+                printf("aec_init: chn/%d freq/%d intervalMs/%d pkgFrame/%d x %d\r\n", chn, freq, as->intervalMs, as->pkgFrame, chn);
                 return as;
             }
 #ifdef WMIX_WEBRTC_DEBUG
@@ -629,7 +639,7 @@ void *ns_init(int chn, int freq)
                     ns->in[1] = (NSX_FRAME_TYPE *)calloc(ns->pkgFrame, sizeof(NSX_FRAME_TYPE));
                     ns->out[1] = (NSX_FRAME_TYPE *)calloc(ns->pkgFrame, sizeof(NSX_FRAME_TYPE));
                 }
-                printf("ns_init: chn/%d freq/%d pkgFrame/%d x %d\r\n", chn, freq, ns->pkgFrame, chn);
+                printf("ns_init: chn/%d freq/%d intervalMs/%d pkgFrame/%d x %d\r\n", chn, freq, ns->intervalMs, ns->pkgFrame, chn);
                 return ns;
             }
 #ifdef WMIX_WEBRTC_DEBUG
@@ -745,7 +755,7 @@ void *agc_init(int chn, int freq, int intervalMs)
     // Minimum possible mic level
     int32_t minLevel = 0;
     // Maximum possible mic level
-    int32_t maxLevel = 255;
+    int32_t maxLevel = 65535;
     // 0 - kAgcModeUnchanged - Unchanged - 没变化？
     // 1 - kAgcModeAdaptiveAnalog - Adaptive Analog Automatic Gain Control -3dBOv - 模拟信号模式
     // 2 - kAgcModeAdaptiveDigital - Adaptive Digital Automatic Gain Control -3dBOv - 数字信号模式
@@ -767,8 +777,11 @@ void *agc_init(int chn, int freq, int intervalMs)
             {
                 as->chn = chn;
                 as->freq = freq;
-                //必须10ms每包
-                as->intervalMs = 10;
+                //必须10ms每包  
+                if(freq <= 16000)
+                    as->intervalMs = 10;
+                else
+                    as->intervalMs = 5;
                 as->pkgFrame = freq / 1000 * as->intervalMs;
                 //单声道
                 as->in[0] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
@@ -779,7 +792,7 @@ void *agc_init(int chn, int freq, int intervalMs)
                     as->in[1] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
                     as->out[1] = (int16_t *)calloc(as->pkgFrame, sizeof(int16_t));
                 }
-                printf("agc_init: chn/%d freq/%d pkgFrame/%d x %d\r\n", chn, freq, as->pkgFrame, chn);
+                printf("agc_init: chn/%d freq/%d intervalMs/%d pkgFrame/%d x %d\r\n", chn, freq, as->intervalMs, as->pkgFrame, chn);
                 return as;
             }
 #ifdef WMIX_WEBRTC_DEBUG
