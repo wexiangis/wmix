@@ -1339,6 +1339,14 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
             wmix->webrtcPoint[WR_AEC] = NULL;
         }
 #endif
+        //失能释放
+#if (WMIX_WEBRTC_AGC)
+        if (!wmix->webrtcEnable[WR_AGC] && wmix->webrtcPoint[WR_AGC])
+        {
+            agc_release(wmix->webrtcPoint[WR_AGC]);
+            wmix->webrtcPoint[WR_AGC] = NULL;
+        }
+#endif
         //有录音线程或有客户端在用mem(内存共享)数据录音
         if (wmix->recordRun || wmix->shmemRun > 0 || wmix->rwTest)
         {
@@ -1404,6 +1412,24 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                                 write(fd, pR++, 2);
                             }
 #endif
+                        }
+                    }
+#endif
+
+#if (WMIX_WEBRTC_AGC)
+                    //录音增益
+                    if (wmix->webrtcEnable[WR_AGC] && WMIX_FREQ <= 32000)
+                    {
+                        if (wmix->webrtcPoint[WR_AGC] == NULL)
+                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                        if (wmix->webrtcPoint[WR_AGC])
+                        {
+                            //开始转换
+                            agc_process(
+                                wmix->webrtcPoint[WR_AGC],
+                                (int16_t *)buff,
+                                (int16_t *)buff,
+                                frame_num);
                         }
                     }
 #endif
@@ -1513,12 +1539,36 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 hiaudio_ai_exit();
             }
 #endif
-            //无录音任务释放vad
+            //失能释放
 #if (WMIX_WEBRTC_VAD)
-            if (wmix->webrtcEnable[WR_VAD] && wmix->webrtcPoint[WR_VAD])
+            if (wmix->webrtcPoint[WR_VAD])
             {
                 vad_release(wmix->webrtcPoint[WR_VAD]);
                 wmix->webrtcPoint[WR_VAD] = NULL;
+            }
+#endif
+            //失能释放
+#if (WMIX_WEBRTC_NS)
+            if (wmix->webrtcPoint[WR_NS])
+            {
+                ns_release(wmix->webrtcPoint[WR_NS]);
+                wmix->webrtcPoint[WR_NS] = NULL;
+            }
+#endif
+            //失能释放
+#if (WMIX_WEBRTC_AEC)
+            if (wmix->webrtcPoint[WR_AEC])
+            {
+                aec_release(wmix->webrtcPoint[WR_AEC]);
+                wmix->webrtcPoint[WR_AEC] = NULL;
+            }
+#endif
+            //失能释放
+#if (WMIX_WEBRTC_AGC)
+            if (wmix->webrtcPoint[WR_AGC])
+            {
+                agc_release(wmix->webrtcPoint[WR_AGC]);
+                wmix->webrtcPoint[WR_AGC] = NULL;
             }
 #endif
         }
@@ -1535,6 +1585,38 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     }
 #ifdef AEC_SYNC_SAVE_FILE
     close(fd);
+#endif
+    //失能释放
+#if (WMIX_WEBRTC_VAD)
+    if (!wmix->webrtcEnable[WR_VAD] && wmix->webrtcPoint[WR_VAD])
+    {
+        vad_release(wmix->webrtcPoint[WR_VAD]);
+        wmix->webrtcPoint[WR_VAD] = NULL;
+    }
+#endif
+    //失能释放
+#if (WMIX_WEBRTC_NS)
+    if (!wmix->webrtcEnable[WR_NS] && wmix->webrtcPoint[WR_NS])
+    {
+        ns_release(wmix->webrtcPoint[WR_NS]);
+        wmix->webrtcPoint[WR_NS] = NULL;
+    }
+#endif
+    //失能释放
+#if (WMIX_WEBRTC_AEC)
+    if (!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
+    {
+        aec_release(wmix->webrtcPoint[WR_AEC]);
+        wmix->webrtcPoint[WR_AEC] = NULL;
+    }
+#endif
+    //失能释放
+#if (WMIX_WEBRTC_AGC)
+    if (!wmix->webrtcEnable[WR_AGC] && wmix->webrtcPoint[WR_AGC])
+    {
+        agc_release(wmix->webrtcPoint[WR_AGC]);
+        wmix->webrtcPoint[WR_AGC] = NULL;
+    }
 #endif
     //
 #if (WMIX_MODE == 0)
@@ -3508,6 +3590,14 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #ifdef AEC_FILE_STREAM_TEST
     close(fd);
 #endif
+    //失能释放
+#if (WMIX_WEBRTC_NS)
+    if (wmix->webrtcPoint[WR_NS_PA])
+    {
+        ns_release(wmix->webrtcPoint[WR_NS_PA]);
+        wmix->webrtcPoint[WR_NS_PA] = NULL;
+    }
+#endif
     //
 #ifdef WMIX_RECORD_PLAY_SYNC
     wmix_shmem_write_circle(wmtp);
@@ -3596,10 +3686,10 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
     wmix->webrtcEnable[WR_VAD] = 0;
-    wmix->webrtcEnable[WR_AEC] = 1;
-    wmix->webrtcEnable[WR_NS] = 1;
+    wmix->webrtcEnable[WR_AEC] = 0;
+    wmix->webrtcEnable[WR_NS] = 0;
     wmix->webrtcEnable[WR_NS_PA] = 0;
-    wmix->webrtcEnable[WR_AGC] = 0;
+    wmix->webrtcEnable[WR_AGC] = 1;
 
     printf("\n---- WMix info -----\n"
            "   chn: %d\n"

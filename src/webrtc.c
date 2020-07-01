@@ -718,8 +718,6 @@ void ns_release(void *fp)
 #if (WMIX_WEBRTC_AGC)
 #include "gain_control.h"
 
-#define AGC_AGGRESSIVE 2 // 效果激进程度 0~2
-
 typedef struct
 {
     void *agcInst;
@@ -744,17 +742,26 @@ typedef struct
 void *agc_init(int chn, int freq, int intervalMs)
 {
     Agc_Struct *as;
+    // Minimum possible mic level
+    int32_t minLevel = 0;
+    // Maximum possible mic level
+    int32_t maxLevel = 255;
+    // 0 - kAgcModeUnchanged - Unchanged - 没变化？
+    // 1 - kAgcModeAdaptiveAnalog - Adaptive Analog Automatic Gain Control -3dBOv - 模拟信号模式
+    // 2 - kAgcModeAdaptiveDigital - Adaptive Digital Automatic Gain Control -3dBOv - 数字信号模式
+    // 3 - kAgcModeFixedDigital - Fixed Digital Gain 0dB
+    int16_t agcMode = kAgcModeAdaptiveDigital;
     WebRtcAgcConfig config = {
-        .targetLevelDbfs = 3,
-        .compressionGaindB = 9,
-        .limiterEnable = kAgcTrue,
+        .targetLevelDbfs = 3,       // default 3 (-3 dBOv)
+        .compressionGaindB = 9,     // default 9 dB
+        .limiterEnable = kAgcTrue,  // default kAgcTrue (on)
     };
     if(freq > 32000)
         return NULL;
     as = (Agc_Struct *)calloc(1, sizeof(Agc_Struct));
     if (WebRtcAgc_Create(&as->agcInst) == 0)
     {
-        if (WebRtcAgc_Init(as->agcInst, 0, 50, 0, freq) == 0)
+        if (WebRtcAgc_Init(as->agcInst, minLevel, maxLevel, agcMode, freq) == 0)
         {
             if (WebRtcAgc_set_config(as->agcInst, config) == 0)
             {
@@ -798,12 +805,66 @@ void *agc_init(int chn, int freq, int intervalMs)
  *  自动增益
  * 
  *  param:
- *      frame <in/out> : 录音数据
+ *      frame <in> : 音频数据,采样间隔必须10ms的整数倍数
+ *      frameOut <out> : 输出数据
  *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ * 
+ *  return:
+ *      0/OK
+ *      -1/failed
  */
-void agc_process(void *fp, int16_t *frame, int frameLen)
+int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
 {
-    ;
+    Agc_Struct *as = fp;
+    int ret;
+    int cLen, cPkg, cChn;
+    int realFrameLen, realPkgFrame;
+    int32_t temp32;
+
+    int32_t inMicLevel = 0;//输入录音音量等级(相对于输出而言)
+    int32_t outMicLevel = 1;//接收返回, 输出录音音量等级(相对于输入而言)
+    int16_t echo = 0;//是否考虑回声影响
+    uint8_t saturationWarning = 1;//接收返回,  0/正常, 1/表示不能产生增益或减益
+
+    //实际 frameFar 的 int16_t 字数
+    realFrameLen = frameLen * as->chn;
+
+    //实际每包数据的 int16_t 字数
+    realPkgFrame = as->pkgFrame * as->chn;
+
+    for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
+    {
+        //装载数据,把 int6_t 转为 int16_t (双声道时,把左右声拆分到ns->in[2])
+        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
+        {
+            for (cChn = temp32 = 0; cChn < as->chn; cChn++)
+                temp32 += *frame++;
+            as->in[0][cPkg] = temp32/as->chn;
+        }
+        //开始处理
+        ret = WebRtcAgc_Process(
+            as->agcInst,
+            (const int16_t *const *)as->in, //注意这里in和下面out是 int16_t *in[2] 指针(即左右声道数据)
+            1,//as->chn,//只支持单通道
+            as->pkgFrame,
+            (int16_t *const *)as->out,
+            inMicLevel,
+            &outMicLevel,
+            echo,
+            &saturationWarning);
+        if (ret != 0)
+        {
+#ifdef WMIX_WEBRTC_DEBUG
+            printf("WebRtcAgc_Process failed !!, ret %d \r\n", ret);
+#endif
+            return ret;
+        }
+        //提取输出数据
+        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
+            for (cChn = 0; cChn < as->chn; cChn++)
+                *frameOut++ = (int16_t)as->out[0][cPkg];
+    }
+    return 0;
 }
 
 /*

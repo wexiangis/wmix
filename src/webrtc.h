@@ -14,7 +14,7 @@
 #define WMIX_WEBRTC_VAD MAKE_WEBRTC_VAD
 #define WMIX_WEBRTC_AEC MAKE_WEBRTC_AEC
 #define WMIX_WEBRTC_NS  MAKE_WEBRTC_NS
-#define WMIX_WEBRTC_AGC MAKE_WEBRTC_AGC
+#define WMIX_WEBRTC_AGC 1//MAKE_WEBRTC_AGC
 
 #include <stdint.h>
 
@@ -49,7 +49,7 @@ void ns_release(void *fp);
 
 #if (WMIX_WEBRTC_AGC)
 void *agc_init(int chn, int freq, int intervalMs);
-void agc_process(void *fp, int16_t *frame, int frameLen);
+int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen);
 void agc_release(void *fp);
 #endif
 
