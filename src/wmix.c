@@ -4474,7 +4474,7 @@ void help(char *argv0)
         "\r\n"
         "Usage: %s [option]\r\n"
         "\r\n"
-        "Opition:\r\n"
+        "Option:\r\n"
         "  -d : 显示debug信息\r\n"
         "  -v volume : 设置音量0~10\r\n"
         "  -vr volume : 设置录音音量0~10\r\n"

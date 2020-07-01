@@ -17,7 +17,7 @@ void help(char *argv0)
         "\n"
         "Usage: %s [option] audioFile\n"
         "\n"
-        "Opition:\n"
+        "Option:\n"
         "  -l : 排队模式,排到最后一位(默认模式)\n"
         "  -i : 排队模式,排到第一位\n"
         "  -m : 混音模式(不设置时为排队模式)\n"

@@ -88,9 +88,9 @@ void *vad_init(int chn, int freq, int intervalMs)
  * 
  *  param:
  *      frame <in/out> : 录音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  */
-void vad_process(void *fp, int16_t *frame, int frameLen)
+void vad_process(void *fp, int16_t *frame, int frameNum)
 {
     Vad_Struct *vs = fp;
     int cChn, cLen, cPkg, cReduce, ret;
@@ -99,7 +99,7 @@ void vad_process(void *fp, int16_t *frame, int frameLen)
     int realFrameLen;
 
     //实际 frame 的 int16_t 字数
-    realFrameLen = frameLen * vs->chn;
+    realFrameLen = frameNum * vs->chn;
 
     pFrame = frame;
     cPkg = realFrameLen;
@@ -283,12 +283,12 @@ void *aec_init(int chn, int freq, int intervalMs)
  * 
  *  param:
  *      frameFar <in> : 远端音频数据(即录音数据)
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  *  return:
  *      0/OK
  *      -1/failed
  */
-int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
+int aec_setFrameFar(void *fp, int16_t *frameFar, int frameNum)
 {
     Aec_Struct *as = fp;
     int ret;
@@ -296,7 +296,7 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
     int realFrameLen, realPkgFrame;
 
     //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameLen * as->chn;
+    realFrameLen = frameNum * as->chn;
 
     //实际每包数据的 int16_t 字数
     realPkgFrame = as->pkgFrame * as->chn;
@@ -334,13 +334,13 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameLen)
  *  param:
  *      frameNear <in> : 近端数据(即将要播放的音频数据)
  *      frameOut <out> : 处理好的播音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  *      delayms <in> : 录播音估计延时间隔
  *  return:
  *      0/OK
  *      -1/failed
  */
-int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, int delayms)
+int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms)
 {
     Aec_Struct *as = fp;
     int ret;
@@ -348,7 +348,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
     int realFrameLen, realPkgFrame;
 
     //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameLen * as->chn;
+    realFrameLen = frameNum * as->chn;
 
     //实际每包数据的 int16_t 字数
     realPkgFrame = as->pkgFrame * as->chn;
@@ -408,13 +408,13 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameLen, i
  *      frameFar <in> : 远端音频数据(即录音数据)
  *      frameNear <in> : 近端数据(即将要播放的音频数据)
  *      frameOut <out> : 处理好的播音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  *      delayms <in> : 录播音估计延时间隔
  *  return:
  *      0/OK
  *      -1/failed
  */
-int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameLen, int delayms)
+int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms)
 {
     Aec_Struct *as = fp;
     int ret;
@@ -422,7 +422,7 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
     int realFrameLen, realPkgFrame;
 
     //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameLen * as->chn;
+    realFrameLen = frameNum * as->chn;
 
     //实际每包数据的 int16_t 字数
     realPkgFrame = as->pkgFrame * as->chn;
@@ -498,20 +498,20 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
  *      frameFar <in> : 远端音频数据(即录音数据)
  *      frameNear <in> : 近端数据(即将要播放的音频数据)
  *      frameOut <out> : 处理好的播音数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  *      reduce <in> : frameFar乘上的倍数, 决定了消音强度, 推荐范围0.1 ~ 1.0
  *  return:
  *      0/OK
  *      -1/failed
  */
-int aec_process3(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameLen, float reduce)
+int aec_process3(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, float reduce)
 {
     Aec_Struct *as = fp;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
 
     //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameLen * as->chn;
+    realFrameLen = frameNum * as->chn;
 
     //实际每包数据的 int16_t 字数
     realPkgFrame = as->pkgFrame * as->chn;
@@ -667,16 +667,16 @@ void *ns_init(int chn, int freq)
  *  param:
  *      frame <in> : 音频数据,采样间隔必须10ms的整数倍数
  *      frameOut <out> : 输出数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  */
-void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
+void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
 {
     Ns_Struct *ns = fp;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
 
     //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameLen * ns->chn;
+    realFrameLen = frameNum * ns->chn;
 
     //实际每包数据的 int16_t 字数
     realPkgFrame = ns->pkgFrame * ns->chn;
@@ -820,13 +820,13 @@ void *agc_init(int chn, int freq, int intervalMs)
  *  param:
  *      frame <in> : 音频数据,采样间隔必须10ms的整数倍数
  *      frameOut <out> : 输出数据
- *      frameLen <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
+ *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
  * 
  *  return:
  *      0/OK
  *      -1/failed
  */
-int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
+int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
 {
     Agc_Struct *as = fp;
     int ret;
@@ -840,7 +840,7 @@ int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
     uint8_t saturationWarning = 1;//接收返回,  0/正常, 1/表示不能产生增益或减益
 
     //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameLen * as->chn;
+    realFrameLen = frameNum * as->chn;
 
     //实际每包数据的 int16_t 字数
     realPkgFrame = as->pkgFrame * as->chn;
