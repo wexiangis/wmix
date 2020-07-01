@@ -101,3 +101,9 @@
   * 依赖库 libwebrtcagc(裁剪自WebRtc库)
 
 ---
+
+# ----- 树莓派 -----
+
+* 大多数库可以用 gcc 编译, MAKE_WEBRTC_AEC 库要改 cross:=arm-linux-gnueabihf ,再 make libwebrtcaec 单独编译
+
+* 树莓派用 gcc 和 arm-linux-gnueabihf-gcc 编译的应用是通用的

@@ -2,6 +2,8 @@
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
+# ps. 树莓派 MAKE_WEBRTC_AEC 库要用 cross:=arm-linux-gnueabihf 来编译
+
 # 置1时编译外部alsa库,否则使用编译器自带
 MAKE_ALSA=1
 

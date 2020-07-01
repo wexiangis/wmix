@@ -2981,7 +2981,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             break;
         }
         //长时间没有播放任务,关闭播放器
-        if (wmix->thread_play == 0 && wmix->shmemRun == 0)
+        if (wmix->thread_play == 0 && wmix->shmemRun == 0 && !wmix->rwTest)
         {
             //连续5秒没有播放线程,清tick
             if (playTickTimeout < 5000)
@@ -3013,7 +3013,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             wmix->playRun = true;
         }
         //长时间没有录音任务,关闭录音
-        if (wmix->thread_record == 0 && wmix->shmemRun == 0)
+        if (wmix->thread_record == 0 && wmix->shmemRun == 0 && !wmix->rwTest)
         {
             //连续5秒没有录音线程,清tick
             if (recordTickTimeout < 5000)
