@@ -69,6 +69,7 @@ void ns_release(void *fp);
 #if (WMIX_WEBRTC_AGC)
 void *agc_init(int chn, int freq, int intervalMs);
 int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen);
+void agc_addition(void *fp, uint8_t value);
 void agc_release(void *fp);
 #endif
 

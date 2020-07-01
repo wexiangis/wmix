@@ -25,6 +25,8 @@ void help(char *argv0)
         "  -t interval : 循环播放模式,间隔秒,取值[1~255]\n"
         "  -d reduce : 背景音削减倍数,取值[1~255]\n"
         "  -v volume : 音量设置0~10\n"
+        "  -vr volume : 录音音量设置0~10\n"
+        "  -va volumeAgc : 录音音量增益设置0~100, 启用 -agc 时有效\n"
         "  -k id : 关闭指定id的语音,id=0时关闭所有\n"
         "  -r : 录音模式,wav格式(默认单通道/16bits/8000Hz/5秒)\n"
         "  -raac : 录音模式,aac格式(默认单通道/16bits/8000Hz/5秒)\n"
@@ -42,19 +44,19 @@ void help(char *argv0)
         "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
         "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -rw 0/1 : 关/开 自收发测试\n"
+        "  -info : 打印信息\n"
         "  -? --help : 显示帮助\n"
         "\n"
-        "其它说明:\n"
-        "  支持播放格式 : wav,mp3,aac\n"
-        "  返回 : 0/正常 <0/错误 >0/语音id,用于\"-k\"关闭\n"
+        "Return:\n"
+        "  0/OK <0/ERROR >0/id use to \"-k id\"\n"
         "\n"
-        "软件版本: %s\n"
+        "Version: %s\n"
         "\n"
         "Example:\n"
         "  %s -v 10\n"
         "  %s ./music.wav\n"
         "  %s ./music.wav -t 1\n"
-        "  %s ./music.wav -r ./record.wav\n"
+        "  %s -r ./record.wav\n"
         "\n",
         argv0, WMIX_VERSION, argv0, argv0, argv0, argv0);
 }
@@ -67,7 +69,7 @@ int main(int argc, char **argv)
     bool record = false; //播音模式
     int interval = 0;
     int reduce = 0;
-    int volume = -1;
+    int volume = -1, volumeMic = -1, volumeAgc = -1;
     int id = -1;
     int order = 0;
     int rt = 5, rc = 1, rr = 8000;
@@ -78,9 +80,9 @@ int main(int argc, char **argv)
     bool rtpr = false;
     int log = -1;
     bool reset = false;
+    bool info = false;
 
-    int vad = 0, aec = 0, ns = 0, ns_pa = 0, agc = 0, rw = 0;
-    bool _vad = false, _aec = false, _ns = false, _ns_pa = false, _agc = false, _rw = false;
+    int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
     char *filePath = NULL;
     char tmpPath[128] = {0};
@@ -148,6 +150,14 @@ int main(int argc, char **argv)
         {
             sscanf(argv[++i], "%d", &volume);
         }
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-vr") && i + 1 < argc)
+        {
+            sscanf(argv[++i], "%d", &volumeMic);
+        }
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-va") && i + 1 < argc)
+        {
+            sscanf(argv[++i], "%d", &volumeAgc);
+        }
         else if (strlen(argv[i]) == 2 && strstr(argv[i], "-k") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &id);
@@ -167,36 +177,34 @@ int main(int argc, char **argv)
         else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &vad);
-            _vad = true;
         }
         else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &aec);
-            _aec = true;
         }
         else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &ns);
-            _ns = true;
         }
         else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &ns_pa);
-            _ns_pa = true;
         }
         else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &agc);
-            _agc = true;
         }
         else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rw") && i + 1 < argc)
         {
             sscanf(argv[++i], "%d", &rw);
-            _rw = true;
         }
         else if (strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
+        }
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-info"))
+        {
+            info = true;
         }
         else if (strstr(argv[i], "-?") || strstr(argv[i], "-help"))
         {
@@ -215,45 +223,63 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    if (volume >= 0 && volume < 11)
+    if (info)
     {
-        wmix_set_volume(volume, 10);
+        wmix_info();
+        helpFalg = false;
+    }
+
+    if (volume >= 0)
+    {
+        wmix_set_volume(volume);
+        helpFalg = false;
+    }
+
+    if (volumeMic >= 0)
+    {
+        wmix_set_volumeMic(volumeMic);
+        helpFalg = false;
+    }
+
+    if (volumeAgc >= 0)
+    {
+        wmix_set_volumeAgc(volumeAgc);
         helpFalg = false;
     }
 
     if (log >= 0)
     {
-        wmix_log(log);
+        wmix_log(log ? true : false);
         helpFalg = false;
     }
 
-    if (_vad)
+    if (vad >= 0)
     {
         wmix_webrtc_vad(vad ? true : false);
         helpFalg = false;
     }
-    if (_aec)
+    if (aec >= 0)
     {
         wmix_webrtc_aec(aec ? true : false);
         helpFalg = false;
     }
-    if (_ns)
+    if (ns >= 0)
     {
         wmix_webrtc_ns(ns ? true : false);
         helpFalg = false;
     }
-    if (_ns_pa)
+    if (ns_pa >= 0)
     {
         wmix_webrtc_ns_pa(ns_pa ? true : false);
         helpFalg = false;
     }
-    if (_agc)
+    if (agc >= 0)
     {
         wmix_webrtc_agc(agc ? true : false);
         helpFalg = false;
     }
 
-    if (_rw)
+    if (rw >= 0)
     {
         wmix_rw_test(rw ? true : false);
         helpFalg = false;
@@ -283,7 +309,6 @@ int main(int argc, char **argv)
         {
             snprintf(tmpPath2, sizeof(tmpPath2), "%s/%s", tmpPath, filePath);
             filePath = tmpPath2;
-            // printf("%s\n", filePath);
         }
     }
 

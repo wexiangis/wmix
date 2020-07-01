@@ -58,7 +58,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V4.1 - 20200630"
+#define WMIX_VERSION "V5.0 - 20200701"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -111,8 +111,11 @@ typedef enum
     WMT_WEBRTC_NS_PA_SW = 18, //开/关 webrtc.ns 噪音抑制(播音)
     WMT_WEBRTC_AGC_SW = 19,   //开/关 webrtc.agc 自动增益
     WMT_RW_TEST = 20,         //自收发测试
+    WMT_VOLUME_MIC = 21,      //设置录音音量
+    WMT_VOLUME_AGC = 22,      //设置录音音量增益
 
     WMT_LOG_SW = 100, //开关log
+    WMT_INFO = 101,   //打印信息
 } WMIX_MSG_TYPE;
 
 typedef struct
@@ -200,19 +203,10 @@ typedef struct
 
     //自收发测试
     bool rwTest;
+
+    //音量
+    int volume, volumeMic, volumeAgc;
 } WMix_Struct;
-
-/* ---------- 原始的操作方式 ---------- */
-
-//设置音量
-int sys_volume_set(uint8_t count, uint8_t div);
-
-//播放
-#if (WMIX_MODE == 1)
-#define play_wav hiaudio_play_wav
-#else
-int record_wav(char *filename, uint32_t duration_time, uint8_t chn, uint8_t sample, uint16_t freq);
-#endif
 
 /* ---------- 混音器主要操作 ---------- */
 
@@ -223,6 +217,10 @@ WMix_Struct *wmix_init(void);
 
 //关闭
 void wmix_exit(WMix_Struct *wmix);
+
+//设置音量
+void wmix_volume(uint8_t value);
+void wmix_volumeMic(uint8_t value);
 
 //载入音频数据 的方式播放
 WMix_Point wmix_load_wavStream(

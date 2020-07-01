@@ -14,45 +14,57 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V4.1 - 20200630"
+#define WMIX_VERSION "V5.0 - 20200701"
 
-//----- 设置音量 count/div 例如: 30% -> wmix_set_volume(3,10) -----
-//count: 音量  div: 分度
-//正常返回0
-int wmix_set_volume(uint8_t count, uint8_t div);
+/* ----- 设置音量 -----
+ * value: 音量 0~10
+ * 正常返回0
+ */
+void wmix_set_volume(uint8_t value);
 
-//----- 播放 wav 和 mp3 文件 -----
-//wavOrMp3: 音频文件
-//  支持格式: wav, aac, mp3
-//backgroundReduce: 播放当前音频时,降低背景音量
-//  0: 不启用
-//  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
-//  (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
-//repeatInterval: 音频重复播放间隔,单位 sec
-//  0: 不启用
-//  >0: 播放结束后间隔 repeatInterval sec 后重播
-//order: 播放顺序(backgroundReduce>0或repeatInterval>0时不参与排队)
-//  -1: 打断所有
-//  0:排尾
-//  1:排头
-//  2:混音
-//返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
+/* ----- 设置录音音量 -----
+ * value: 音量 0~10
+ */
+void wmix_set_volumeMic(uint8_t value);
+
+/* ----- 设置录音音量增益 -----
+ * value: 音量 0~100
+ */
+void wmix_set_volumeAgc(uint8_t value);
+
+/* ----- 播放 wav 和 mp3 文件 -----
+ *    wavOrMp3: 音频文件
+ *          支持格式: wav, aac, mp3
+ *    backgroundReduce: 播放当前音频时,降低背景音量
+ *          0: 不启用
+ *          >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
+ *          (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
+ *    repeatInterval: 音频重复播放间隔,单位 sec
+ *          0: 不启用
+ *          >0: 播放结束后间隔 repeatInterval sec 后重播
+ *    order: 播放顺序(backgroundReduce>0或repeatInterval>0时不参与排队)
+ *          -1: 打断所有
+ *          0:排尾
+ *          1:排头
+ *          2:混音
+ *    返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
+ */
 int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, int order);
 
-//根据 wmix_play() 返回的id关闭启动的音频,id=0时关闭所有
-//正常返回0
+// 根据 wmix_play() 返回的id关闭启动的音频,id=0时关闭所有, 正常返回0
 int wmix_play_kill(int id);
 
-//----- 播放音频流,用于播放录音 -----
-//成功返回fd(fifo的写入端)  失败返回0
-//backgroundReduce: 播放当前音频时,降低背景音量
-//  0: 不启用
-//  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
-//  (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
-//channels: 声道数(取值1,2)
-//sample: 采样位数bit(取值16)
-//freq: 频率(取值44100,32000,22050,16000,11025,8000)
-//正常返回>0的fd
+/* ----- 播放音频流,用于播放录音 -----
+ * 成功返回fd(fifo的写入端)  失败返回0
+ * backgroundReduce: 播放当前音频时,降低背景音量
+ *   0: 不启用
+ *   >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
+ *   (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
+ * channels: 声道数(取值1,2)
+ * sample: 采样位数bit(取值16)
+ * freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ * 正常返回>0的fd
+ */
 int wmix_stream_open(
     uint8_t channels,
     uint8_t sample,
@@ -60,27 +72,29 @@ int wmix_stream_open(
     uint8_t backgroundReduce,
     char *path);
 
-//----- 录音 -----
-//成功返回fd(fifo的读取端)  失败返回0
-//backgroundReduce: 播放当前音频时,降低背景音量
-//  0: 不启用
-//  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
-//注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得)
-//channels: 声道数(取值1,2)
-//sample: 采样位数bit(取值16)
-//freq: 频率(取值44100,32000,22050,16000,11025,8000)
-//正常返回>0的fd
+/* ----- 录音 -----
+ * 成功返回fd(fifo的读取端)  失败返回0
+ * backgroundReduce: 播放当前音频时,降低背景音量
+ *   0: 不启用
+ *   >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
+ * 注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得)
+ * channels: 声道数(取值1,2)
+ * sample: 采样位数bit(取值16)
+ * freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ * 正常返回>0的fd
+ */
 int wmix_record_stream_open(
     uint8_t channels,
     uint8_t sample,
     uint16_t freq,
     char *path);
 
-//----- 录音到文件 -----
-//channels: 声道数(取值1,2)
-//sample: 采样位数bit(取值16)
-//freq: 频率(取值44100,32000,22050,16000,11025,8000)
-//正常返回0
+/* ----- 录音到文件 -----
+ * channels: 声道数(取值1,2)
+ * sample: 采样位数bit(取值16)
+ * freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ * 正常返回0
+ */
 int wmix_record(
     char *wavPath,
     uint8_t channels,
@@ -89,61 +103,67 @@ int wmix_record(
     uint16_t second,
     bool useAAC);
 
-//----- rtp -----
-
-//type: 0/pcma 1/aac(暂不支持)
-//chn: pcma只支持1通道
-//freq: pcma只支持8000Hz
-//返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
+/* ----- rtp -----
+ * type: 0/pcma 1/aac(暂不支持)
+ * chn: pcma只支持1通道
+ * freq: pcma只支持8000Hz
+ * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
+ */
 int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type);
 
-//type: 0/pcma 1/aac(暂不支持)
-//chn: pcma只支持1通道
-//freq: pcma只支持8000Hz
-//返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
+/* ----- rtp -----
+ * type: 0/pcma 1/aac(暂不支持)
+ * chn: pcma只支持1通道
+ * freq: pcma只支持8000Hz
+ * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
+ */
 int wmix_rtp_send(char *ip, int port, int chn, int freq, int type);
 
-//rtp流控制
-//id: 从上面两个函数返回的id值
-//ctrl: 0/运行 1/停止 2/重连(启用ip,port参数)
+/* ----- rtp -----
+ * rtp流控制
+ * id: 从上面两个函数返回的id值
+ * ctrl: 0/运行 1/停止 2/重连(启用ip,port参数)
+ */
 void wmix_rtp_ctrl(int id, int ctrl, char *ip, int port);
 
-//----- 其它 -----
-//正常返回0
+// 重置wmix, 正常返回0
 int wmix_reset(void);
 
-//检查指定id的音频是否存在
+// 检查指定id的音频是否存在
 bool wmix_check_id(int id);
 
-void wmix_log(int b);
+// 开关log
+void wmix_log(bool on);
 
-//从共享内存读取录音数据
-//dat: 传入数据保存地址
-//len: 按int16_t计算的数据长度
-//addr: 返回当前在循环缓冲区中读数据的位置
-//wait: 阻塞
-//返回: 按int16_t计算的数据长度
+/* ----- mem -----
+ * 从共享内存读取录音数据
+ * dat: 传入数据保存地址
+ * len: 按int16_t计算的数据长度
+ * addr: 返回当前在循环缓冲区中读数据的位置
+ * wait: 阻塞
+ * 返回: 按int16_t计算的数据长度
+ */
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
-
 int16_t wmix_mem_write(int16_t *dat, int16_t len);
-
-//
 void wmix_mem_open(void);
 void wmix_mem_close(void);
 
-//
+// 检查wmix路径和获取id
 void wmix_get_path(int id, char *path);
 bool wmix_check_path(char *path);
 
-//webrtc 模块开关
-void wmix_webrtc_vad(bool on);   //人声是别(录音辅助,在没说话时主动静音)
-void wmix_webrtc_aec(bool on);   //回声消除
-void wmix_webrtc_ns(bool on);    //噪音抑制(录音)
-void wmix_webrtc_ns_pa(bool on); //噪音抑制(播音)
-void wmix_webrtc_agc(bool on);   //自动增益
+// webrtc 模块开关
+void wmix_webrtc_vad(bool on);    // 人声是别(录音辅助,在没说话时主动静音)
+void wmix_webrtc_aec(bool on);    // 回声消除
+void wmix_webrtc_ns(bool on);     // 噪音抑制(录音)
+void wmix_webrtc_ns_pa(bool on);  // 噪音抑制(播音)
+void wmix_webrtc_agc(bool on);    // 自动增益
 
-//自收发测试
+// 自收发测试
 void wmix_rw_test(bool on);
+
+// 打印信息
+void wmix_info(void);
 
 #ifdef __cplusplus
 };

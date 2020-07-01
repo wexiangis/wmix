@@ -755,16 +755,16 @@ void *agc_init(int chn, int freq, int intervalMs)
     // Minimum possible mic level
     int32_t minLevel = 0;
     // Maximum possible mic level
-    int32_t maxLevel = 65535;
+    int32_t maxLevel = 100;
     // 0 - kAgcModeUnchanged - Unchanged - 没变化？
     // 1 - kAgcModeAdaptiveAnalog - Adaptive Analog Automatic Gain Control -3dBOv - 模拟信号模式
     // 2 - kAgcModeAdaptiveDigital - Adaptive Digital Automatic Gain Control -3dBOv - 数字信号模式
     // 3 - kAgcModeFixedDigital - Fixed Digital Gain 0dB
     int16_t agcMode = kAgcModeAdaptiveDigital;
     WebRtcAgcConfig config = {
-        .targetLevelDbfs = 3,       // default 3 (-3 dBOv)
-        .compressionGaindB = 9,     // default 9 dB
-        .limiterEnable = kAgcTrue,  // default kAgcTrue (on)
+        .targetLevelDbfs = 0,       // default 3 (-3 dBOv)
+        .compressionGaindB = 30,    // default 9 dB
+        .limiterEnable = kAgcFalse, // default kAgcTrue (on)
     };
     if(freq > 32000)
         return NULL;
@@ -834,7 +834,7 @@ int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
     int realFrameLen, realPkgFrame;
     int32_t temp32;
 
-    int32_t inMicLevel = 0;//输入录音音量等级(相对于输出而言)
+    int32_t inMicLevel = 0;//输入录音音量等级
     int32_t outMicLevel = 1;//接收返回, 输出录音音量等级(相对于输入而言)
     int16_t echo = 0;//是否考虑回声影响
     uint8_t saturationWarning = 1;//接收返回,  0/正常, 1/表示不能产生增益或减益
@@ -877,7 +877,29 @@ int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameLen)
             for (cChn = 0; cChn < as->chn; cChn++)
                 *frameOut++ = (int16_t)as->out[0][cPkg];
     }
+// #ifdef WMIX_WEBRTC_DEBUG
+//     printf("WebRtcAgc_Process:  inMicLevel/%d != outMicLevel/%d\r\n", inMicLevel, outMicLevel);
+// #endif
     return 0;
+}
+
+/*
+ *  增益设置 
+ */
+void agc_addition(void *fp, uint8_t value)
+{
+    Agc_Struct *as = fp;
+    int ret;
+    WebRtcAgcConfig config = {
+        .targetLevelDbfs = 0,
+        .compressionGaindB = (int16_t)value,
+        .limiterEnable = kAgcFalse,
+    };
+    ret = WebRtcAgc_set_config(as->agcInst, config);
+#ifdef WMIX_WEBRTC_DEBUG
+    if(ret != 0)
+        printf("WebRtcAgc_set_config failed !!, ret %d \r\n", ret);
+#endif
 }
 
 /*

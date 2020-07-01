@@ -43,9 +43,12 @@ typedef enum
     WMT_WEBRTC_NS_SW = 17,    //开/关 webrtc.ns 噪音抑制(录音)
     WMT_WEBRTC_NS_PA_SW = 18, //开/关 webrtc.ns 噪音抑制(播音)
     WMT_WEBRTC_AGC_SW = 19,   //开/关 webrtc.agc 自动增益
-    WMT_RW_TEST = 20,         //自发收测试
+    WMT_RW_TEST = 20,         //自收发测试
+    WMT_VOLUME_MIC = 21,      //设置录音音量
+    WMT_VOLUME_AGC = 22,      //设置录音音量增益
 
     WMT_LOG_SW = 100, //开关log
+    WMT_INFO = 101,   //打印信息
 } WMIX_MSG_TYPE;
 
 typedef struct
@@ -91,22 +94,31 @@ typedef struct
         return;                                             \
     }
 
-int wmix_set_volume(uint8_t count, uint8_t div)
+void _wmix_set_value(int type, uint8_t value)
 {
     WMix_Msg msg;
     //msg初始化
-    MSG_INIT();
+    MSG_INIT_VOID();
     //装填 message
-    memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = WMT_VOLUME;
-    if (count > div)
-        msg.value[0] = div;
-    else
-        msg.value[0] = count;
-    msg.value[1] = div;
+    msg.type = type;
+    msg.value[0] = value;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-    return 0;
+}
+
+void wmix_set_volume(uint8_t value)
+{
+    _wmix_set_value(WMT_VOLUME, value);
+}
+
+void wmix_set_volumeMic(uint8_t value)
+{
+    _wmix_set_value(WMT_VOLUME_MIC, value);
+}
+
+void wmix_set_volumeAgc(uint8_t value)
+{
+    _wmix_set_value(WMT_VOLUME_AGC, value);
 }
 
 //自动命名: 主路径WMIX_MSG_PATH + wav + (pid%1000000)*1000+(0~255)
@@ -566,15 +578,7 @@ void wmix_mem_open(void)
 {
     if (wmix_shmemRun)
         return;
-    WMix_Msg msg;
-    //msg初始化
-    MSG_INIT_VOID();
-    //装填 message
-    msg.type = WMT_MEM_SW;
-    msg.value[0] = 1;
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-    //
+    _wmix_set_value(WMT_MEM_SW, 1);
     wmix_shmemRun = 1;
 }
 
@@ -582,15 +586,7 @@ void wmix_mem_close(void)
 {
     if (!wmix_shmemRun)
         return;
-    WMix_Msg msg;
-    //msg初始化
-    MSG_INIT_VOID();
-    //装填 message
-    msg.type = WMT_MEM_SW;
-    msg.value[0] = 0;
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-    //
+    _wmix_set_value(WMT_MEM_SW, 0);
     wmix_shmemRun = 0;
 }
 
@@ -670,16 +666,9 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
 
 //============= shm =============
 
-void wmix_log(int b)
+void wmix_log(bool on)
 {
-    WMix_Msg msg;
-    //msg初始化
-    MSG_INIT_VOID();
-    //装填 message
-    msg.type = WMT_LOG_SW;
-    msg.value[0] = b;
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+    _wmix_set_value(WMT_LOG_SW, on ? 1 : 0);
 }
 
 //============= id path =============
@@ -699,40 +688,33 @@ bool wmix_check_path(char *path)
 
 //============= webrtc modules =============
 
-void _wmix_webrtc_xxx(int id, bool on)
-{
-    WMix_Msg msg;
-    //msg初始化
-    MSG_INIT_VOID();
-    //装填 message
-    msg.type = id;
-    msg.value[0] = on ? 1 : 0;
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-}
-
 void wmix_webrtc_vad(bool on)
 {
-    _wmix_webrtc_xxx(WMT_WEBRTC_VAD_SW, on);
+    _wmix_set_value(WMT_WEBRTC_VAD_SW, on ? 1 : 0);
 }
 void wmix_webrtc_aec(bool on)
 {
-    _wmix_webrtc_xxx(WMT_WEBRTC_AEC_SW, on);
+    _wmix_set_value(WMT_WEBRTC_AEC_SW, on ? 1 : 0);
 }
 void wmix_webrtc_ns(bool on)
 {
-    _wmix_webrtc_xxx(WMT_WEBRTC_NS_SW, on);
+    _wmix_set_value(WMT_WEBRTC_NS_SW, on ? 1 : 0);
 }
 void wmix_webrtc_ns_pa(bool on)
 {
-    _wmix_webrtc_xxx(WMT_WEBRTC_NS_PA_SW, on);
+    _wmix_set_value(WMT_WEBRTC_NS_PA_SW, on ? 1 : 0);
 }
 void wmix_webrtc_agc(bool on)
 {
-    _wmix_webrtc_xxx(WMT_WEBRTC_AGC_SW, on);
+    _wmix_set_value(WMT_WEBRTC_AGC_SW, on ? 1 : 0);
 }
 
 void wmix_rw_test(bool on)
 {
-    _wmix_webrtc_xxx(WMT_RW_TEST, on);
+    _wmix_set_value(WMT_RW_TEST, on ? 1 : 0);
+}
+
+void wmix_info(void)
+{
+    _wmix_set_value(WMT_INFO, 0);
 }

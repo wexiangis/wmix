@@ -128,7 +128,7 @@ obj-recvaac+=./test/recvAAC.c \
 		./src/aac.h
 
 target: wmixmsg
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC) -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
+	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC) -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD) -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC) -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS) -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
