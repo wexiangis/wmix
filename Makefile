@@ -182,7 +182,7 @@ libfaad:
 libwebrtcvad:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	./build_vad_so.sh $(cc) && \
+	bash ./build_vad_so.sh $(cc) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -190,8 +190,8 @@ libwebrtcvad:
 libwebrtcaec:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	./build_aec_so.sh $(cc) && \
-	./build_aecm_so.sh $(cc) && \
+	bash ./build_aec_so.sh $(cc) && \
+	bash ./build_aecm_so.sh $(cc) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -199,7 +199,7 @@ libwebrtcaec:
 libwebrtcns:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	./build_ns_so.sh $(cc) && \
+	bash ./build_ns_so.sh $(cc) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -207,7 +207,7 @@ libwebrtcns:
 libwebrtcagc:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	./build_agc_so.sh $(cc) && \
+	bash ./build_agc_so.sh $(cc) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
