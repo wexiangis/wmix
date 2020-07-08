@@ -73,7 +73,7 @@ void wmix_volume(uint8_t value)
     //
     if(main_wmix)
         main_wmix->volume = volume_value;
-    //
+    // 范围: [-121,6] db
     if (volume_value == 0)
         hiaudio_set_volume(-120);
     else
@@ -100,11 +100,11 @@ void wmix_volume(uint8_t value)
     snd_mixer_selem_set_playback_volume_all(pcm_element, volume_value);
     //检查设置
     snd_mixer_selem_get_playback_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &volume_value); //获取音量
-    printf("wmix volume playback: %ld\r\n", volume_value);
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
 #endif
+    printf("wmix volume playback: %ld\r\n", volume_value);
 }
 
 /*******************************************************************************
@@ -123,11 +123,11 @@ void wmix_volumeMic(uint8_t value)
     //
     if(main_wmix)
         main_wmix->volumeMic = volume_value;
-    //
+    // 范围: [-87,86] db
     if (volume_value == 0)
-        hiaudio_set_volume(-120);
+        hiaudio_set_ai_volume(-80);
     else
-        hiaudio_set_volume(5 - (10 - volume_value) * 5);
+        hiaudio_set_ai_volume(80 - (10 - volume_value) * 10);
 #else
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
@@ -150,11 +150,11 @@ void wmix_volumeMic(uint8_t value)
     snd_mixer_selem_set_capture_volume_all(pcm_element, volume_value);
     //检查设置
     snd_mixer_selem_get_capture_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &volume_value); //获取音量
-    printf("wmix volume capture: %ld\r\n", volume_value);
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
 #endif
+    printf("wmix volume capture: %ld\r\n", volume_value);
 }
 
 #if (WMIX_MODE == 0)
@@ -974,7 +974,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #if (WMIX_MODE == 0)
             if (wmix->recordback)
 #else
-            if (hiaudio_state())
+            if (hiaudio_ai_state())
 #endif
             {
                 // frame_num*frame_size = buffSize 实际读取字节数
@@ -1125,7 +1125,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #endif
                 }
 #else
-                if (hiaudio_state() == 0)
+                if (hiaudio_ai_state() == 0)
                 {
                     printf("wmix record: start\r\n");
                     hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS);
@@ -1154,7 +1154,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 wmix->recordback = NULL;
             }
 #else
-            if (hiaudio_state())
+            if (hiaudio_ai_state())
             {
                 printf("wmix record: clear\r\n");
                 hiaudio_ai_exit();
@@ -1247,7 +1247,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         wmix->recordback = NULL;
     }
 #else
-    if (hiaudio_state())
+    if (hiaudio_ai_state())
     {
         hiaudio_ai_exit();
     }
@@ -3332,7 +3332,7 @@ WMix_Struct *wmix_init(void)
         mkdir(WMIX_MSG_PATH, 0777);
 
 #if (WMIX_MODE == 1)
-    if (hiaudio_ao_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ))
+    if (hiaudio_ao_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS))
         return NULL;
     if (hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS))
         return NULL;
@@ -4524,6 +4524,8 @@ void wmix_start()
     else
         printf("audio init failed !!\r\n");
 }
+#elif(WMIX_MERGE_MODE == 1)
+// none
 #else
 void wmix_getSignal(int id)
 {
