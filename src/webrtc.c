@@ -173,6 +173,7 @@ void vad_release(void *fp)
 #include "echo_cancellation.h"
 #include "echo_control_mobile.h"
 
+// 切换 aec 和 aecm
 // #undef WMIX_WEBRTC_AEC // do this switch to AECM
 
 #ifdef WMIX_WEBRTC_AEC
@@ -567,6 +568,7 @@ void aec_release(void *fp)
 #include "noise_suppression.h"
 #include "noise_suppression_x.h"
 
+// 切换 ns 和 nsx
 // #define WMIX_WEBRTC_NSX // define this switch to NSX
 
 #ifdef WMIX_WEBRTC_NSX

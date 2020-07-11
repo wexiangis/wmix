@@ -14,7 +14,7 @@
 
 * make
 
-3. 主程序抛后台 (先拷贝 ./libs/lib/*.so 到运行环境), -d 表示打印debug信息
+3. 主程序抛后台 (先拷贝 ./libs/lib/lib* 到 /usr/lib/ ), -d 表示打印debug信息
 
 * wmix -d &
 
@@ -104,6 +104,6 @@
 
 # ----- 树莓派 -----
 
-* 大多数库可以用 gcc 编译, MAKE_WEBRTC_AEC 库要改 cross:=arm-linux-gnueabihf ,再 make libwebrtcaec 单独编译
+* 在 Makefile 改用 cross:=arm-linux-gnueabihf 再编译, MAKE_WEBRTC_AEC 库用 gcc 编译不过;
 
-* 树莓派用 gcc 和 arm-linux-gnueabihf-gcc 编译的应用是通用的
+* ps. 树莓派用 gcc 和 arm-linux-gnueabihf-gcc 编译的应用是通用的
