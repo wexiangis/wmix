@@ -94,17 +94,17 @@ void wmix_volume(uint8_t value)
     snd_mixer_selem_register(mixer, NULL, NULL);
     snd_mixer_load(mixer);
     //找到Pcm对应的element
-    pcm_element = snd_mixer_first_elem(mixer);                     // 取得第一个 element，也就是 Master
-    snd_mixer_selem_set_playback_volume_range(pcm_element, 0, 10); // 设置音量范围：0-100之间
+    pcm_element = snd_mixer_first_elem(mixer);
+    snd_mixer_selem_set_playback_volume_range(pcm_element, 0, 10 + WMIX_VOLUME_BASE); //设置音量范围,最大：0-100
     //设置左右声道音量
-    snd_mixer_selem_set_playback_volume_all(pcm_element, volume_value);
+    snd_mixer_selem_set_playback_volume_all(pcm_element, volume_value == 0 ? 0 : volume_value + WMIX_VOLUME_BASE);
     //检查设置
     snd_mixer_selem_get_playback_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &volume_value); //获取音量
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
 #endif
-    printf("wmix volume playback: %ld\r\n", volume_value);
+    printf("wmix volume playback: %ld\r\n", volume_value == 0 ? 0 : volume_value - WMIX_VOLUME_BASE);
 }
 
 /*******************************************************************************

@@ -58,15 +58,13 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.1 - 20200702"
+#define WMIX_VERSION "V5.1 - 20200727"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
 #define WMIX_MSG_PATH_AUTHORITY "chmod 777 /tmp/wmix -R"
 #define WMIX_MSG_ID 'w'
 #define WMIX_MSG_BUFF_SIZE 128
-
-#define WMIX_INTERVAL_MS 20 //录播音包间隔ms, 必须10的倍数且>=10
 
 #if (WMIX_MODE == 0)
 
@@ -83,10 +81,16 @@ typedef struct SNDPCMContainer
 
 #endif
 
+//1音量时的保底音量, 用户配置[1~10], 实际[11~20], 0还是0
+#define WMIX_VOLUME_BASE 10
+
+//录播音包间隔ms, 必须10的倍数且>=10
+#define WMIX_INTERVAL_MS 20
+//每帧字节数
 #define WMIX_FRAME_SIZE (WMIX_CHANNELS * WMIX_SAMPLE / 8)
-
+//按 WMIX_INTERVAL_MS 采样间隔下的一包帧数
 #define WMIX_FRAME_NUM (WMIX_FREQ / 1000 * WMIX_INTERVAL_MS)
-
+//按 WMIX_INTERVAL_MS 采样间隔下的一包字节数
 #define WMIX_PKG_SIZE (WMIX_FRAME_SIZE * WMIX_FRAME_NUM)
 
 typedef enum
