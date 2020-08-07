@@ -58,7 +58,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.1 - 20200727"
+#define WMIX_VERSION "V5.1 - 20200807"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -86,12 +86,42 @@ typedef struct SNDPCMContainer
 
 //录播音包间隔ms, 必须10的倍数且>=10
 #define WMIX_INTERVAL_MS 20
+
 //每帧字节数
 #define WMIX_FRAME_SIZE (WMIX_CHANNELS * WMIX_SAMPLE / 8)
-//按 WMIX_INTERVAL_MS 采样间隔下的一包帧数
+
+//按 WMIX_INTERVAL_MS 采样,每次采样帧数
 #define WMIX_FRAME_NUM (WMIX_FREQ / 1000 * WMIX_INTERVAL_MS)
-//按 WMIX_INTERVAL_MS 采样间隔下的一包字节数
+
+//按 WMIX_INTERVAL_MS 采样,每次采样字节数
 #define WMIX_PKG_SIZE (WMIX_FRAME_SIZE * WMIX_FRAME_NUM)
+
+/*
+ * 保存AEC 左(录音) 右(播音) 声道数据,用于校正AEC时延
+ * 
+ * 操作方法:
+ *      wmixMsg xxx.wav -t 1 -v 8 //循环播放音频
+ *      wmixMsg -aec 1            //开启回声消除
+ *      wmixMsg -r /tmp/xxx.wav   //开录音5秒,此时不要说话,让设备干净的录到自己播出的声音
+ * 
+ * 文件aec.pcm怎么用?
+ *      看其波形,左声道是录到的声音,右声道是播出的声音,会看到右声道数据会超前左声道,
+ *      此时找到左右声道相似的波峰位置,两个位置的时差就是aec回声消除的时差
+ */
+// #define AEC_SYNC_SAVE_FILE "/tmp/aec.pcm"
+
+//回声消除,时间间隔估算,必须是 WMIX_INTERVAL_MS 的倍数
+#if (WMIX_MODE == 1)
+#define AEC_INTERVAL_MS 760
+#else
+#define AEC_INTERVAL_MS 400
+#endif
+
+//FIFO 循环缓冲区包数量
+#define AEC_FIFO_PKG_NUM (AEC_INTERVAL_MS / WMIX_INTERVAL_MS + 2)
+
+//录、播音同步,将把"录音线程"改为"心跳函数"内嵌到"播音线程"中
+#define WMIX_RECORD_PLAY_SYNC
 
 typedef enum
 {

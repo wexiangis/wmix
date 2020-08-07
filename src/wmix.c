@@ -31,9 +31,6 @@
 #include "aac.h"
 #endif
 
-//录、播音同步,将把"录音线程"改为"心跳函数"内嵌到"播音线程"中
-#define WMIX_RECORD_PLAY_SYNC
-
 static WMix_Struct *main_wmix = NULL;
 
 static void signal_callback(int signo)
@@ -780,12 +777,6 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
     return i;
 }
 
-//回声消除,时间间隔估算
-#define AEC_INTERVAL_MS 400 //(WMIX_INTERVAL_MS)
-
-//FIFO 循环缓冲区包数量
-#define AEC_FIFO_PKG_NUM (AEC_INTERVAL_MS / WMIX_INTERVAL_MS + 2)
-
 // recordPkgBuff FIFO
 static uint8_t recordPkgBuff[WMIX_PKG_SIZE];
 static uint8_t _recordPkgBuff[AEC_FIFO_PKG_NUM][WMIX_PKG_SIZE];
@@ -878,9 +869,6 @@ uint8_t *playPkgBuff_get(uint8_t *buff, int delayms)
     return ret;
 }
 
-//保存AEC 左(录音) 右(播音) 声道数据,用于校正AEC时延
-// #define AEC_SYNC_SAVE_FILE
-
 void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
@@ -920,7 +908,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     int16_t *pL, *pR;
     int aec_sync_c;
     if (fd == 0)
-        fd = open("/tmp/aec.pcm", O_WRONLY | O_CREAT, 0666);
+        fd = open(AEC_SYNC_SAVE_FILE, O_WRONLY | O_CREAT, 0666);
 #endif
 
     //录音频率和目标频率的比值
@@ -1014,14 +1002,6 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
-                            //开始转换
-                            aec_process2(
-                                wmix->webrtcPoint[WR_AEC],
-                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
-                                (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
-                                (int16_t *)buff,                                          //输出的数据,得 人说话声音
-                                frame_num,
-                                0); //评估回声时延
 
 #ifdef AEC_SYNC_SAVE_FILE
                             playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS);
@@ -1033,6 +1013,14 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                                 write(fd, pR++, 2);
                             }
 #endif
+                            //开始转换
+                            aec_process2(
+                                wmix->webrtcPoint[WR_AEC],
+                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                                (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
+                                (int16_t *)buff,                                          //输出的数据,得 人说话声音
+                                frame_num,
+                                0); //评估回声时延
                         }
                     }
 #endif
@@ -2959,15 +2947,14 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->webrtcEnable[WR_NS_PA],
                     wmix->webrtcEnable[WR_AGC],
                     wmix->playRun ? 1 : 0, wmix->recordRun ? 1 : 0,
-                    wmix->tick, wmix->buff, wmix->head.U8, wmix->tail.U8, 
+                    wmix->tick, wmix->buff, wmix->head.U8, wmix->tail.U8,
                     wmix->loopWord, wmix->loopWordRecord, wmix->loopWordFifo, wmix->loopWordRtp,
                     wmix->thread_sys, wmix->thread_record, wmix->thread_play,
                     wmix->onPlayCount, wmix->queue.head, wmix->queue.tail,
                     wmix->shmemRun,
                     wmix->reduceMode,
                     wmix->debug ? 1 : 0,
-                    WMIX_VERSION
-                );
+                    WMIX_VERSION);
                 break;
             }
             continue;
@@ -3369,6 +3356,11 @@ WMix_Struct *wmix_init(void)
     wmix->webrtcEnable[WR_NS] = 1;
     wmix->webrtcEnable[WR_NS_PA] = 0;
     wmix->webrtcEnable[WR_AGC] = 1;
+
+#if (WMIX_MODE == 1)
+    //承受不了这个CPU占用率
+    wmix->webrtcEnable[WR_AEC] = 0;
+#endif
 
     printf("\n---- WMix info -----\r\n"
            "   chn: %d\r\n"
@@ -4524,7 +4516,7 @@ void wmix_start()
     else
         printf("audio init failed !!\r\n");
 }
-#elif(WMIX_MERGE_MODE == 1)
+#elif (WMIX_MERGE_MODE == 1)
 // none
 #else
 void wmix_getSignal(int id)
