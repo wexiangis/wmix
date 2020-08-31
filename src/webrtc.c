@@ -748,10 +748,11 @@ typedef struct
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
+ *      value : 增益,范围1~20,0不起用,越大则维持音量越大(过大会破音)
  *  return:
  *      fp指针
  */
-void *agc_init(int chn, int freq, int intervalMs)
+void *agc_init(int chn, int freq, int intervalMs, int value)
 {
     Agc_Struct *as;
     // Minimum possible mic level
@@ -765,7 +766,7 @@ void *agc_init(int chn, int freq, int intervalMs)
     int16_t agcMode = kAgcModeAdaptiveDigital;
     WebRtcAgcConfig config = {
         .targetLevelDbfs = 0,       // default 3 (-3 dBOv)
-        .compressionGaindB = 30,    // default 9 dB
+        .compressionGaindB = value, // default 9 dB
         .limiterEnable = kAgcFalse, // default kAgcTrue (on)
     };
     if(freq > 32000)

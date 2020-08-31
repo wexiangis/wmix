@@ -178,6 +178,7 @@ libfaad:
 	cd $(ROOT)/libs/faad2-2.8.8 && \
 	./configure --prefix=$(ROOT)/libs --host=$(host) && \
 	make -j4 && make install && \
+	sed -i '/#pragma message/c // ignore update tips' $(ROOT)/libs/include/faad.h && \
 	cd - && \
 	rm $(ROOT)/libs/faad2-2.8.8 -rf
 
