@@ -68,13 +68,13 @@ void wmix_volume(uint8_t value)
     if (volume_value > 10)
         volume_value = 10;
     //
-    if(main_wmix)
+    if (main_wmix)
         main_wmix->volume = volume_value;
-    // 范围: [-121,6] db
+    // 范围: [-120, 6] db,这已是最大音量,不要改动
     if (volume_value == 0)
         hiaudio_set_volume(-120);
     else
-        hiaudio_set_volume(5 - (10 - volume_value) * 5);
+        hiaudio_set_volume(6 - (10 - volume_value) * 5);
 #else
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
@@ -83,7 +83,7 @@ void wmix_volume(uint8_t value)
     if (volume_value > 10)
         volume_value = 10;
     //
-    if(main_wmix)
+    if (main_wmix)
         main_wmix->volume = volume_value;
     //初始化
     snd_mixer_open(&mixer, 0);
@@ -118,13 +118,14 @@ void wmix_volumeMic(uint8_t value)
     if (volume_value > 10)
         volume_value = 10;
     //
-    if(main_wmix)
+    if (main_wmix)
         main_wmix->volumeMic = volume_value;
-    // 范围: [-87,86] db
+    // 范围: [-10,56] db,不要乱动这个范围,录音音量不足可以开agc
+    // 范围: [-10,80] db
     if (volume_value == 0)
-        hiaudio_set_ai_volume(-80);
+        hiaudio_set_ai_volume(-10);
     else
-        hiaudio_set_ai_volume(80 - (10 - volume_value) * 10);
+        hiaudio_set_ai_volume(80 - (10 - volume_value) * 8);
 #else
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
@@ -133,7 +134,7 @@ void wmix_volumeMic(uint8_t value)
     if (volume_value > 10)
         volume_value = 10;
     //
-    if(main_wmix)
+    if (main_wmix)
         main_wmix->volumeMic = volume_value;
     //初始化
     snd_mixer_open(&mixer, 0);
@@ -154,7 +155,7 @@ void wmix_volumeMic(uint8_t value)
     printf("wmix volume capture: %ld\r\n", volume_value);
 }
 
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
 
 /*******************************************************************************
  * 名称: SNDWAV_ReadPcm
@@ -598,7 +599,6 @@ void wmix_throwOut_thread(
 
 #include <sys/shm.h>
 
-#define AI_CIRCLE_BUFF_LEN 10240
 typedef struct
 {
     int16_t w;
@@ -894,7 +894,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     size_t frame_size = WMIX_FRAME_SIZE;
     //每包字节数
     size_t buffSize = WMIX_PKG_SIZE;
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
     uint8_t *buff;
     //录音句柄已初始化
     if (wmix->recordback)
@@ -959,7 +959,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         //有录音线程或有客户端在用mem(内存共享)数据录音
         if (wmix->recordRun || wmix->shmemRun > 0 || wmix->rwTest)
         {
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
             if (wmix->recordback)
 #else
             if (hiaudio_ai_state())
@@ -967,7 +967,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
             {
                 // frame_num*frame_size = buffSize 实际读取字节数
                 memset(buff, 0, buffSize);
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
                 ret = SNDWAV_ReadPcm(wmix->recordback, frame_num) * frame_size;
 #else
                 ret = hiaudio_ai_read((int16_t *)buff, 1000) * frame_size;
@@ -1030,7 +1030,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AGC] && WMIX_FREQ <= 32000)
                     {
                         if (wmix->webrtcPoint[WR_AGC] == NULL)
-                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, wmix->volumeAgc);
                         if (wmix->webrtcPoint[WR_AGC])
                         {
                             //开始转换
@@ -1098,7 +1098,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 memset(recordPkgBuff, 0, frame_num * frame_size);
                 recordPkgBuff_add(recordPkgBuff);
 
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
                 if ((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
                 {
                     printf("wmix record: start\r\n");
@@ -1134,7 +1134,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
             recordPkgBuff_add(recordPkgBuff);
 
             //无录音任务释放录音句柄
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
             if (wmix->recordback)
             {
                 printf("wmix record: clear\r\n");
@@ -1228,7 +1228,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     }
 #endif
     //
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
     if (wmix->recordback)
     {
         wmix_alsa_release(wmix->recordback);
@@ -3360,7 +3360,17 @@ WMix_Struct *wmix_init(void)
 #if (WMIX_MODE == 1)
     //承受不了这个CPU占用率
     wmix->webrtcEnable[WR_AEC] = 0;
+    //关闭agc
+    wmix->webrtcEnable[WR_AGC] = 0;
 #endif
+
+    //默认音量
+    wmix->volume = 10;
+    wmix->volumeMic = 10;
+    wmix->volumeAgc = 5;
+
+    wmix_volume(wmix->volume);
+    wmix_volumeMic(wmix->volumeMic);
 
     printf("\n---- WMix info -----\r\n"
            "   chn: %d\r\n"
@@ -3424,7 +3434,7 @@ WMix_Point wmix_load_wavStream(
     int16_t repairBuff[64], repairBuffCount, repairTemp;
     float repairStep, repairStepSum;
     //
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE != 1)
     uint16_t correct = WMIX_CHANNELS * WMIX_FREQ * 16 / 8 / 5;
 #else
     uint16_t correct = 0;
@@ -4530,7 +4540,7 @@ void wmix_getSignal(int id)
 }
 int main(int argc, char **argv)
 {
-    int i, volume = 10, volumeMic = 10;
+    int i, volume = -1, volumeMic = -1, volumeAgc = -1;
     char *p, *path = NULL;
 
     //传入参数处理
@@ -4572,6 +4582,10 @@ int main(int argc, char **argv)
                 {
                     sscanf(argv[++i], "%d", &volumeMic);
                 }
+                else if (strlen(argv[i]) == 3 && strstr(argv[i], "-va") && i + 1 < argc)
+                {
+                    sscanf(argv[++i], "%d", &volumeAgc);
+                }
                 else if (strstr(p, ".wav") || strstr(p, ".mp3") || strstr(p, ".aac"))
                     path = p;
             }
@@ -4579,6 +4593,8 @@ int main(int argc, char **argv)
                 wmix_volume(volume);
             if (volumeMic >= 0)
                 wmix_volumeMic(volumeMic);
+            if (volumeAgc >= 0)
+                main_wmix->volumeAgc = volumeAgc;
             if (path)
             {
                 wmix_throwOut_thread(main_wmix,

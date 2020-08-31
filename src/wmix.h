@@ -58,7 +58,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.1 - 20200807"
+#define WMIX_VERSION "V5.1 - 20200831"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -66,16 +66,16 @@ typedef struct SNDPCMContainer
 #define WMIX_MSG_ID 'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#if (WMIX_MODE == 0)
+#if (WMIX_MODE == 1)
 
-#define WMIX_CHANNELS 2
+//hiaudio只支持单声道
+#define WMIX_CHANNELS 1
 #define WMIX_SAMPLE 16
 #define WMIX_FREQ 8000
 
 #else
 
-//hiaudio只支持单声道
-#define WMIX_CHANNELS 1
+#define WMIX_CHANNELS 2
 #define WMIX_SAMPLE 16
 #define WMIX_FREQ 8000
 
@@ -169,6 +169,8 @@ typedef struct
 
 //循环缓冲区大小
 #define WMIX_BUFF_SIZE 262144 //256K //131072//128K //262144//256K 524288//512K //1048576//1M
+
+#define AI_CIRCLE_BUFF_LEN 10240
 
 //多功能指针
 typedef union {
