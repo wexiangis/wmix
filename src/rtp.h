@@ -8,6 +8,7 @@
 #define _RTP_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <pthread.h> //mtex
@@ -92,11 +93,29 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize);
 
 int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
 
-SocketStruct *rtp_socket(char *ip, uint16_t port, uint8_t isServer);
+SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer);
 
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
 //系统当前毫秒数获取
 __time_t getTickUs(void);
+
+
+/* ----- 辅助 wmix 添加的链表管理结构 ----- */
+/* ----- 检索到新增同ip和端口连接时使用现存,关闭时由最后使用者回收内存 ----- */
+
+//链表节点,又来记录当前这套ip和端口的使用情况
+typedef struct RtpChainStruct{
+    char ip[16];
+    int port;
+    SocketStruct *ss;//连接句柄
+    bool send_run, recv_run;//正在使用的发收线程(一套ip和端口只允许一个s和一个r在使用)
+    struct RtpChainStruct *last, *next;//链表
+}RtpChain_Struct;
+
+//申请节点(已自动连上socket),NULL为失败
+RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend);
+//释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
+void rtpChain_release(RtpChain_Struct *rcs, bool isSend);
 
 #endif //_RTP_H_

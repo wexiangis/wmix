@@ -12,13 +12,7 @@
 
 //网络参数,有些端口vlc是不支持的
 #define RTP_IP "127.0.0.1"
-#define RTP_PORT 9832
-
-// void main(void)
-// {
-//     // aac_decodeToFile("./audio/2x32000.aac", "./t.pcm");
-//     aac_encodeToFile("./t.pcm", "./t.aac", 2, 32000);
-// }
+#define RTP_PORT 9832 //用vlc播放的时候只识别9832...
 
 int main(int argc, char *argv[])
 {
@@ -75,7 +69,7 @@ int main(int argc, char *argv[])
         if (!wsdp)
         {
             wsdp = 1;
-            rtp_create_sdp("./test.sdp",
+            rtp_create_sdp("/tmp/record-aac.sdp",
                            RTP_IP, RTP_PORT,
                            AacHeader.channelCfg,
                            aac_freqList[AacHeader.samplingFreqIndex],

@@ -33,9 +33,10 @@ void help(char *argv0)
         "  -rc chn : 指定录音通道数[1,2]\n"
         "  -rr freq : 指定录音频率[8000,11025,16000,22050,32000,44100]\n"
         "  -rt time : 指定录音时长秒\n"
-        "  -rtps ip port : 启动rtp录音发送,使用-rc,-rr可以配置通道和频率参数\n"
-        "                : 生成/tmp/record.sdp\n"
+        "  -rtps ip port : 启动rtp录音发送,使用-rc,-rr可以配置通道和频率参数,生成/tmp/record.sdp\n"
         "  -rtpr ip port : 启动rtp接收播音,使用-rc,-rr可以配置通道和频率参数\n"
+        "  -rtps-aac ip port : 启动rtp-aac录音发送,使用-rc,-rr可以配置通道和频率参数,生成/tmp/record-aac.sdp\n"
+        "  -rtpr-aac ip port : 启动rtp-aac接收播音,使用-rc,-rr可以配置通道和频率参数\n"
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
         "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
@@ -44,7 +45,12 @@ void help(char *argv0)
         "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
         "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -rw 0/1 : 关/开 自收发测试\n"
-        "  -info : 打印信息\n"
+        "  -ctl id ctl_type : 给目标id的线程发控制状态,ctl_type定义如下\n"
+        "              1    : WCT_CLEAR 清控制状态 \n"
+        "              2    : WCT_STOP 结束线程 \n"
+        "              3    : WCT_RESET 重置/重连(rtp) \n"
+        "              4    : WCT_SILENCE 静音,使用0数据运行 \n"
+        "  -info path: 打印信息,path可以指定终端或输出文件的路径,path可以不带\n"
         "  -? --help : 显示帮助\n"
         "\n"
         "Return:\n"
@@ -61,26 +67,53 @@ void help(char *argv0)
         argv0, WMIX_VERSION, argv0, argv0, argv0, argv0);
 }
 
+void warn(char *param, int value_num)
+{
+    printf(
+        "\n  param err !! \n"
+        "\n"
+        "  %s 需要跟 %d 个参数\n"
+        "\n",
+        param, value_num);
+    exit(0);
+}
+
 int main(int argc, char **argv)
 {
     int i;
-    bool helpFalg = true;
+
+    bool helpFalg = true; //提示help使能
 
     bool record = false; //播音模式
+
     int interval = 0;
     int reduce = 0;
+
     int volume = -1, volumeMic = -1, volumeAgc = -1;
-    int id = -1;
+
+    int kill_id = -1, ctrl_id = -1, ret_id = 0;
     int order = 0;
+
     int rt = 5, rc = 1, rr = 8000;
-    char *ip;
-    int port = 9999;
-    bool useAAC = false;
+    bool rAcc = false;
+
+    char *rtp_ip;
+    int rtp_port = 9999;
     bool rtps = false;
     bool rtpr = false;
+
+    char *rtp_aac_ip;
+    int rtp_aac_port = 9999;
+    bool rtps_aac = false;
+    bool rtpr_aac = false;
+
     int log = -1;
     bool reset = false;
+
+    int ctrl = -1;
+
     bool info = false;
+    char infoPath[128] = {0};
 
     int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
@@ -99,28 +132,40 @@ int main(int argc, char **argv)
         if (strlen(argv[i]) == 2 && strstr(argv[i], "-r"))
         {
             record = true;
-            useAAC = false;
+            rAcc = false;
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-log") && i + 1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-log"))
         {
-            sscanf(argv[++i], "%d", &log);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &log);
+            else
+                warn("-log", 1);
         }
         else if (strlen(argv[i]) == 5 && strstr(argv[i], "-raac"))
         {
             record = true;
-            useAAC = true;
+            rAcc = true;
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rt") && i + 1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rt"))
         {
-            sscanf(argv[++i], "%d", &rt);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &rt);
+            else
+                warn("-rt", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rc") && i + 1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rc"))
         {
-            sscanf(argv[++i], "%d", &rc);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &rc);
+            else
+                warn("-rc", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rr") && i + 1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rr"))
         {
-            sscanf(argv[++i], "%d", &rr);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &rr);
+            else
+                warn("-rr", 1);
         }
         else if (strlen(argv[i]) == 2 && strstr(argv[i], "-b"))
         {
@@ -138,65 +183,143 @@ int main(int argc, char **argv)
         {
             order = 0;
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-t") && i + 1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-t"))
         {
-            sscanf(argv[++i], "%d", &interval);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &interval);
+            else
+                warn("-t", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-d") && i + 1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-d"))
         {
-            sscanf(argv[++i], "%d", &reduce);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &reduce);
+            else
+                warn("-d", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-v") && i + 1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-v"))
         {
-            sscanf(argv[++i], "%d", &volume);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &volume);
+            else
+                warn("-v", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-vr") && i + 1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-vr"))
         {
-            sscanf(argv[++i], "%d", &volumeMic);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &volumeMic);
+            else
+                warn("-vr", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-va") && i + 1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-va"))
         {
-            sscanf(argv[++i], "%d", &volumeAgc);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &volumeAgc);
+            else
+                warn("-va", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-k") && i + 1 < argc)
+        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-k"))
         {
-            sscanf(argv[++i], "%d", &id);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &kill_id);
+            else
+                warn("-k", 1);
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtps") && i + 2 < argc)
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtps"))
         {
-            ip = argv[++i];
-            sscanf(argv[++i], "%d", &port);
-            rtps = true;
+            if (i + 2 < argc)
+            {
+                rtp_ip = argv[++i];
+                sscanf(argv[++i], "%d", &rtp_port);
+                rtps = true;
+            }
+            else
+                warn("-rtps", 2);
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtpr") && i + 2 < argc)
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtpr"))
         {
-            ip = argv[++i];
-            sscanf(argv[++i], "%d", &port);
-            rtpr = true;
+            if (i + 2 < argc)
+            {
+                rtp_ip = argv[++i];
+                sscanf(argv[++i], "%d", &rtp_port);
+                rtpr = true;
+            }
+            else
+                warn("-rtpr", 2);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i + 1 < argc)
+        else if (strlen(argv[i]) == 9 && strstr(argv[i], "-rtps-aac"))
         {
-            sscanf(argv[++i], "%d", &vad);
+            if (i + 2 < argc)
+            {
+                rtp_aac_ip = argv[++i];
+                sscanf(argv[++i], "%d", &rtp_aac_port);
+                rtps_aac = true;
+            }
+            else
+                warn("-rtps-aac", 2);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i + 1 < argc)
+        else if (strlen(argv[i]) == 9 && strstr(argv[i], "-rtpr-aac"))
         {
-            sscanf(argv[++i], "%d", &aec);
+            if (i + 2 < argc)
+            {
+                rtp_aac_ip = argv[++i];
+                sscanf(argv[++i], "%d", &rtp_aac_port);
+                rtpr_aac = true;
+            }
+            else
+                warn("-rtpr-aac", 2);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i + 1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad"))
         {
-            sscanf(argv[++i], "%d", &ns);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &vad);
+            else
+                warn("-vad", 1);
         }
-        else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i + 1 < argc)
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec"))
         {
-            sscanf(argv[++i], "%d", &ns_pa);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &aec);
+            else
+                warn("-aec", 1);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i + 1 < argc)
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns"))
         {
-            sscanf(argv[++i], "%d", &agc);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &ns);
+            else
+                warn("-ns", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rw") && i + 1 < argc)
+        else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa"))
         {
-            sscanf(argv[++i], "%d", &rw);
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &ns_pa);
+            else
+                warn("-ns_pa", 1);
+        }
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc"))
+        {
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &agc);
+            else
+                warn("-agc", 1);
+        }
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rw"))
+        {
+            if (i + 1 < argc)
+                sscanf(argv[++i], "%d", &rw);
+            else
+                warn("-rw", 1);
+        }
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-ctl"))
+        {
+            if (i + 2 < argc)
+            {
+                sscanf(argv[++i], "%d", &ctrl_id);
+                sscanf(argv[++i], "%d", &ctrl);
+            }
+            else
+                warn("-ctl", 2);
         }
         else if (strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
         {
@@ -205,6 +328,11 @@ int main(int argc, char **argv)
         else if (strlen(argv[i]) == 5 && strstr(argv[i], "-info"))
         {
             info = true;
+            if (i + 1 < argc)
+            {
+                memset(infoPath, 0, sizeof(infoPath));
+                strcpy(infoPath, argv[++i]);
+            }
         }
         else if (strstr(argv[i], "-?") || strstr(argv[i], "-help"))
         {
@@ -225,7 +353,7 @@ int main(int argc, char **argv)
 
     if (info)
     {
-        wmix_info();
+        wmix_info(infoPath);
         helpFalg = false;
     }
 
@@ -285,21 +413,37 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
-    if (id >= 0)
+    if (ctrl_id > 0 && ctrl > 0)
     {
-        wmix_play_kill(id);
+        wmix_ctrl(ctrl_id, ctrl);
         helpFalg = false;
     }
-    id = 0;
+
+    if (kill_id >= 0)
+    {
+        wmix_play_kill(kill_id);
+        helpFalg = false;
+    }
 
     if (rtps)
     {
-        id = wmix_rtp_send(ip, port, rc, rr, 0);
+        ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0);
         helpFalg = false;
     }
     if (rtpr)
     {
-        id = wmix_rtp_recv(ip, port, rc, rr, 0);
+        ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0);
+        helpFalg = false;
+    }
+
+    if (rtps_aac)
+    {
+        ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1);
+        helpFalg = false;
+    }
+    if (rtpr_aac)
+    {
+        ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1);
         helpFalg = false;
     }
 
@@ -315,21 +459,21 @@ int main(int argc, char **argv)
     if (filePath && filePath[0])
     {
         if (record)
-            wmix_record(filePath, rc, 16, rr, rt, useAAC);
+            wmix_record(filePath, rc, 16, rr, rt, rAcc);
         else
-            id = wmix_play(filePath, reduce, interval, order);
+            ret_id = wmix_play(filePath, reduce, interval, order);
         helpFalg = false;
     }
 
     if (helpFalg)
     {
-        printf("\nparam err !!\n");
+        printf("\n  param err !! \r\n");
         help(argv[0]);
         return -1;
     }
 
-    if (id > 0)
-        printf("id: %d\n", id);
+    if (ret_id > 0)
+        printf("id: %d\n", ret_id);
 
-    return id;
+    return ret_id;
 }

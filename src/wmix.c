@@ -33,6 +33,7 @@
 
 static WMix_Struct *main_wmix = NULL;
 
+/* 信号事件接收,主要是识别ctrl+c结束时完成收尾工作 */
 static void signal_callback(int signo)
 {
     if (SIGINT == signo || SIGTERM == signo)
@@ -45,6 +46,7 @@ static void signal_callback(int signo)
     exit(0);
 }
 
+/* 稍微精准的延时 */
 #include <sys/time.h>
 void delayus(unsigned int us)
 {
@@ -53,6 +55,20 @@ void delayus(unsigned int us)
     delay.tv_usec = us % 1000000;
     select(0, NULL, NULL, NULL, &delay);
 }
+
+/* 自动校准的延时3件套 */
+/* 把reset放在死循环的开头,delay放在任务完成之后 */
+#define DELAY_US_INIT \
+    __time_t _tick1, _tick2;
+
+#define DELAY_US_RESET() \
+    _tick1 = getTickUs();
+
+#define DELAY_US(us)                             \
+    _tick2 = getTickUs();                        \
+    if (_tick2 > _tick1 && _tick2 - _tick1 < us) \
+        delayus(us - (_tick2 - _tick1));         \
+    _tick1 = getTickUs();
 
 /*******************************************************************************
  * 名称: wmix_volume
@@ -190,7 +206,7 @@ int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t frame_num)
         else if (ret == -EPIPE)
         {
             snd_pcm_prepare(sndpcm->handle);
-            fprintf(stderr, "R-Error: Buffer Underrun\r\n");
+            // fprintf(stderr, "R-Error: Buffer Underrun\r\n");
         }
         else if (ret == -ESTRPIPE)
         {
@@ -252,7 +268,7 @@ int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
         else if (ret == -EPIPE)
         {
             snd_pcm_prepare(sndpcm->handle);
-            fprintf(stderr, "W-Error: Buffer Underrun\r\n");
+            // fprintf(stderr, "W-Error: Buffer Underrun\r\n");
         }
         else if (ret == -ESTRPIPE)
         {
@@ -514,84 +530,88 @@ void wmix_throwOut_thread(
 }
 
 #if (WMIX_CHANNELS == 1)
-#define RECORD_DATA_TRANSFER()                                                                 \
-    if (chn == 1)                                                                              \
-    {                                                                                          \
-        for (count = 0, src.U8 = dist.U8 = buff; count < ret; count += frame_size)             \
-        {                                                                                      \
-            if (divCount >= 1.0)                                                               \
-            {                                                                                  \
-                src.U16++;                                                                     \
-                divCount -= 1.0;                                                               \
-            }                                                                                  \
-            else                                                                               \
-            {                                                                                  \
-                *dist.U16++ = *src.U16++;                                                      \
-                divCount += divPow;                                                            \
-            }                                                                                  \
-        }                                                                                      \
-        src.U8 = buff;                                                                         \
-        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;                                          \
-    }                                                                                          \
-    else                                                                                       \
-    {                                                                                          \
-        memcpy(&buff[ret], buff, ret);                                                         \
-        for (count = 0, src.U8 = &buff[ret], dist.U8 = buff; count < ret; count += frame_size) \
-        {                                                                                      \
-            if (divCount >= 1.0)                                                               \
-            {                                                                                  \
-                src.U16++;                                                                     \
-                divCount -= 1.0;                                                               \
-            }                                                                                  \
-            else                                                                               \
-            {                                                                                  \
-                *dist.U16++ = *src.U16;                                                        \
-                *dist.U16++ = *src.U16++;                                                      \
-                divCount += divPow;                                                            \
-            }                                                                                  \
-        }                                                                                      \
-        src.U8 = buff;                                                                         \
-        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;                                          \
+#define RECORD_DATA_TRANSFER()                               \
+    if (chn == 1)                                            \
+    {                                                        \
+        for (count = 0, src.U8 = dist.U8 = buff;             \
+             count < ret; count += frame_size)               \
+        {                                                    \
+            if (divCount >= 1.0)                             \
+            {                                                \
+                src.U16++;                                   \
+                divCount -= 1.0;                             \
+            }                                                \
+            else                                             \
+            {                                                \
+                *dist.U16++ = *src.U16++;                    \
+                divCount += divPow;                          \
+            }                                                \
+        }                                                    \
+        src.U8 = buff;                                       \
+        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;        \
+    }                                                        \
+    else                                                     \
+    {                                                        \
+        memcpy(&buff[ret], buff, ret);                       \
+        for (count = 0, src.U8 = &buff[ret], dist.U8 = buff; \
+             count < ret; count += frame_size)               \
+        {                                                    \
+            if (divCount >= 1.0)                             \
+            {                                                \
+                src.U16++;                                   \
+                divCount -= 1.0;                             \
+            }                                                \
+            else                                             \
+            {                                                \
+                *dist.U16++ = *src.U16;                      \
+                *dist.U16++ = *src.U16++;                    \
+                divCount += divPow;                          \
+            }                                                \
+        }                                                    \
+        src.U8 = buff;                                       \
+        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;        \
     }
 #else
-#define RECORD_DATA_TRANSFER()                                                     \
-    if (chn == 1)                                                                  \
-    {                                                                              \
-        for (count = 0, src.U8 = dist.U8 = buff; count < ret; count += frame_size) \
-        {                                                                          \
-            if (divCount >= 1.0)                                                   \
-            {                                                                      \
-                src.U16++;                                                         \
-                src.U16++;                                                         \
-                divCount -= 1.0;                                                   \
-            }                                                                      \
-            else                                                                   \
-            {                                                                      \
-                *dist.U16++ = *src.U16++;                                          \
-                src.U16++;                                                         \
-                divCount += divPow;                                                \
-            }                                                                      \
-        }                                                                          \
-        src.U8 = buff;                                                             \
-        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;                              \
-    }                                                                              \
-    else                                                                           \
-    {                                                                              \
-        for (count = 0, src.U8 = dist.U8 = buff; count < ret; count += frame_size) \
-        {                                                                          \
-            if (divCount >= 1.0)                                                   \
-            {                                                                      \
-                src.U32++;                                                         \
-                divCount -= 1.0;                                                   \
-            }                                                                      \
-            else                                                                   \
-            {                                                                      \
-                *dist.U32++ = *src.U32++;                                          \
-                divCount += divPow;                                                \
-            }                                                                      \
-        }                                                                          \
-        src.U8 = buff;                                                             \
-        buffSize2 = (size_t)(dist.U32 - src.U32) * 4;                              \
+#define RECORD_DATA_TRANSFER()                        \
+    if (chn == 1)                                     \
+    {                                                 \
+        for (count = 0, src.U8 = dist.U8 = buff;      \
+             count < ret; count += frame_size)        \
+        {                                             \
+            if (divCount >= 1.0)                      \
+            {                                         \
+                src.U16++;                            \
+                src.U16++;                            \
+                divCount -= 1.0;                      \
+            }                                         \
+            else                                      \
+            {                                         \
+                *dist.U16++ = *src.U16++;             \
+                src.U16++;                            \
+                divCount += divPow;                   \
+            }                                         \
+        }                                             \
+        src.U8 = buff;                                \
+        buffSize2 = (size_t)(dist.U16 - src.U16) * 2; \
+    }                                                 \
+    else                                              \
+    {                                                 \
+        for (count = 0, src.U8 = dist.U8 = buff;      \
+             count < ret; count += frame_size)        \
+        {                                             \
+            if (divCount >= 1.0)                      \
+            {                                         \
+                src.U32++;                            \
+                divCount -= 1.0;                      \
+            }                                         \
+            else                                      \
+            {                                         \
+                *dist.U32++ = *src.U32++;             \
+                divCount += divPow;                   \
+            }                                         \
+        }                                             \
+        src.U8 = buff;                                \
+        buffSize2 = (size_t)(dist.U32 - src.U32) * 4; \
     }
 #endif
 
@@ -645,6 +665,7 @@ int wmix_mem_destroy(int id)
     return shmctl(id, IPC_RMID, NULL);
 }
 
+//len和返回长度都按int16计算长度
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
@@ -685,6 +706,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
+//len和返回长度都按int16计算长度
 int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
@@ -725,6 +747,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
+//len和返回长度都按int16计算长度
 int16_t wmix_mem_write(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
@@ -751,6 +774,7 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     return i;
 }
 
+//len和返回长度都按int16计算长度
 int16_t wmix_mem_write2(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
@@ -884,7 +908,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     size_t buffSize2;
 #ifndef WMIX_RECORD_PLAY_SYNC
     //严格录音间隔
-    __time_t tick1, tick2;
+    DELAY_US_INIT;
     //采样时间间隔us
     int intervalUs = WMIX_INTERVAL_MS * 1000 - 2000;
 #endif
@@ -920,7 +944,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #else
     //线程数+1
     wmix->thread_sys += 1;
-    tick1 = getTickUs();
+    DELAY_US_RESET();
     while (wmix->run)
 #endif
     {
@@ -1186,10 +1210,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         return;
 #else
         //矫正到20ms
-        tick2 = getTickUs();
-        if (tick2 > tick1 && tick2 - tick1 < intervalUs)
-            delayus(intervalUs - (tick2 - tick1));
-        tick1 = getTickUs();
+        DELAY_US(intervalUs);
 #endif
     }
 #ifdef AEC_SYNC_SAVE_FILE
@@ -1379,8 +1400,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordFifo)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
     {
         ret = read(fd_read, buff, buffSize);
         if (ret > 0)
@@ -1504,8 +1524,7 @@ void wmix_record_wav_fifo_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordFifo)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
     {
         ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, false) * 2;
         if (ret > 0)
@@ -1632,8 +1651,7 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordRecord)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
         //最后一帧
         if (total + buffSize >= TOTAL)
@@ -1690,6 +1708,33 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
         free(wmtp->param);
     free(wmtp);
 }
+
+#define WMIX_CTRL_MSG_RECV(thread_name)                                  \
+    if (msg_fd)                                                          \
+    {                                                                    \
+        if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1) \
+        {                                                                \
+            if (errno != ENOMSG)                                         \
+            {                                                            \
+                if (wmtp->wmix->debug)                                   \
+                    printf("%s exit: %d msgrecv err/%d\r\n",             \
+                           thread_name, msg_fd, errno);                  \
+                break;                                                   \
+            }                                                            \
+        }                                                                \
+        else                                                             \
+        {                                                                \
+            printf("%s: msg recv %ld\r\n",                               \
+                   thread_name, msg.type);                               \
+            ctrlType = msg.type & 0xFF;                                  \
+            if (ctrlType == WCT_RESET)                                   \
+            {                                                            \
+                ctrlType = WCT_CLEAR;                                    \
+            }                                                            \
+            else if (ctrlType == WCT_STOP)                               \
+                break;                                                   \
+        }                                                                \
+    }
 
 #if (WMIX_AAC)
 void wmix_record_aac_thread(WMixThread_Param *wmtp)
@@ -1763,8 +1808,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordRecord)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
         //最后一帧
         if (total + buffSize >= TOTAL)
@@ -1865,8 +1909,9 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     void *aacEnc = NULL;
     unsigned char aacbuff[2048];
     //
-    SocketStruct *ss;
+    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    long ctrlType = 0;
     //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
@@ -1888,10 +1933,10 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化rtp
-    ss = rtp_socket(path, port, 1);
-    if (!ss)
+    rcs = rtpChain_get(path, port, true);
+    if (!rcs)
     {
-        fprintf(stderr, "rtp_socket: err\r\n");
+        fprintf(stderr, "rtpChain_get: err\r\n");
         return;
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_AAC, 1, 0, 0, 0x32411);
@@ -1910,7 +1955,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         msgPath = NULL;
     //生成sdp文件
     rtp_create_sdp(
-        "/tmp/record.sdp",
+        "/tmp/record-aac.sdp",
         path, port, chn, freq,
         RTP_PAYLOAD_TYPE_AAC);
     //
@@ -1939,29 +1984,20 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordRtp)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
-        if (msg_fd)
-        {
-            if (msgrcv(msg_fd, &msg,
-                       WMIX_MSG_BUFF_SIZE,
-                       0, IPC_NOWAIT) < 1 &&
-                errno != ENOMSG) //消息队列被关闭
-            {
-                if (wmtp->wmix->debug)
-                    printf("RTP-SEND-AAC exit: %d msgrecv err/%d\r\n", msg_fd, errno);
-                break;
-            }
-        }
+        WMIX_CTRL_MSG_RECV("RTP-SEND-AAC");
         //
         ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
         if (ret > 0)
         {
+            //使用0数据
+            if (ctrlType == WCT_SILENCE)
+                memset(buff, 0, ret);
+            //录制时间
             bpsCount += ret;
             total += ret;
-            //录制时间
             if (bpsCount > bytes_p_second)
             {
                 bpsCount -= bytes_p_second;
@@ -1985,11 +2021,19 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                 {
                     ret -= 7;
                     memcpy(&rtpPacket.payload[4], &aacbuff[7], ret);
-                    ret = rtp_send(ss, &rtpPacket, ret);
+                    ret = rtp_send(rcs->ss, &rtpPacket, ret);
                     if (ret < 1)
                     {
-                        printf("rtp_send: err\r\n");
-                        break;
+                        fprintf(stderr, "wmix_rtp_send_aac_thread: rtp_send err !!\r\n");
+                        delayus(1000000);
+                        //重连
+                        pthread_mutex_lock(&rcs->ss->lock);
+                        close(rcs->ss->fd);
+                        rcs->ss->fd = socket(AF_INET, SOCK_DGRAM, 0);
+                        bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
+                        pthread_mutex_unlock(&rcs->ss->lock);
+                        //
+                        continue;
                     }
                 }
                 pBuff2_S += buffSizeR;
@@ -2020,8 +2064,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         remove(msgPath);
     free(buff);
     free(buff2);
-    close(ss->fd);
-    free(ss);
+    rtpChain_release(rcs, true);
     //
     if (aacEnc)
         aac_encodeRelease(&aacEnc);
@@ -2055,20 +2098,21 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     //aac解码句柄
     void *aacDec = NULL;
     int datUse = 0, retLen;
-    unsigned char aacBuff[2048];
+    unsigned char aacBuff[4096];
     //
-    SocketStruct *ss;
+    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    long ctrlType = 0;
     int retSize;
     //
     // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
-    ss = rtp_socket(path, port, 0);
-    if (!ss)
+    rcs = rtpChain_get(path, port, false);
+    if (!rcs)
     {
-        fprintf(stderr, "rtp_socket: err\r\n");
+        fprintf(stderr, "rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
@@ -2116,24 +2160,12 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordRtp)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
-        if (msg_fd)
-        {
-            if (msgrcv(msg_fd, &msg,
-                       WMIX_MSG_BUFF_SIZE,
-                       0, IPC_NOWAIT) < 1 &&
-                errno != ENOMSG) //消息队列被关闭
-            {
-                if (wmtp->wmix->debug)
-                    printf("RTP-RECV exit: %d msgrecv err/%d\r\n", msg_fd, errno);
-                break;
-            }
-        }
+        WMIX_CTRL_MSG_RECV("RTP-RECV-AAC");
         //往aacBuff读入数据
-        ret = rtp_recv(ss, &rtpPacket, (uint32_t *)&retSize);
+        ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
         if (ret > 0)
         {
             memcpy(&aacBuff[7], &rtpPacket.payload[4], retSize);
@@ -2149,6 +2181,10 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
         //播放文件
         if (retLen > 0)
         {
+            //使用0数据
+            if (ctrlType == WCT_SILENCE)
+                memset(buff, 0, retLen);
+            //
             //等播放指针赶上写入进度
             // timeout = 0;
             // while(wmtp->wmix->run && timeout++ < 200 &&
@@ -2177,7 +2213,6 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 if (wmtp->wmix->debug)
                     printf("  RTP-RECV: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
             }
-            //
             continue;
         }
         else
@@ -2191,8 +2226,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
-    close(ss->fd);
-    free(ss);
+    rtpChain_release(rcs, false);
     if (aacDec)
         aac_decodeRelease(&aacDec);
     //线程计数
@@ -2207,9 +2241,6 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
 }
 #endif //if(WMIX_AAC)
 
-#if (RTP_ONE_SR)
-static SocketStruct *rtp_sr = NULL;
-#endif
 void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 {
     char *path = (char *)&wmtp->param[6];
@@ -2228,21 +2259,17 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     ssize_t ret, total = 0;
     uint32_t second = 0, bytes_p_second, bpsCount = 0;
     //
-    int ctrl = 0;
-#if (!RTP_ONE_SR)
-    SocketStruct *rtp_sr = NULL;
-#endif
+    RtpChain_Struct *rcs;
+    RtpPacket rtpPacket;
+    long ctrlType = 0;
     //
-    __time_t tick1, tick2;
+    DELAY_US_INIT;
     //
     int16_t record_addr = -1;
     unsigned char *buff;
     //
-    RtpPacket rtpPacket;
-    //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
-    //
     //参数检查,是否在允许的变参范围内
     if (freq != WMIX_FREQ)
     {
@@ -2260,11 +2287,10 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化rtp
-    if (!rtp_sr)
-        rtp_sr = rtp_socket(path, port, 1);
-    if (!rtp_sr)
+    rcs = rtpChain_get(path, port, true);
+    if (!rcs)
     {
-        fprintf(stderr, "rtp_socket: err\r\n");
+        fprintf(stderr, "rtpChain_get: err\r\n");
         return;
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_PCMA, 1, 0, 0, 0);
@@ -2302,91 +2328,48 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_record += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordRecord)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
         //msg 检查
-        if (msg_fd)
-        {
-            if (msgrcv(msg_fd, &msg,
-                       WMIX_MSG_BUFF_SIZE,
-                       0, IPC_NOWAIT) < 1)
-            {
-                if (errno != ENOMSG) //消息队列被关闭
-                {
-                    if (wmtp->wmix->debug)
-                        printf("RTP-SEND-PCM exit: %d msgrecv err/%d\r\n", msg_fd, errno);
-                    break;
-                }
-            }
-            else
-            {
-                printf("RTP-SEND-PCM: msg recv %ld\r\n", msg.type);
-                //控制信号
-                if (msg.type == 0) //运行
-                    ctrl = 0;
-                else if (msg.type == 1) //停止
-                    ctrl = 1;
-                else if (msg.type == 2) //重连
-                {
-                    port = (msg.value[0] << 8) | msg.value[1];
-                    path = (char *)&msg.value[2];
-                    //
-                    pthread_mutex_lock(&rtp_sr->lock);
-                    close(rtp_sr->fd);
-                    rtp_sr->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                    rtp_sr->addr.sin_port = htons(port);
-                    rtp_sr->addr.sin_addr.s_addr = (in_addr_t)inet_addr(path);
-                    rtp_sr->addrSize = sizeof(rtp_sr->addr);
-                    bind(rtp_sr->fd, (const struct sockaddr *)&rtp_sr->addr, rtp_sr->addrSize);
-                    pthread_mutex_unlock(&rtp_sr->lock);
-                    //
-                    ctrl = 0;
-                }
-            }
-        }
+        WMIX_CTRL_MSG_RECV("RTP-SEND-PCM");
         //
-        tick1 = getTickUs();
+        DELAY_US_RESET();
         //
         ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
         if (ret > 0)
         {
-            if (ctrl == 0)
+            //使用0数据
+            if (ctrlType == WCT_SILENCE)
+                memset(buff, 0, ret);
+            //录制时间
+            bpsCount += ret;
+            total += ret;
+            if (bpsCount > bytes_p_second)
             {
-                bpsCount += ret;
-                total += ret;
-                //录制时间
-                if (bpsCount > bytes_p_second)
-                {
-                    bpsCount -= bytes_p_second;
-                    second = total / bytes_p_second;
-                    if (wmtp->wmix->debug)
-                        printf("  RTP-SEND-PCM: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
-                }
+                bpsCount -= bytes_p_second;
+                second = total / bytes_p_second;
+                if (wmtp->wmix->debug)
+                    printf("  RTP-SEND-PCM: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
             }
-            //
+            //把buff数据转换后存到rtpPacket.payload
+            //注意参数ret是按char计算长度,返回ret都是按int16计算的长度
             ret = PCM2G711a((char *)buff, (char *)rtpPacket.payload, ret, 0);
-            if (ctrl == 0)
+            if (rtp_send(rcs->ss, &rtpPacket, ret) < ret)
             {
-                if (rtp_send(rtp_sr, &rtpPacket, ret) < ret)
-                {
-                    fprintf(stderr, "wmix_rtp_send_pcma_thread: rtp_send err !!\r\n");
-                    delayus(1000000);
-                    //重连
-                    pthread_mutex_lock(&rtp_sr->lock);
-                    close(rtp_sr->fd);
-                    rtp_sr->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                    bind(rtp_sr->fd, (const struct sockaddr *)&rtp_sr->addr, rtp_sr->addrSize);
-                    pthread_mutex_unlock(&rtp_sr->lock);
-                    //
-                    continue;
-                }
-                rtpPacket.rtpHeader.timestamp += ret;
+                fprintf(stderr, "wmix_rtp_send_pcma_thread: rtp_send err !!\r\n");
+                delayus(1000000);
+                //重连
+                pthread_mutex_lock(&rcs->ss->lock);
+                close(rcs->ss->fd);
+                rcs->ss->fd = socket(AF_INET, SOCK_DGRAM, 0);
+                bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
+                pthread_mutex_unlock(&rcs->ss->lock);
+                //
+                continue;
             }
+            rtpPacket.rtpHeader.timestamp += ret;
             //
-            tick2 = getTickUs();
-            if (tick2 > tick1 && tick2 - tick1 < 18000)
-                delayus(18000 - (tick2 - tick1));
+            DELAY_US(18000);
         }
         else
         {
@@ -2407,10 +2390,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 #if (WMIX_MODE == 1)
     free(buff);
 #endif
-#if (!RTP_ONE_SR)
-    close(rtp_sr->fd);
-    free(rtp_sr);
-#endif
+    rtpChain_release(rcs, true);
     //
     if (wmtp->param)
         free(wmtp->param);
@@ -2440,23 +2420,19 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     double totalPow;
     uint8_t rdce = 2, rdceIsMe = 0;
     //
-    int ctrl = 0;
-#if (!RTP_ONE_SR)
-    SocketStruct *rtp_sr = NULL;
-#endif
-    //
+    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    long ctrlType = 0;
     int retSize;
     //
     // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
-    if (!rtp_sr)
-        rtp_sr = rtp_socket(path, port, 0);
-    if (!rtp_sr)
+    rcs = rtpChain_get(path, port, false);
+    if (!rcs)
     {
-        fprintf(stderr, "rtp_socket: err\r\n");
+        fprintf(stderr, "rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
@@ -2501,49 +2477,10 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     //线程计数
     wmtp->wmix->thread_play += 1;
     //
-    while (wmtp->wmix->run &&
-           loopWord == wmtp->wmix->loopWordRtp)
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
-        if (msg_fd)
-        {
-            if (msgrcv(msg_fd, &msg,
-                       WMIX_MSG_BUFF_SIZE,
-                       0, IPC_NOWAIT) < 1)
-            {
-                if (errno != ENOMSG) //消息队列被关闭
-                {
-                    if (wmtp->wmix->debug)
-                        printf("RTP-RECV-PCM exit: %d msgrecv err/%d\r\n", msg_fd, errno);
-                    break;
-                }
-            }
-            else
-            {
-                printf("RTP-RECV-PCM: msg recv %ld\r\n", msg.type);
-                //控制信号
-                if (msg.type == 0) //运行
-                    ctrl = 0;
-                else if (msg.type == 1) //停止
-                    ctrl = 1;
-                else if (msg.type == 2) //重连
-                {
-                    port = (msg.value[0] << 8) | msg.value[1];
-                    path = (char *)&msg.value[2];
-                    //
-                    pthread_mutex_lock(&rtp_sr->lock);
-                    close(rtp_sr->fd);
-                    rtp_sr->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                    rtp_sr->addr.sin_port = htons(port);
-                    rtp_sr->addr.sin_addr.s_addr = inet_addr(path);
-                    rtp_sr->addrSize = sizeof(rtp_sr->addr);
-                    bind(rtp_sr->fd, (const struct sockaddr *)&rtp_sr->addr, rtp_sr->addrSize);
-                    pthread_mutex_unlock(&rtp_sr->lock);
-                    //
-                    ctrl = 0;
-                }
-            }
-        }
+        WMIX_CTRL_MSG_RECV("RTP-RECV-PCM");
         //等播放指针赶上写入进度
         // timeout = 0;
         // while(wmtp->wmix->run && timeout++ < 200 &&
@@ -2557,7 +2494,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         if (!wmtp->wmix->run)
             break;
         //读rtp数据
-        ret = rtp_recv(rtp_sr, &rtpPacket, (uint32_t *)&retSize);
+        ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
         if (ret > 0 && retSize > 0)
             ret = G711a2PCM((char *)rtpPacket.payload, (char *)buff, retSize, 0);
         else
@@ -2565,6 +2502,9 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         //播放文件
         if (ret > 0)
         {
+            //使用0数据
+            if (ctrlType == WCT_SILENCE)
+                memset(buff, 0, ret);
             //写入循环缓冲区
             head = wmix_load_wavStream(
                 wmtp->wmix,
@@ -2584,7 +2524,6 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
                 if (wmtp->wmix->debug)
                     printf("  RTP-RECV-PCM: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
             }
-            //
             continue;
         }
         else
@@ -2598,10 +2537,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
-#if (!RTP_ONE_SR)
-    close(rtp_sr->fd);
-    free(rtp_sr);
-#endif
+    rtpChain_release(rcs, false);
     //线程计数
     wmtp->wmix->thread_play -= 1;
     //
@@ -2907,6 +2843,24 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 }
 #endif
                 break;
+#if (WMIX_AAC)
+            //rtp send aac
+            case WMT_RTP_SEND_AAC:
+                wmix_throwOut_thread(wmix,
+                                     msg.type,
+                                     msg.value,
+                                     WMIX_MSG_BUFF_SIZE,
+                                     &wmix_rtp_send_aac_thread);
+                break;
+            //rtp recv aac
+            case WMT_RTP_RECV_AAC:
+                wmix_throwOut_thread(wmix,
+                                     msg.type,
+                                     msg.value,
+                                     WMIX_MSG_BUFF_SIZE,
+                                     &wmix_rtp_recv_aac_thread);
+                break;
+#endif
             //开关log
             case WMT_LOG_SW:
                 if (msg.value[0])

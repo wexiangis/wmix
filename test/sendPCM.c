@@ -12,12 +12,12 @@
 
 //网络参数,有些端口vlc是不支持的
 #define RTP_IP "127.0.0.1"
-#define RTP_PORT 9832
+#define RTP_PORT 9832 //用vlc播放的时候只识别9832...
 
 //发送文件参数
 #define SEND_CHN 1
 #define SEND_FREQ 8000
-#define SEND_FILE "./8000.wav"
+#define SEND_FILE "./audio/1x8000.wav" //只能传单声道8000Hz的音频
 
 //每包数据发出后的延时
 #define SEND_DELAYUS 20000
@@ -31,36 +31,27 @@ int main(int argc, char *argv[])
     int ret;
     char wsdp = 0;
     __time_t tick1, tick2;
-    int pkgType = RTP_PAYLOAD_TYPE_PCMA;
+    int pkgType = RTP_PAYLOAD_TYPE_PCMA;//RTP_PAYLOAD_TYPE_PCMU
     //各种句柄
     SocketStruct *ss;
     RtpPacket rtpPacket;
     int fd;
     int seekStart = 0;
-    //
     unsigned char pcm[SEND_TIMESTAMP * 2];
+    char *file = SEND_FILE;
 
-    if (argc != 2)
-    {
-        printf("Usage: %s <pkg type: 0/pcma 1/pcmu>\n", argv[0]);
-        return -1;
-    }
+    if(argc > 1)
+        file = argv[1];
 
-    sscanf(argv[1], "%d", &pkgType);
-    if (pkgType == 0)
-        pkgType = RTP_PAYLOAD_TYPE_PCMA;
-    else
-        pkgType = RTP_PAYLOAD_TYPE_PCMU;
-
-    fd = open(SEND_FILE, O_RDONLY);
+    fd = open(file, O_RDONLY);
     if (fd < 0)
     {
-        printf("failed to open %s\n", SEND_FILE);
+        printf("failed to open %s\n", file);
         return -1;
     }
 
     //wav格式跳过文件头
-    if (strstr(SEND_FILE, ".wav"))
+    if (strstr(file, ".wav"))
     {
         seekStart = 44;
         read(fd, rtpPacket.payload, seekStart);
@@ -88,7 +79,7 @@ int main(int argc, char *argv[])
         if (!wsdp)
         {
             wsdp = 1;
-            rtp_create_sdp("./test.sdp", RTP_IP, RTP_PORT, SEND_CHN, SEND_FREQ, pkgType);
+            rtp_create_sdp("/tmp/record.sdp", RTP_IP, RTP_PORT, SEND_CHN, SEND_FREQ, pkgType);
         }
 
         //读文件
@@ -108,7 +99,7 @@ int main(int argc, char *argv[])
         //发包
         ret = rtp_send(ss, &rtpPacket, ret);
         if (ret > 0)
-            printf("send: %d, %d\n", ret, rtpPacket.rtpHeader.seq);
+            printf("send: %s:%d bytes %d, seq %d\n", RTP_IP, RTP_PORT, ret, rtpPacket.rtpHeader.seq);
 
         //时间戳增量
         rtpPacket.rtpHeader.timestamp += SEND_TIMESTAMP;

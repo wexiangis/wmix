@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.1 - 20200831"
+#define WMIX_VERSION "V5.1 - 20200901"
 
 /* ----- 设置音量 -----
  * value: 音量 0~10
@@ -104,7 +104,7 @@ int wmix_record(
     bool useAAC);
 
 /* ----- rtp -----
- * type: 0/pcma 1/aac(暂不支持)
+ * type: 0/pcma 1/aac
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
@@ -112,7 +112,7 @@ int wmix_record(
 int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type);
 
 /* ----- rtp -----
- * type: 0/pcma 1/aac(暂不支持)
+ * type: 0/pcma 1/aac
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
@@ -162,8 +162,26 @@ void wmix_webrtc_agc(bool on);    // 自动增益
 // 自收发测试
 void wmix_rw_test(bool on);
 
-// 打印信息
-void wmix_info(void);
+// 打印信息,path可以指定终端或输出文件的路径,NULL不使用
+void wmix_info(char *path);
+
+//客户端(根据id) 发 服务端线程 控制类型
+typedef enum
+{
+    //下列控制状态是互斥的,即设置一个就会清掉别的控制状态
+    WCT_CLEAR = 1,   //清控制状态
+    WCT_STOP = 2,    //结束线程
+    WCT_RESET = 3,   //重置/重连(rtp)
+    WCT_SILENCE = 4, //静音,使用0数据运行
+    WCT_TOTAL,
+} WMIX_CTRL_TYPE;
+
+/* 给目标id的线程发控制状态
+ * id: 上面产生的id
+ * ctrl_type: 控制类型
+ * 返回: 0/正常 -1/发送失败,id线程不存在
+ */
+int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type);
 
 #ifdef __cplusplus
 };

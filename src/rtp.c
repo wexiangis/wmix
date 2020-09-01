@@ -100,7 +100,7 @@ int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize)
     return ret;
 }
 
-SocketStruct *rtp_socket(char *ip, uint16_t port, uint8_t isServer)
+SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
 {
     int fd;
     int ret;
@@ -225,4 +225,105 @@ __time_t getTickUs(void)
     struct timeval tv = {0};
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000000u + tv.tv_usec;
+}
+
+
+/* ----- 辅助 wmix 添加的链表管理结构 ----- */
+/* ----- 检索到新增同ip和端口连接时使用现存,关闭时由最后使用者回收内存 ----- */
+
+
+//本地保留一个链表头,不参与遍历
+static RtpChain_Struct rtpChain_struct = {
+    .next = NULL,
+};
+
+//链表操作禁止异步,简单的互斥保护
+static bool rtpChain_busy = false;
+
+//申请节点(已自动连上socket),NULL为失败
+RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend)
+{
+    SocketStruct *ss = NULL;
+    RtpChain_Struct *rcs = &rtpChain_struct;
+    while(rtpChain_busy)
+        usleep(10000);
+    rtpChain_busy = true;
+    //遍历链表
+    while(rcs->next){
+        //下一个
+        rcs = rcs->next;
+        //已存在ip和端口相同的
+        if(port == rcs->port
+            && strlen(ip) == strlen(rcs->ip)
+            && strcmp(ip, rcs->ip) == 0){
+            //保证只有一个s或r
+            if(rcs->send_run && isSend){
+                rtpChain_busy = false;
+                return NULL;
+            }
+            else if(rcs->recv_run && !isSend){
+                rtpChain_busy = false;
+                return NULL;
+            }
+            //占坑
+            else if(isSend)
+                rcs->send_run = true;
+            else
+                rcs->recv_run = true;
+            //有效返回
+            rtpChain_busy = false;
+            return rcs;
+        }
+    }
+    //新建连接
+    ss = rtp_socket(ip, port, isSend);
+    if(!ss){
+        rtpChain_busy = false;
+        return NULL;
+    }
+    //添加节点
+    rcs->next = (RtpChain_Struct*)calloc(1, sizeof(RtpChain_Struct));
+    rcs->next->last = rcs;
+    rcs = rcs->next;
+    //参数备份
+    strcpy(rcs->ip, ip);
+    rcs->port = port;
+    rcs->ss = ss;
+    if(isSend)
+        rcs->send_run = true;
+    else
+        rcs->recv_run = true;
+    //有效返回
+    rtpChain_busy = false;
+    return rcs;
+}
+
+//释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
+void rtpChain_release(RtpChain_Struct *rcs, bool isSend)
+{
+    if(!rcs)
+        return;
+    while(rtpChain_busy)
+        usleep(10000);
+    rtpChain_busy = true;
+    //清标志
+    if(isSend)
+        rcs->send_run = false;
+    else
+        rcs->recv_run = false;
+    //发收线程都退出了,允许回收内存
+    if(!rcs->send_run && !rcs->recv_run){
+        //关闭连接
+        if(rcs->ss)
+            close(rcs->ss->fd);
+        //移除节点
+        if(rcs->next)
+            rcs->next->last = rcs->last;
+        rcs->last->next = rcs->next;//上一个节点必然存在
+        //释放内存
+        free(rcs->ss);
+        free(rcs);
+    }
+    //
+    rtpChain_busy = false;
 }

@@ -58,7 +58,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.1 - 20200831"
+#define WMIX_VERSION "V5.1 - 20200901"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -123,21 +123,22 @@ typedef struct SNDPCMContainer
 //录、播音同步,将把"录音线程"改为"心跳函数"内嵌到"播音线程"中
 #define WMIX_RECORD_PLAY_SYNC
 
+//客户端 发 服务端 消息类型
 typedef enum
 {
-    WMT_VOLUME = 1,           //设置音量
-    WMT_PLYAY_MUTEX = 2,      //互斥播放文件
-    WMT_PLAY_MIX = 3,         //混音播放文件
-    WMT_FIFO_PLAY = 4,        //fifo播放wav流
+    WMT_VOLUME = 1,           //设置音量 (value[0]携带0~10)
+    WMT_PLYAY_MUTEX = 2,      //互斥播放文件 (value格式见wmix_user.c)
+    WMT_PLAY_MIX = 3,         //混音播放文件 (value格式见wmix_user.c)
+    WMT_FIFO_PLAY = 4,        //fifo播放wav流 (value格式见wmix_user.c)
     WMT_RESET = 5,            //复位
-    WMT_FIFO_RECORD = 6,      //fifo录音wav流
-    WMT_RECORD_WAV = 7,       //录音wav文件
+    WMT_FIFO_RECORD = 6,      //fifo录音wav流 (value格式见wmix_user.c)
+    WMT_RECORD_WAV = 7,       //录音wav文件 (value格式见wmix_user.c)
     WMT_CLEAN_LIST = 8,       //清空播放列表
-    WMT_PLAY_FIRST = 9,       //排头播放
-    WMT_PLAY_LAST = 10,       //排尾播放
-    WMT_RTP_SEND_PCMA = 11,   //rtp send pcma
-    WMT_RTP_RECV_PCMA = 12,   //rtp recv pcma
-    WMT_RECORD_AAC = 13,      //录音aac文件
+    WMT_PLAY_FIRST = 9,       //排头播放 (value格式见wmix_user.c)
+    WMT_PLAY_LAST = 10,       //排尾播放 (value格式见wmix_user.c)
+    WMT_RTP_SEND_PCMA = 11,   //rtp send pcma (value格式见wmix_user.c)
+    WMT_RTP_RECV_PCMA = 12,   //rtp recv pcma (value格式见wmix_user.c)
+    WMT_RECORD_AAC = 13,      //录音aac文件 (value格式见wmix_user.c)
     WMT_MEM_SW = 14,          //开/关 shmem
     WMT_WEBRTC_VAD_SW = 15,   //开/关 webrtc.vad 人声识别,录音辅助,没人说话时主动静音
     WMT_WEBRTC_AEC_SW = 16,   //开/关 webrtc.aec 回声消除
@@ -145,24 +146,38 @@ typedef enum
     WMT_WEBRTC_NS_PA_SW = 18, //开/关 webrtc.ns 噪音抑制(播音)
     WMT_WEBRTC_AGC_SW = 19,   //开/关 webrtc.agc 自动增益
     WMT_RW_TEST = 20,         //自收发测试
-    WMT_VOLUME_MIC = 21,      //设置录音音量
-    WMT_VOLUME_AGC = 22,      //设置录音音量增益
+    WMT_VOLUME_MIC = 21,      //设置录音音量 (value[0]携带0~10)
+    WMT_VOLUME_AGC = 22,      //设置录音音量增益 (value[0]携带0~20)
+    WMT_RTP_SEND_AAC = 23,    //rtp send pcma (value格式见wmix_user.c)
+    WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
 
     WMT_LOG_SW = 100, //开关log
     WMT_INFO = 101,   //打印信息
+    WMT_TOTAL,
 } WMIX_MSG_TYPE;
 
+//客户端(根据id) 发 服务端线程 控制类型
+typedef enum
+{
+    //下列控制状态是互斥的,即设置一个就会清掉别的控制状态
+    WCT_CLEAR = 1,   //清控制状态
+    WCT_STOP = 2,    //结束线程
+    WCT_RESET = 3,   //重置/重连(rtp)
+    WCT_SILENCE = 4, //静音,使用0数据运行
+    WCT_TOTAL,
+} WMIX_CTRL_TYPE;
+
+//消息载体格式
 typedef struct
 {
     /*
-     *  type[0,7]: see WMIX_MSG_TYPE
+     *  type[0,7]: see WMIX_MSG_TYPE or WMIX_CTRL_TYPE
      *  type[8,15]: reduce
      *  type[16,23]: repeatInterval
      */
     long type;
     /*
-     *  value(file/fifo): filePath + '\0' + msgPath
-     *  value(rtp): chn(1) + bitWidth(1) + freq(2) + port(2) + ip + '\0' + msgPath
+     *  使用格式见wmix_user.c
      */
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 } WMix_Msg;
