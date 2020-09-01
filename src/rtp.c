@@ -36,8 +36,6 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize)
 {
     int ret;
 
-    pthread_mutex_lock(&ss->lock);
-
     rtpPacket->rtpHeader.seq = htons(rtpPacket->rtpHeader.seq);
     rtpPacket->rtpHeader.timestamp = htonl(rtpPacket->rtpHeader.timestamp);
     rtpPacket->rtpHeader.ssrc = htonl(rtpPacket->rtpHeader.ssrc);
@@ -65,16 +63,12 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize)
 
     rtpPacket->rtpHeader.seq++;
 
-    pthread_mutex_unlock(&ss->lock);
-
     return ret;
 }
 
 int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize)
 {
     int ret;
-
-    pthread_mutex_lock(&ss->lock);
 
     ret = recvfrom(
         ss->fd,
@@ -94,8 +88,6 @@ int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize)
         else
             *dataSize = 0;
     }
-
-    pthread_mutex_unlock(&ss->lock);
 
     return ret;
 }
@@ -136,15 +128,13 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
         }
     }
 
-    pthread_mutex_init(&ss->lock, NULL);
-
     return ss;
 }
 
 SocketStruct *rtp_socket2(int _fd, char *ip, uint16_t port, bool isServer)
 {
     int ret;
-    int fd = _fd - 1;//dup(_fd);
+    int fd = dup(_fd);
     SocketStruct *ss;
 
     ss = (SocketStruct *)calloc(1, sizeof(SocketStruct));
@@ -170,8 +160,6 @@ SocketStruct *rtp_socket2(int _fd, char *ip, uint16_t port, bool isServer)
         }
     }
 
-    pthread_mutex_init(&ss->lock, NULL);
-
     return ss;
 }
 
@@ -180,7 +168,6 @@ void rtp_socket_close(SocketStruct *ss)
     if(!ss)
         return;
     close(ss->fd);
-    pthread_mutex_destroy(&ss->lock);
 }
 
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
@@ -342,6 +329,8 @@ RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, in
         rcs->send_run = true;
     else
         rcs->recv_run = true;
+    rcs->isServer = isServer;
+    pthread_mutex_init(&rcs->lock, NULL);
     //有效返回
     rtpChain_busy = false;
     printf("rtpChain_get a new node isSend/%d isServer/%d fd/%d %s:%d\r\n", 
@@ -373,9 +362,22 @@ void rtpChain_release(RtpChain_Struct *rcs, bool isSend)
             rcs->next->last = rcs->last;
         rcs->last->next = rcs->next; //上一个节点必然存在
         //释放内存
+        pthread_mutex_destroy(&rcs->lock);
         free(rcs->ss);
         free(rcs);
     }
     //
     rtpChain_busy = false;
+}
+
+void rtpChain_reconnect(RtpChain_Struct *rcs)
+{
+    size_t ret;
+    if(!rcs)
+        return;
+    pthread_mutex_lock(&rcs->lock);
+    rtp_socket_close(rcs->ss);
+    free(rcs->ss);
+    rcs->ss = rtp_socket(rcs->ip, rcs->port, rcs->isServer);
+    pthread_mutex_unlock(&rcs->lock);
 }

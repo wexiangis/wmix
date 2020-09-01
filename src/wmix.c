@@ -2029,15 +2029,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                         fprintf(stderr, "wmix_rtp_send_aac_thread: rtp_send err !!\r\n");
                         delayus(1000000);
                         //重连
-                        pthread_mutex_lock(&rcs->ss->lock);
-                        close(rcs->ss->fd);
-                        rcs->ss->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                        if(isServer)
-                            bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
-                        ret = fcntl(rcs->ss->fd, F_GETFL, 0);
-                        fcntl(rcs->ss->fd, F_SETFL, ret | O_NONBLOCK);
-                        pthread_mutex_unlock(&rcs->ss->lock);
-                        //
+                        rtpChain_reconnect(rcs);
                         continue;
                     }
                 }
@@ -2111,8 +2103,9 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     long ctrlType = 0;
     int retSize;
+    int recv_timeout = 0;
+    int intervalUs = 5000;
     //
-    // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
@@ -2182,9 +2175,27 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 aacBuff, retSize + 7,
                 buff, &datUse,
                 (int *)&chn, (int *)&freq);
+            recv_timeout = 0;
         }
         else
+        {
+            if(errno == EAGAIN && recv_timeout < 3000)//当前缓冲区已无数据可读
+                recv_timeout += intervalUs/1000;
+            // else if(errno == ECONNRESET)//对方发送了RST
+            //     ;
+            // else if(errno == EINTR)//被信号中断
+            //     ;
+            else{
+                fprintf(stderr, "wmix_rtp_recv_aac_thread: rtp_recv err !!\r\n");
+                delayus(1000000);
+                //重连
+                rtpChain_reconnect(rcs);
+                recv_timeout = 0;
+                continue;
+            }
+            ret = -1;
             retLen = -1;
+        }
         //播放文件
         if (retLen > 0)
         {
@@ -2192,13 +2203,6 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             if (ctrlType == WCT_SILENCE)
                 memset(buff, 0, retLen);
             //
-            //等播放指针赶上写入进度
-            // timeout = 0;
-            // while(wmtp->wmix->run && timeout++ < 200 &&
-            //     loopWord == wmtp->wmix->loopWordRtp &&
-            //     tick > wmtp->wmix->tick &&
-            //     tick - wmtp->wmix->tick > totalWait)
-            //     delayus(5000);
             if (!wmtp->wmix->run)
                 break;
             //写入循环缓冲区
@@ -2223,7 +2227,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             continue;
         }
         else
-            delayus(5000);
+            delayus(intervalUs);
     }
     //
     if (wmtp->wmix->debug)
@@ -2368,15 +2372,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 fprintf(stderr, "wmix_rtp_send_pcma_thread: rtp_send err !!\r\n");
                 delayus(1000000);
                 //重连
-                pthread_mutex_lock(&rcs->ss->lock);
-                close(rcs->ss->fd);
-                rcs->ss->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                if(isServer)
-                    bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
-                ret = fcntl(rcs->ss->fd, F_GETFL, 0);
-                fcntl(rcs->ss->fd, F_SETFL, ret | O_NONBLOCK);
-                pthread_mutex_unlock(&rcs->ss->lock);
-                //
+                rtpChain_reconnect(rcs);
                 continue;
             }
             rtpPacket.rtpHeader.timestamp += ret;
@@ -2438,8 +2434,9 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     long ctrlType = 0;
     int retSize;
+    int recv_timeout = 0;
+    int intervalUs = 10000;
     //
-    // int timeout;
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
@@ -2495,24 +2492,34 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     {
         //msg 检查
         WMIX_CTRL_MSG_RECV("RTP-RECV-PCM");
-        //等播放指针赶上写入进度
-        // timeout = 0;
-        // while(wmtp->wmix->run && timeout++ < 200 &&
-        //     loopWord == wmtp->wmix->loopWordRtp &&
-        //     tick > wmtp->wmix->tick &&
-        //     tick - wmtp->wmix->tick > totalWait)
-        // {
-        //     rtp_recv(rtp_sr, &rtpPacket, &retSize);
-        //     delayus(5000);
-        // }
+        //
         if (!wmtp->wmix->run)
             break;
         //读rtp数据
         ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
         if (ret > 0 && retSize > 0)
+        {
             ret = G711a2PCM((char *)rtpPacket.payload, (char *)buff, retSize, 0);
+            recv_timeout = 0;
+        }
         else
+        {
+            if(errno == EAGAIN && recv_timeout < 3000)//当前缓冲区已无数据可读
+                recv_timeout += intervalUs/1000;
+            // else if(errno == ECONNRESET)//对方发送了RST
+            //     ;
+            // else if(errno == EINTR)//被信号中断
+            //     ;
+            else{
+                fprintf(stderr, "wmix_rtp_recv_pcma_thread: rtp_recv err !!\r\n");
+                delayus(1000000);
+                //重连
+                rtpChain_reconnect(rcs);
+                recv_timeout = 0;
+                continue;
+            }
             ret = -1;
+        }
         //播放文件
         if (ret > 0)
         {
@@ -2541,7 +2548,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
             continue;
         }
         else
-            delayus(10000);
+            delayus(intervalUs);
     }
     //
     if (wmtp->wmix->debug)

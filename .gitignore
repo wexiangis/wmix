@@ -7,3 +7,4 @@ sendaac
 recvpcm
 sendpcm
 fifo
+transmit

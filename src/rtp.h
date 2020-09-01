@@ -82,7 +82,6 @@ typedef struct
     int fd;
     struct sockaddr_in addr;
     size_t addrSize;
-    pthread_mutex_t lock;
 } SocketStruct;
 
 void rtp_header(RtpPacket *rtpPacket, uint8_t cc, uint8_t x,
@@ -112,12 +111,16 @@ typedef struct RtpChainStruct{
     int port;
     SocketStruct *ss;//连接句柄
     bool send_run, recv_run;//正在使用的发收线程(一套ip和端口只允许一个s和一个r在使用)
+    bool isServer;
     struct RtpChainStruct *last, *next;//链表
+    pthread_mutex_t lock;
 }RtpChain_Struct;
 
 //申请节点(已自动连上socket),NULL为失败
 RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, int socket_fd);
 //释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
 void rtpChain_release(RtpChain_Struct *rcs, bool isSend);
+//
+void rtpChain_reconnect(RtpChain_Struct *rcs);
 
 #endif //_RTP_H_

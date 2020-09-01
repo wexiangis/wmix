@@ -131,9 +131,22 @@ obj-recvaac+=./test/recvAAC.c \
 		./src/aac.c \
 		./src/aac.h
 
-target: wmixmsg
+obj-transmit+=./transmit.c \
+		./src/rtp.c \
+		./src/rtp.h \
+		./src/g711codec.c \
+		./src/g711codec.h \
+		./src/wav.c \
+		./src/wav.h \
+		./test/wmix_user.c \
+		./test/wmix_user.h
+
+target: wmixmsg sendRecvTest
 	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC) -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD) -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC) -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS) -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
 	@echo "---------- all complete !! ----------"
+
+transmit:
+	@$(cc) -Wall -o transmit $(obj-transmit) -I./src -I./test -lpthread
 
 wmixmsg:
 	@$(cc) -Wall -o wmixMsg $(obj-wmixmsg) -lpthread
@@ -229,4 +242,4 @@ cleanall: clean
 	@rm -rf $(ROOT)/libs/* -rf
 
 clean:
-	@rm -rf ./wmix ./wmixMsg ./sendpcm ./recvpcm ./sendaac ./recvaac ./fifo
+	@rm -rf ./wmix ./wmixMsg ./sendpcm ./recvpcm ./sendaac ./recvaac ./fifo ./transmit
