@@ -113,16 +113,17 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
         return NULL;
     }
 
-    //非阻塞设置
-    ret = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, ret | O_NONBLOCK);
-
     ss = (SocketStruct *)calloc(1, sizeof(SocketStruct));
     ss->fd = fd;
     ss->addr.sin_family = AF_INET;
     ss->addr.sin_port = htons(port);
     ss->addr.sin_addr.s_addr = inet_addr((const char *)ip);
+    bzero(&(ss->addr.sin_zero), 8);
     ss->addrSize = sizeof(ss->addr);
+
+    //非阻塞设置
+    ret = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, ret | O_NONBLOCK);
 
     if (!isServer)
     {
@@ -138,6 +139,48 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
     pthread_mutex_init(&ss->lock, NULL);
 
     return ss;
+}
+
+SocketStruct *rtp_socket2(int _fd, char *ip, uint16_t port, bool isServer)
+{
+    int ret;
+    int fd = _fd - 1;//dup(_fd);
+    SocketStruct *ss;
+
+    ss = (SocketStruct *)calloc(1, sizeof(SocketStruct));
+    ss->fd = fd;
+    ss->addr.sin_family = AF_INET;
+    ss->addr.sin_port = htons(port);
+    ss->addr.sin_addr.s_addr = inet_addr((const char *)ip);
+    bzero(&(ss->addr.sin_zero), 8);
+    ss->addrSize = sizeof(ss->addr);
+
+    //非阻塞设置
+    ret = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, ret | O_NONBLOCK);
+
+    if (!isServer)
+    {
+        ret = bind(fd, (const struct sockaddr *)&ss->addr, ss->addrSize);
+        if (fd < 0)
+        {
+            fprintf(stderr, "bind err\n");
+            free(ss);
+            return NULL;
+        }
+    }
+
+    pthread_mutex_init(&ss->lock, NULL);
+
+    return ss;
+}
+
+void rtp_socket_close(SocketStruct *ss)
+{
+    if(!ss)
+        return;
+    close(ss->fd);
+    pthread_mutex_destroy(&ss->lock);
 }
 
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
@@ -227,10 +270,8 @@ __time_t getTickUs(void)
     return tv.tv_sec * 1000000u + tv.tv_usec;
 }
 
-
 /* ----- 辅助 wmix 添加的链表管理结构 ----- */
 /* ----- 检索到新增同ip和端口连接时使用现存,关闭时由最后使用者回收内存 ----- */
-
 
 //本地保留一个链表头,不参与遍历
 static RtpChain_Struct rtpChain_struct = {
@@ -241,85 +282,96 @@ static RtpChain_Struct rtpChain_struct = {
 static bool rtpChain_busy = false;
 
 //申请节点(已自动连上socket),NULL为失败
-RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend)
+RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, int socket_fd)
 {
     SocketStruct *ss = NULL;
     RtpChain_Struct *rcs = &rtpChain_struct;
-    while(rtpChain_busy)
+    while (rtpChain_busy)
         usleep(10000);
     rtpChain_busy = true;
     //遍历链表
-    while(rcs->next){
+    while (rcs->next)
+    {
         //下一个
         rcs = rcs->next;
         //已存在ip和端口相同的
-        if(port == rcs->port
-            && strlen(ip) == strlen(rcs->ip)
-            && strcmp(ip, rcs->ip) == 0){
+        if (port == rcs->port && strlen(ip) == strlen(rcs->ip) && strcmp(ip, rcs->ip) == 0)
+        {
             //保证只有一个s或r
-            if(rcs->send_run && isSend){
+            if (rcs->send_run && isSend)
+            {
                 rtpChain_busy = false;
                 return NULL;
             }
-            else if(rcs->recv_run && !isSend){
+            else if (rcs->recv_run && !isSend)
+            {
                 rtpChain_busy = false;
                 return NULL;
             }
             //占坑
-            else if(isSend)
+            else if (isSend)
                 rcs->send_run = true;
             else
                 rcs->recv_run = true;
             //有效返回
             rtpChain_busy = false;
+            printf("rtpChain_get the same node isSend/%d isServer/%d fd/%d %s:%d\r\n", 
+                isSend ? 1 : 0, isServer ? 1 : 0, rcs->ss->fd, ip, port);
             return rcs;
         }
     }
     //新建连接
-    ss = rtp_socket(ip, port, isSend);
-    if(!ss){
+    if(socket_fd > 0)
+        ss = rtp_socket2(socket_fd, ip, port, isServer);
+    else
+        ss = rtp_socket(ip, port, isServer);
+    if (!ss)
+    {
         rtpChain_busy = false;
         return NULL;
     }
     //添加节点
-    rcs->next = (RtpChain_Struct*)calloc(1, sizeof(RtpChain_Struct));
+    rcs->next = (RtpChain_Struct *)calloc(1, sizeof(RtpChain_Struct));
     rcs->next->last = rcs;
     rcs = rcs->next;
     //参数备份
     strcpy(rcs->ip, ip);
     rcs->port = port;
     rcs->ss = ss;
-    if(isSend)
+    if (isSend)
         rcs->send_run = true;
     else
         rcs->recv_run = true;
     //有效返回
     rtpChain_busy = false;
+    printf("rtpChain_get a new node isSend/%d isServer/%d fd/%d %s:%d\r\n", 
+        isSend ? 1 : 0, isServer ? 1 : 0, rcs->ss->fd, ip, port);
     return rcs;
 }
 
 //释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
 void rtpChain_release(RtpChain_Struct *rcs, bool isSend)
 {
-    if(!rcs)
+    if (!rcs)
         return;
-    while(rtpChain_busy)
+    while (rtpChain_busy)
         usleep(10000);
     rtpChain_busy = true;
     //清标志
-    if(isSend)
+    if (isSend)
         rcs->send_run = false;
     else
         rcs->recv_run = false;
     //发收线程都退出了,允许回收内存
-    if(!rcs->send_run && !rcs->recv_run){
+    if (!rcs->send_run && !rcs->recv_run)
+    {
         //关闭连接
-        if(rcs->ss)
-            close(rcs->ss->fd);
+        if (rcs->ss)
+            rtp_socket_close(rcs->ss);
         //移除节点
-        if(rcs->next)
+        if (rcs->next)
             rcs->next->last = rcs->last;
-        rcs->last->next = rcs->next;//上一个节点必然存在
+        rcs->last->next = rcs->next; //上一个节点必然存在
         //释放内存
         free(rcs->ss);
         free(rcs);

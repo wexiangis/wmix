@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "rtp.h"
+#include "wav.h"
 #include "g711codec.h"
 
 #define RTP_IP "127.0.0.1"
@@ -23,6 +24,8 @@ int main(int argc, char *argv[])
 
     int readSize = RTP_PCMA_PKT_SIZE;
 
+    WAVContainer_t container;
+
     if (argc != 2)
     {
         printf("Usage: %s <save file>\n", argv[0]);
@@ -36,6 +39,9 @@ int main(int argc, char *argv[])
         printf("failed to open %s\n", argv[1]);
         return -1;
     }
+
+    WAV_Params(&container, 5, 1, 16, 8000);
+    WAV_WriteHeader(fd, &container);
 
     ss = rtp_socket(RTP_IP, RTP_PORT, 0);
     if (!ss)

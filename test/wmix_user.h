@@ -107,17 +107,21 @@ int wmix_record(
  * type: 0/pcma 1/aac
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
+ * isServer: 以服务器形式连接(bind),这个设置很重要
+ * socket_fd: 传递已打开的socket连接,不用则写0
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
-int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type);
+int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool isServer, int socket_fd);
 
 /* ----- rtp -----
  * type: 0/pcma 1/aac
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
+ * isServer: 以服务器形式连接(bind),这个设置很重要
+ * socket_fd: 传递已打开的socket连接,不用则写0
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
-int wmix_rtp_send(char *ip, int port, int chn, int freq, int type);
+int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool isServer, int socket_fd);
 
 /* ----- rtp -----
  * rtp流控制

@@ -1887,7 +1887,7 @@ void wmix_record_aac_thread(WMixThread_Param *wmtp)
 
 void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[6];
+    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
@@ -1897,6 +1897,8 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
+    bool isServer = wmtp->param[6] ? true : false;
+    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     //
     size_t buffSize, buffSizeR, buffSize2, frame_size, count;
     WMix_Point src, dist;
@@ -1933,7 +1935,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化rtp
-    rcs = rtpChain_get(path, port, true);
+    rcs = rtpChain_get(path, port, true, isServer, socket_fd);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
@@ -1941,7 +1943,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_AAC, 1, 0, 0, 0x32411);
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 6 + 1];
+    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -2030,7 +2032,10 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                         pthread_mutex_lock(&rcs->ss->lock);
                         close(rcs->ss->fd);
                         rcs->ss->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                        bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
+                        if(isServer)
+                            bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
+                        ret = fcntl(rcs->ss->fd, F_GETFL, 0);
+                        fcntl(rcs->ss->fd, F_SETFL, ret | O_NONBLOCK);
                         pthread_mutex_unlock(&rcs->ss->lock);
                         //
                         continue;
@@ -2075,7 +2080,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
 
 void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[6];
+    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
@@ -2085,6 +2090,8 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
+    bool isServer = wmtp->param[6] ? true : false;
+    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     uint32_t bytes_p_second;
     //
     int ret = 0;
@@ -2109,14 +2116,14 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
-    rcs = rtpChain_get(path, port, false);
+    rcs = rtpChain_get(path, port, false, isServer, socket_fd);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 6 + 1];
+    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -2243,7 +2250,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
 
 void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[6];
+    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
@@ -2253,6 +2260,8 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
+    bool isServer = wmtp->param[6] ? true : false;
+    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     //
     size_t buffSize;
     WMix_Point src, dist;
@@ -2287,7 +2296,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化rtp
-    rcs = rtpChain_get(path, port, true);
+    rcs = rtpChain_get(path, port, true, isServer, socket_fd);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
@@ -2295,7 +2304,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_PCMA, 1, 0, 0, 0);
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 6 + 1];
+    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -2354,7 +2363,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
             //把buff数据转换后存到rtpPacket.payload
             //注意参数ret是按char计算长度,返回ret都是按int16计算的长度
             ret = PCM2G711a((char *)buff, (char *)rtpPacket.payload, ret, 0);
-            if (rtp_send(rcs->ss, &rtpPacket, ret) < ret)
+            if (rtp_send(rcs->ss, &rtpPacket, ret) < 0)
             {
                 fprintf(stderr, "wmix_rtp_send_pcma_thread: rtp_send err !!\r\n");
                 delayus(1000000);
@@ -2362,7 +2371,10 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 pthread_mutex_lock(&rcs->ss->lock);
                 close(rcs->ss->fd);
                 rcs->ss->fd = socket(AF_INET, SOCK_DGRAM, 0);
-                bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
+                if(isServer)
+                    bind(rcs->ss->fd, (const struct sockaddr *)&rcs->ss->addr, rcs->ss->addrSize);
+                ret = fcntl(rcs->ss->fd, F_GETFL, 0);
+                fcntl(rcs->ss->fd, F_SETFL, ret | O_NONBLOCK);
                 pthread_mutex_unlock(&rcs->ss->lock);
                 //
                 continue;
@@ -2399,7 +2411,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
 
 void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[6];
+    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
@@ -2409,6 +2421,8 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
+    bool isServer = wmtp->param[6] ? true : false;
+    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     uint32_t bytes_p_second;
     //
     int ret = 0;
@@ -2429,14 +2443,14 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
-    rcs = rtpChain_get(path, port, false);
+    rcs = rtpChain_get(path, port, false, isServer, socket_fd);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 6 + 1];
+    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径

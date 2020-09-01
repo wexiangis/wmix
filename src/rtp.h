@@ -95,6 +95,8 @@ int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
 
 SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer);
 
+void rtp_socket_close(SocketStruct *ss);//之后自行free(ss);
+
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
 //系统当前毫秒数获取
@@ -114,7 +116,7 @@ typedef struct RtpChainStruct{
 }RtpChain_Struct;
 
 //申请节点(已自动连上socket),NULL为失败
-RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend);
+RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, int socket_fd);
 //释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
 void rtpChain_release(RtpChain_Struct *rcs, bool isSend);
 
