@@ -115,7 +115,9 @@ obj-recvpcm+=./test/recvPCM.c \
 		./src/rtp.c \
 		./src/rtp.h \
 		./src/g711codec.c \
-		./src/g711codec.h
+		./src/g711codec.h \
+		./src/wav.c \
+		./src/wav.h
 
 obj-sendaac+=./test/sendAAC.c \
 		./src/rtp.c \
