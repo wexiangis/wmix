@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.1 - 20200901"
+#define WMIX_VERSION "V5.2 - 20200902"
 
 /* ----- 设置音量 -----
  * value: 音量 0~10
@@ -53,6 +53,9 @@ int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, 
 
 // 根据 wmix_play() 返回的id关闭启动的音频,id=0时关闭所有, 正常返回0
 int wmix_play_kill(int id);
+
+// 关闭所有播放、录音、fifo、rtp
+void wmix_kill_all();
 
 /* ----- 播放音频流,用于播放录音 -----
  * 成功返回fd(fifo的写入端)  失败返回0
@@ -108,7 +111,7 @@ int wmix_record(
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
  * isServer: 以服务器形式连接(bind),这个设置很重要
- * socket_fd: 传递已打开的socket连接,不用则写0
+ * socket_fd: 传递已打开的socket连接,不用则写0 < 暂不可用 >
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
 int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool isServer, int socket_fd);
@@ -118,7 +121,7 @@ int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool isServer
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
  * isServer: 以服务器形式连接(bind),这个设置很重要
- * socket_fd: 传递已打开的socket连接,不用则写0
+ * socket_fd: 传递已打开的socket连接,不用则写0 < 暂不可用 >
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
 int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool isServer, int socket_fd);

@@ -142,11 +142,15 @@ int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show)
 //返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
 int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq)
 {
+    int count = 0;
+    AacHeader aacHead = {.aacFrameLength = 0};
+    NeAACDecHandle hDecoder;
+    NeAACDecFrameInfo hInfo;
+    uint8_t *ret;
+
     if (!aacDec)
         return -1;
     //找到aac头
-    int count = 0;
-    AacHeader aacHead = {.aacFrameLength = 0};
     for (; count < inLen - 7; count++)
     {
         if (in[0] == 0xFF && (in[1] & 0xF0) == 0xF0)
@@ -162,14 +166,14 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     }
     //检查是否足够一包数据
     if (aacHead.aacFrameLength == 0)
-        return -1;
+        return 0;
     else if (inLen - count < aacHead.aacFrameLength)
     {
         *bytesConsumed = aacHead.aacFrameLength - (inLen - count);
         return 0;
     }
     //第一次初始化解码器句柄
-    NeAACDecHandle hDecoder = *((NeAACDecHandle *)aacDec);
+    hDecoder = *((NeAACDecHandle *)aacDec);
     if (!hDecoder)
     {
         hDecoder = NeAACDecOpen();
@@ -179,8 +183,6 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
         *aacDec = hDecoder;
     }
     //解码
-    NeAACDecFrameInfo hInfo;
-    uint8_t *ret;
     ret = (uint8_t *)NeAACDecDecode(hDecoder, &hInfo, in, aacHead.aacFrameLength);
     if (!ret || hInfo.error > 0)
     {

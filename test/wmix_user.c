@@ -49,6 +49,7 @@ typedef enum
     WMT_VOLUME_AGC = 22,      //设置录音音量增益 (value[0]携带0~20)
     WMT_RTP_SEND_AAC = 23,    //rtp send pcma (value格式见wmix_user.c)
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
+    WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
 
     WMT_LOG_SW = 100, //开关log
     WMT_INFO = 101,   //打印信息
@@ -235,6 +236,17 @@ int wmix_play_kill(int id)
         }
     }
     return 0;
+}
+
+void wmix_kill_all()
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT();
+    //装填 message
+    msg.type = WMT_CLEAN_ALL;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }
 
 void signal_get_SIGPIPE(int id) {}
@@ -463,8 +475,8 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     msg.value[4] = (port >> 8) & 0xff;
     msg.value[5] = port & 0xff;
     msg.value[6] = isServer ? 1 : 0;
-    if(socket_fd > 0)
-        socket_fd = dup(socket_fd);//必须复制一份
+    if (socket_fd > 0)
+        socket_fd = dup(socket_fd); //必须复制一份
     msg.value[7] = (socket_fd >> 24) & 0xFF;
     msg.value[8] = (socket_fd >> 16) & 0xFF;
     msg.value[9] = (socket_fd >> 8) & 0xFF;
@@ -632,12 +644,13 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         {
             if (wait && ai_circle)
             {
-                if (timeout++ > 2000) //2秒超时
+                timeout += 5;
+                if (timeout > 2000) //2秒超时
                 {
                     wmix_mem_open();
                     break;
                 }
-                usleep(1000);
+                usleep(5000);
                 continue;
             }
             break;

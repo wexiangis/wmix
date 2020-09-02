@@ -58,7 +58,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.1 - 20200901"
+#define WMIX_VERSION "V5.2 - 20200902"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -150,6 +150,7 @@ typedef enum
     WMT_VOLUME_AGC = 22,      //设置录音音量增益 (value[0]携带0~20)
     WMT_RTP_SEND_AAC = 23,    //rtp send pcma (value格式见wmix_user.c)
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
+    WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
 
     WMT_LOG_SW = 100, //开关log
     WMT_INFO = 101,   //打印信息

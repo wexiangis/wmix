@@ -15,7 +15,7 @@ void help(char *argv0)
 {
     printf(
         "\n"
-        "Usage: %s [option] audioFile\n"
+        "Usage: %s [option] fileName\n"
         "\n"
         "Option:\n"
         "  -l : 排队模式,排到最后一位(默认模式)\n"
@@ -24,34 +24,44 @@ void help(char *argv0)
         "  -b : 打断模式(不设置时为排队模式)\n"
         "  -t interval : 循环播放模式,间隔秒,取值[1~255]\n"
         "  -d reduce : 背景音削减倍数,取值[1~255]\n"
+        "\n"
         "  -v volume : 音量设置0~10\n"
         "  -vr volume : 录音音量设置0~10\n"
         "  -va volumeAgc : 录音音量增益设置0~100, 启用 -agc 时有效\n"
-        "  -k id : 关闭指定id的语音,id=0时关闭所有\n"
+        "\n"
+        "  -k id : 关闭指定id的语音,id=0时清空播放列表\n"
+        "  -ka : 关闭所有播放、录音、fifo、rtp\n"
+        "\n"
         "  -r : 录音模式,wav格式(默认单通道/16bits/8000Hz/5秒)\n"
         "  -raac : 录音模式,aac格式(默认单通道/16bits/8000Hz/5秒)\n"
         "  -rc chn : 指定录音通道数[1,2]\n"
         "  -rr freq : 指定录音频率[8000,11025,16000,22050,32000,44100]\n"
         "  -rt time : 指定录音时长秒\n"
-        "  -rtps ip port : 启动rtp录音发送,使用-rc,-rr可以配置通道和频率参数,生成/tmp/record.sdp\n"
-        "  -rtpr ip port : 启动rtp接收播音,使用-rc,-rr可以配置通道和频率参数\n"
-        "  -rtps-aac ip port : 启动rtp-aac录音发送,使用-rc,-rr可以配置通道和频率参数,生成/tmp/record-aac.sdp\n"
-        "  -rtpr-aac ip port : 启动rtp-aac接收播音,使用-rc,-rr可以配置通道和频率参数\n"
-        "  -rtp-server : rtp以服务器的形式连接(bind),否则默认send为服务器,recv为客户端\n"
-        "  -rtp-client : rtp以客户端的形式连接,否则默认send为服务器,recv为客户端\n"
-        "  -log 0/1 : 关闭/显示log\n"
-        "  -reset : 重置混音器\n"
+        "\n"
+        "  -rtpr ip port : 启动rtp pcma接收播音,固定单声道8000Hz\n"
+        "  -rtps ip port : 启动rtp pcma录音发送,固定单声道8000Hz\n"
+        "                : 生成/tmp/record.sdp,用vlc播放端口必须为9832\n"
+        "  -rtpr-aac ip port : 启动rtp aac接收播音,需使用-rc,-rr准确指定通道和频率\n"
+        "  -rtps-aac ip port : 启动rtp aac录音发送,需使用-rc,-rr准确指定通道和频率\n"
+        "                    : 生成/tmp/record-aac.sdp,用vlc播放端口必须为9832\n"
+        "  -rtp-server : rtp以服务端的形式连接(bind),否则默认send为服务端,recv为客户端\n"
+        "  -rtp-client : rtp以客户端的形式连接,否则默认send为服务端,recv为客户端\n"
+        "\n"
         "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
         "  -aec 0/1 : 关/开 webrtc.aec 回声消除\n"
         "  -ns 0/1 : 关/开 webrtc.ns 噪音抑制(录音)\n"
         "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
         "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -rw 0/1 : 关/开 自收发测试\n"
+        "\n"
         "  -ctl id ctl_type : 给目标id的线程发控制状态,ctl_type定义如下\n"
         "              1    : WCT_CLEAR 清控制状态 \n"
         "              2    : WCT_STOP 结束线程 \n"
         "              3    : WCT_RESET 重置/重连(rtp) \n"
         "              4    : WCT_SILENCE 静音,使用0数据运行 \n"
+        "\n"
+        "  -log 0/1 : 关闭/显示log\n"
+        "  -reset : 重置混音器\n"
         "  -info path: 打印信息,path可以指定终端或输出文件的路径,path可以不带\n"
         "  -? --help : 显示帮助\n"
         "\n"
@@ -93,6 +103,7 @@ int main(int argc, char **argv)
 
     int volume = -1, volumeMic = -1, volumeAgc = -1;
 
+    bool kill_all = false;
     int kill_id = -1, ctrl_id = -1, ret_id = 0;
     int order = 0;
 
@@ -228,6 +239,10 @@ int main(int argc, char **argv)
                 sscanf(argv[++i], "%d", &kill_id);
             else
                 warn("-k", 1);
+        }
+        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ka"))
+        {
+            kill_all = true;
         }
         else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtps"))
         {
@@ -437,18 +452,24 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
+    if (kill_all)
+    {
+        wmix_kill_all();
+        helpFalg = false;
+    }
+
     if (rtps)
     {
-        if(rtp_isServer < 0)
-            ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, true, 0);//default
+        if (rtp_isServer < 0)
+            ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, true, 0); //default
         else
             ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, rtp_isServer ? true : false, 0);
         helpFalg = false;
     }
     if (rtpr)
     {
-        if(rtp_isServer < 0)
-            ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, false, 0);//default
+        if (rtp_isServer < 0)
+            ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, false, 0); //default
         else
             ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_isServer ? true : false, 0);
         helpFalg = false;
@@ -456,16 +477,16 @@ int main(int argc, char **argv)
 
     if (rtps_aac)
     {
-        if(rtp_isServer < 0)
-            ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, true, 0);//default
+        if (rtp_isServer < 0)
+            ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, true, 0); //default
         else
             ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_isServer ? true : false, 0);
         helpFalg = false;
     }
     if (rtpr_aac)
     {
-        if(rtp_isServer < 0)
-            ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, false, 0);//default
+        if (rtp_isServer < 0)
+            ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, false, 0); //default
         else
             ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_isServer ? true : false, 0);
         helpFalg = false;

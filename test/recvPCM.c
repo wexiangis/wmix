@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
     WAV_Params(&container, 5, 1, 16, 8000);
     WAV_WriteHeader(fd, &container);
 
-    ss = rtp_socket(RTP_IP, RTP_PORT, 0);
+    ss = rtp_socket(RTP_IP, RTP_PORT, false);
     if (!ss)
     {
         printf("failed to create udp socket\n");

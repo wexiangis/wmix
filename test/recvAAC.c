@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    ss = rtp_socket(RTP_IP, RTP_PORT, 0);
+    ss = rtp_socket(RTP_IP, RTP_PORT, false);
     if (!ss)
     {
         printf("failed to create udp socket\n");
