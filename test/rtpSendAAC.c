@@ -24,12 +24,22 @@ int main(int argc, char *argv[])
     RtpPacket rtpPacket;
     SocketStruct *ss;
     int fd;
+    bool bindMode = false;
+    char *ip = RTP_IP;
+    int port = RTP_PORT;
 
-    if (argc != 2)
+    if (argc < 2 || strstr(argv[1], "?") || strstr(argv[1], "help"))
     {
-        printf("Usage: %s <aac file>\n", argv[0]);
+        printf("Usage: %s <read file> <bind 0/1> <ip %s> <port %d>\n", argv[0], ip, port);
         return -1;
     }
+    if (argc > 2)
+        if (argv[2][0] != '0')
+            bindMode = true;
+    if (argc > 3)
+        ip = argv[3];
+    if (argc > 4)
+        port = atoi(argv[4]);
 
     fd = open(argv[1], O_RDONLY);
     if (fd < 0)
@@ -38,7 +48,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    ss = rtp_socket(RTP_IP, RTP_PORT, true);
+    ss = rtp_socket(ip, port, bindMode);
     if (!ss)
     {
         printf("failed to create udp socket\n");

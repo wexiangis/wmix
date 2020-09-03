@@ -92,7 +92,7 @@ int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize)
     return ret;
 }
 
-SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
+SocketStruct *rtp_socket(char *ip, uint16_t port, bool bindMode)
 {
     int fd;
     int ret;
@@ -107,6 +107,7 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
 
     ss = (SocketStruct *)calloc(1, sizeof(SocketStruct));
     ss->fd = fd;
+    ss->bindMode = bindMode;
     ss->addr.sin_family = AF_INET;
     ss->addr.sin_port = htons(port);
     ss->addr.sin_addr.s_addr = inet_addr((const char *)ip);
@@ -117,42 +118,10 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer)
     ret = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, ret | O_NONBLOCK);
 
-    if (!isServer)
+    if (bindMode)
     {
         ret = bind(fd, (const struct sockaddr *)&ss->addr, ss->addrSize);
-        if (fd < 0)
-        {
-            fprintf(stderr, "bind err\n");
-            free(ss);
-            return NULL;
-        }
-    }
-
-    return ss;
-}
-
-SocketStruct *rtp_socket2(int _fd, char *ip, uint16_t port, bool isServer)
-{
-    int ret;
-    int fd = dup(_fd);
-    SocketStruct *ss;
-
-    ss = (SocketStruct *)calloc(1, sizeof(SocketStruct));
-    ss->fd = fd;
-    ss->addr.sin_family = AF_INET;
-    ss->addr.sin_port = htons(port);
-    ss->addr.sin_addr.s_addr = inet_addr((const char *)ip);
-    bzero(&(ss->addr.sin_zero), 8);
-    ss->addrSize = sizeof(ss->addr);
-
-    //非阻塞设置
-    ret = fcntl(fd, F_GETFL, 0);
-    fcntl(fd, F_SETFL, ret | O_NONBLOCK);
-
-    if (!isServer)
-    {
-        ret = bind(fd, (const struct sockaddr *)&ss->addr, ss->addrSize);
-        if (fd < 0)
+        if (ret < 0)
         {
             fprintf(stderr, "bind err\n");
             free(ss);
@@ -165,7 +134,7 @@ SocketStruct *rtp_socket2(int _fd, char *ip, uint16_t port, bool isServer)
 
 void rtp_socket_close(SocketStruct *ss)
 {
-    if(!ss)
+    if (!ss)
         return;
     close(ss->fd);
 }
@@ -269,7 +238,7 @@ static RtpChain_Struct rtpChain_struct = {
 static bool rtpChain_busy = false;
 
 //申请节点(已自动连上socket),NULL为失败
-RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, int socket_fd)
+RtpChain_Struct *rtpChain_get(char *ip, int port, bool send, bool bindMode)
 {
     SocketStruct *ss = NULL;
     RtpChain_Struct *rcs = &rtpChain_struct;
@@ -281,37 +250,37 @@ RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, in
     {
         //下一个
         rcs = rcs->next;
-        //已存在ip和端口相同的
-        if (port == rcs->port && strlen(ip) == strlen(rcs->ip) && strcmp(ip, rcs->ip) == 0)
+        //已存在ip和端口相同 且bind模式相同
+        if (port == rcs->port &&
+            strlen(ip) == strlen(rcs->ip) &&
+            strcmp(ip, rcs->ip) == 0 &&
+            rcs->bindMode == bindMode)
         {
             //保证只有一个s或r
-            if (rcs->send_run && isSend)
+            if (rcs->send_run && send)
             {
                 rtpChain_busy = false;
                 return NULL;
             }
-            else if (rcs->recv_run && !isSend)
+            else if (rcs->recv_run && !send)
             {
                 rtpChain_busy = false;
                 return NULL;
             }
             //占坑
-            else if (isSend)
+            else if (send)
                 rcs->send_run = true;
             else
                 rcs->recv_run = true;
             //有效返回
             rtpChain_busy = false;
-            printf("rtpChain_get the same node isSend/%d isServer/%d fd/%d %s:%d\r\n", 
-                isSend ? 1 : 0, isServer ? 1 : 0, rcs->ss->fd, ip, port);
+            printf("rtpChain_get the same node send/%d bindMode/%d fd/%d %s:%d\r\n",
+                   send ? 1 : 0, bindMode ? 1 : 0, rcs->ss->fd, ip, port);
             return rcs;
         }
     }
     //新建连接
-    if(socket_fd > 0)
-        ss = rtp_socket2(socket_fd, ip, port, isServer);
-    else
-        ss = rtp_socket(ip, port, isServer);
+    ss = rtp_socket(ip, port, bindMode);
     if (!ss)
     {
         rtpChain_busy = false;
@@ -325,21 +294,21 @@ RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, in
     strcpy(rcs->ip, ip);
     rcs->port = port;
     rcs->ss = ss;
-    if (isSend)
+    if (send)
         rcs->send_run = true;
     else
         rcs->recv_run = true;
-    rcs->isServer = isServer;
+    rcs->bindMode = bindMode;
     pthread_mutex_init(&rcs->lock, NULL);
     //有效返回
     rtpChain_busy = false;
-    printf("rtpChain_get a new node isSend/%d isServer/%d fd/%d %s:%d\r\n", 
-        isSend ? 1 : 0, isServer ? 1 : 0, rcs->ss->fd, ip, port);
+    printf("rtpChain_get a new node send/%d bindMode/%d fd/%d %s:%d\r\n",
+           send ? 1 : 0, bindMode ? 1 : 0, rcs->ss->fd, ip, port);
     return rcs;
 }
 
 //释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
-void rtpChain_release(RtpChain_Struct *rcs, bool isSend)
+void rtpChain_release(RtpChain_Struct *rcs, bool send)
 {
     if (!rcs)
         return;
@@ -347,7 +316,7 @@ void rtpChain_release(RtpChain_Struct *rcs, bool isSend)
         usleep(10000);
     rtpChain_busy = true;
     //清标志
-    if (isSend)
+    if (send)
         rcs->send_run = false;
     else
         rcs->recv_run = false;
@@ -373,11 +342,13 @@ void rtpChain_release(RtpChain_Struct *rcs, bool isSend)
 void rtpChain_reconnect(RtpChain_Struct *rcs)
 {
     size_t ret;
-    if(!rcs)
+    if (!rcs)
         return;
+    printf("rtpChain_reconnect bindMode/%d fd/%d %s:%d\r\n",
+           rcs->bindMode ? 1 : 0, rcs->ss->fd, rcs->ip, rcs->port);
     pthread_mutex_lock(&rcs->lock);
     rtp_socket_close(rcs->ss);
     free(rcs->ss);
-    rcs->ss = rtp_socket(rcs->ip, rcs->port, rcs->isServer);
+    rcs->ss = rtp_socket(rcs->ip, rcs->port, rcs->bindMode);
     pthread_mutex_unlock(&rcs->lock);
 }

@@ -21,16 +21,24 @@ int main(int argc, char *argv[])
     SocketStruct *ss;
     RtpPacket rtpPacket;
     unsigned char buff[1024];
-
     int readSize = RTP_PCMA_PKT_SIZE;
-
     WAVContainer_t container;
+    bool bindMode = false;
+    char *ip = RTP_IP;
+    int port = RTP_PORT;
 
-    if (argc != 2)
+    if (argc < 2 || strstr(argv[1], "?") || strstr(argv[1], "help"))
     {
-        printf("Usage: %s <save file>\n", argv[0]);
+        printf("Usage: %s <save file> <bind 0/1> <ip %s> <port %d>\n", argv[0], ip, port);
         return -1;
     }
+    if (argc > 2)
+        if (argv[2][0] != '0')
+            bindMode = true;
+    if (argc > 3)
+        ip = argv[3];
+    if (argc > 4)
+        port = atoi(argv[4]);
 
     remove(argv[1]);
     fd = open(argv[1], O_WRONLY | O_CREAT, 0666);
@@ -43,7 +51,7 @@ int main(int argc, char *argv[])
     WAV_Params(&container, 5, 1, 16, 8000);
     WAV_WriteHeader(fd, &container);
 
-    ss = rtp_socket(RTP_IP, RTP_PORT, false);
+    ss = rtp_socket(ip, port, bindMode);
     if (!ss)
     {
         printf("failed to create udp socket\n");

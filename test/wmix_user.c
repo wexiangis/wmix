@@ -443,7 +443,7 @@ int wmix_reset(void)
     return 0;
 }
 
-int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool isServer, int socket_fd)
+int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool bindMode)
 {
     WMix_Msg msg;
     char msgPath[128] = {0};
@@ -474,13 +474,11 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     msg.value[3] = freq & 0xff;
     msg.value[4] = (port >> 8) & 0xff;
     msg.value[5] = port & 0xff;
-    msg.value[6] = isServer ? 1 : 0;
-    if (socket_fd > 0)
-        socket_fd = dup(socket_fd); //必须复制一份
-    msg.value[7] = (socket_fd >> 24) & 0xFF;
-    msg.value[8] = (socket_fd >> 16) & 0xFF;
-    msg.value[9] = (socket_fd >> 8) & 0xFF;
-    msg.value[10] = (socket_fd >> 0) & 0xFF;
+    msg.value[6] = bindMode ? 1 : 0;
+    msg.value[7] = 0; //保留4字节
+    msg.value[8] = 0;
+    msg.value[9] = 0;
+    msg.value[10] = 0;
     strcpy((char *)&msg.value[11], ip);
     strcpy((char *)&msg.value[strlen(ip) + 11 + 1], msgPath);
     //发出
@@ -503,14 +501,14 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     return redId;
 }
 
-int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool isServer, int socket_fd)
+int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode)
 {
-    return _wmix_rtp(ip, port, chn, freq, false, type, isServer, socket_fd);
+    return _wmix_rtp(ip, port, chn, freq, false, type, bindMode);
 }
 
-int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool isServer, int socket_fd)
+int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool bindMode)
 {
-    return _wmix_rtp(ip, port, chn, freq, true, type, isServer, socket_fd);
+    return _wmix_rtp(ip, port, chn, freq, true, type, bindMode);
 }
 
 //rtp流控制

@@ -82,6 +82,7 @@ typedef struct
     int fd;
     struct sockaddr_in addr;
     size_t addrSize;
+    bool bindMode;
 } SocketStruct;
 
 void rtp_header(RtpPacket *rtpPacket, uint8_t cc, uint8_t x,
@@ -92,35 +93,37 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize);
 
 int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
 
-SocketStruct *rtp_socket(char *ip, uint16_t port, bool isServer);
+SocketStruct *rtp_socket(char *ip, uint16_t port, bool bindMode);
 
-void rtp_socket_close(SocketStruct *ss);//之后自行free(ss);
+void rtp_socket_close(SocketStruct *ss); //之后自行free(ss);
 
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
 //系统当前毫秒数获取
 __time_t getTickUs(void);
 
-
 /* ----- 辅助 wmix 添加的链表管理结构 ----- */
 /* ----- 检索到新增同ip和端口连接时使用现存,关闭时由最后使用者回收内存 ----- */
 
 //链表节点,又来记录当前这套ip和端口的使用情况
-typedef struct RtpChainStruct{
+typedef struct RtpChainStruct
+{
     char ip[16];
     int port;
-    SocketStruct *ss;//连接句柄
-    bool send_run, recv_run;//正在使用的发收线程(一套ip和端口只允许一个s和一个r在使用)
-    bool isServer;
-    struct RtpChainStruct *last, *next;//链表
+    SocketStruct *ss;        //连接句柄
+    bool send_run, recv_run; //正在使用的发收线程(一套ip和端口只允许一个s和一个r在使用)
+    bool bindMode;
+    struct RtpChainStruct *last, *next; //链表
     pthread_mutex_t lock;
-}RtpChain_Struct;
+} RtpChain_Struct;
 
 //申请节点(已自动连上socket),NULL为失败
-RtpChain_Struct *rtpChain_get(char *ip, int port, bool isSend, bool isServer, int socket_fd);
+RtpChain_Struct *rtpChain_get(char *ip, int port, bool send, bool bindMode);
+
 //释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
-void rtpChain_release(RtpChain_Struct *rcs, bool isSend);
-//
+void rtpChain_release(RtpChain_Struct *rcs, bool send);
+
+//重连
 void rtpChain_reconnect(RtpChain_Struct *rcs);
 
 #endif //_RTP_H_

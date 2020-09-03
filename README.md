@@ -4,6 +4,8 @@
 
 * 在此基础上移植了大量第三方音频处理库, 使其支持 mp3、aac、降噪等功能;
 
+---
+
 # ----- 编译和使用说明 -----
 
 1. 编译第三方依赖库
@@ -26,7 +28,7 @@
 
 * wmixMsg ./xxx.wav -v 10
 
-6. 关闭所有播放
+6. 清空播放列表
 
 * wmixMsg -k 0
 
@@ -37,6 +39,42 @@
 * 修改编译器, 编辑 Makefile 第一行 cross 内容, 注释掉表示使用 gcc
 
 * 修改声道、频率, 在 src/wmix.h
+
+---
+
+# ----- rtp对讲测试(先把主程序抛后台) -----
+
+## 工具推pcm文件流,wmix播放步骤：
+
+1. 使用工具推流,注意pcm格式只支持单声道8000Hz
+
+* ./rtpSendPCM ./audio/1x8000.wav 0 127.0.0.1 9832 >> /dev/null &
+
+2. 接收rtp pcm数据流并播放
+
+* ./wmixMsg -rtpr 127.0.0.1 9832 -rtp-bind
+
+3. 结束收流,关闭工具
+
+* ./wmixMsg -ka
+* fg
+* ctrl + c
+
+## wmix录音推pcm流,工具收流保存文件(设备要可以录音)：
+
+1. 开始录音推流
+
+* ./wmixMsg -rtps 127.0.0.1 9832
+
+2. 接收rtp pcm数据流并播放
+
+* ./rtpRecvPCM ./save.wav 1 127.0.0.1 9832 >> /dev/null &
+
+3. 结束推流,关闭工具
+
+* ./wmixMsg -ka
+* fg
+* ctrl + c
 
 ---
 

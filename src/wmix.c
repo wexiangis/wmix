@@ -1899,8 +1899,8 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
-    bool isServer = wmtp->param[6] ? true : false;
-    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    bool bindMode = wmtp->param[6] ? true : false;
+    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     //
     size_t buffSize, buffSizeR, buffSize2, frame_size, count;
     WMix_Point src, dist;
@@ -1937,7 +1937,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化rtp
-    rcs = rtpChain_get(path, port, true, isServer, socket_fd);
+    rcs = rtpChain_get(path, port, true, bindMode);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
@@ -2086,8 +2086,8 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
-    bool isServer = wmtp->param[6] ? true : false;
-    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    bool bindMode = wmtp->param[6] ? true : false;
+    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     uint32_t bytes_p_second;
     int chnInt, freqInt; //用于decode参数
     //
@@ -2112,7 +2112,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
-    rcs = rtpChain_get(path, port, false, isServer, socket_fd);
+    rcs = rtpChain_get(path, port, false, bindMode);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
@@ -2281,8 +2281,8 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
-    bool isServer = wmtp->param[6] ? true : false;
-    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    bool bindMode = wmtp->param[6] ? true : false;
+    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     //
     size_t buffSize;
     WMix_Point src, dist;
@@ -2317,7 +2317,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         return;
     }
     //初始化rtp
-    rcs = rtpChain_get(path, port, true, isServer, socket_fd);
+    rcs = rtpChain_get(path, port, true, bindMode);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");
@@ -2437,8 +2437,8 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
-    bool isServer = wmtp->param[6] ? true : false;
-    int socket_fd = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    bool bindMode = wmtp->param[6] ? true : false;
+    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     uint32_t bytes_p_second;
     //
     int ret = 0;
@@ -2458,7 +2458,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //初始化rtp
-    rcs = rtpChain_get(path, port, false, isServer, socket_fd);
+    rcs = rtpChain_get(path, port, false, bindMode);
     if (!rcs)
     {
         fprintf(stderr, "rtpChain_get: err\r\n");

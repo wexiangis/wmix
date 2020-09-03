@@ -17,7 +17,6 @@
 //发送文件参数
 #define SEND_CHN 1
 #define SEND_FREQ 8000
-#define SEND_FILE "./audio/1x8000.wav" //只能传单声道8000Hz的音频
 
 //每包数据发出后的延时
 #define SEND_DELAYUS 20000
@@ -31,34 +30,46 @@ int main(int argc, char *argv[])
     int ret;
     char wsdp = 0;
     __time_t tick1, tick2;
-    int pkgType = RTP_PAYLOAD_TYPE_PCMA;//RTP_PAYLOAD_TYPE_PCMU
+    int pkgType = RTP_PAYLOAD_TYPE_PCMA; //RTP_PAYLOAD_TYPE_PCMU
     //各种句柄
     SocketStruct *ss;
     RtpPacket rtpPacket;
     int fd;
     int seekStart = 0;
     unsigned char pcm[SEND_TIMESTAMP * 2];
-    char *file = SEND_FILE;
+    bool bindMode = false;
+    char *ip = RTP_IP;
+    int port = RTP_PORT;
 
-    if(argc > 1)
-        file = argv[1];
+    if (argc < 2 || strstr(argv[1], "?") || strstr(argv[1], "help"))
+    {
+        printf("Usage: %s <read file> <bind 0/1> <ip %s> <port %d>\n", argv[0], ip, port);
+        return -1;
+    }
+    if (argc > 2)
+        if (argv[2][0] != '0')
+            bindMode = true;
+    if (argc > 3)
+        ip = argv[3];
+    if (argc > 4)
+        port = atoi(argv[4]);
 
-    fd = open(file, O_RDONLY);
+    fd = open(argv[1], O_RDONLY);
     if (fd < 0)
     {
-        printf("failed to open %s\n", file);
+        printf("failed to open %s\n", argv[1]);
         return -1;
     }
 
     //wav格式跳过文件头
-    if (strstr(file, ".wav"))
+    if (strstr(argv[1], ".wav"))
     {
         seekStart = 44;
         read(fd, rtpPacket.payload, seekStart);
     }
 
     //udp准备
-    ss = rtp_socket(RTP_IP, RTP_PORT, true);
+    ss = rtp_socket(ip, port, bindMode);
     if (!ss)
     {
         printf("failed to create udp socket\n");

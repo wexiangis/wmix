@@ -40,12 +40,11 @@ void help(char *argv0)
         "\n"
         "  -rtpr ip port : 启动rtp pcma接收播音,固定单声道8000Hz\n"
         "  -rtps ip port : 启动rtp pcma录音发送,固定单声道8000Hz\n"
-        "                : 生成/tmp/record.sdp,用vlc播放端口必须为9832\n"
+        "                : 生成/tmp/record.sdp,用vlc播放时,端口必须设置为9832\n"
         "  -rtpr-aac ip port : 启动rtp aac接收播音,需使用-rc,-rr准确指定通道和频率\n"
         "  -rtps-aac ip port : 启动rtp aac录音发送,需使用-rc,-rr准确指定通道和频率\n"
-        "                    : 生成/tmp/record-aac.sdp,用vlc播放端口必须为9832\n"
-        "  -rtp-server : rtp以服务端的形式连接(bind),否则默认send为服务端,recv为客户端\n"
-        "  -rtp-client : rtp以客户端的形式连接,否则默认send为服务端,recv为客户端\n"
+        "                    : 生成/tmp/record-aac.sdp,用vlc播放时,端口必须设置为9832\n"
+        "  -rtp-bind : rtp以bind绑定端口\n"
         "\n"
         "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
         "  -aec 0/1 : 关/开 webrtc.aec 回声消除\n"
@@ -120,7 +119,7 @@ int main(int argc, char **argv)
     bool rtps_aac = false;
     bool rtpr_aac = false;
 
-    int rtp_isServer = -1;
+    bool rtp_bind = false;
 
     int log = -1;
     bool reset = false;
@@ -288,13 +287,9 @@ int main(int argc, char **argv)
             else
                 warn("-rtpr-aac", 2);
         }
-        else if (strlen(argv[i]) == 11 && strstr(argv[i], "-rtp-server"))
+        else if (strlen(argv[i]) == 9 && strstr(argv[i], "-rtp-bind"))
         {
-            rtp_isServer = 1;
-        }
-        else if (strlen(argv[i]) == 11 && strstr(argv[i], "-rtp-client"))
-        {
-            rtp_isServer = 0;
+            rtp_bind = true;
         }
         else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad"))
         {
@@ -460,35 +455,23 @@ int main(int argc, char **argv)
 
     if (rtps)
     {
-        if (rtp_isServer < 0)
-            ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, true, 0); //default
-        else
-            ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, rtp_isServer ? true : false, 0);
+        ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
         helpFalg = false;
     }
     if (rtpr)
     {
-        if (rtp_isServer < 0)
-            ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, false, 0); //default
-        else
-            ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_isServer ? true : false, 0);
+        ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
         helpFalg = false;
     }
 
     if (rtps_aac)
     {
-        if (rtp_isServer < 0)
-            ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, true, 0); //default
-        else
-            ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_isServer ? true : false, 0);
+        ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
         helpFalg = false;
     }
     if (rtpr_aac)
     {
-        if (rtp_isServer < 0)
-            ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, false, 0); //default
-        else
-            ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_isServer ? true : false, 0);
+        ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
         helpFalg = false;
     }
 
