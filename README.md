@@ -52,7 +52,7 @@
 
 2. 接收rtp pcm数据流并播放
 
-* ./wmixMsg -rtpr 127.0.0.1 9832 -rtp-bind
+* ./wmixMsg -rtpr 127.0.0.1 9832 -bind
 
 3. 结束收流,关闭工具
 
@@ -75,6 +75,22 @@
 * ./wmixMsg -ka
 * fg
 * ctrl + c
+
+## 局域网内两设备对讲,假设A设备IP为 192.168.43.180 使用端口9832：
+
+1. A设备使用bind方式先开启rtp收/发流
+
+* ./wmixMsg -rtpr 192.168.43.180 9832 -bind
+* ./wmixMsg -rtps 192.168.43.180 9832 -bind
+
+2. B设备开启rtp发/收流,此时两设备可以互讲互听
+
+* ./wmixMsg -rtps 192.168.43.180 9832
+* ./wmixMsg -rtpr 192.168.43.180 9832
+
+3. 结束rtp对讲
+
+* ./wmixMsg -ka
 
 ---
 

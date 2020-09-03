@@ -344,8 +344,8 @@ void rtpChain_reconnect(RtpChain_Struct *rcs)
     size_t ret;
     if (!rcs)
         return;
-    printf("rtpChain_reconnect bindMode/%d fd/%d %s:%d\r\n",
-           rcs->bindMode ? 1 : 0, rcs->ss->fd, rcs->ip, rcs->port);
+    // printf("rtpChain_reconnect bindMode/%d fd/%d %s:%d\r\n",
+    //        rcs->bindMode ? 1 : 0, rcs->ss->fd, rcs->ip, rcs->port);
     pthread_mutex_lock(&rcs->lock);
     rtp_socket_close(rcs->ss);
     free(rcs->ss);

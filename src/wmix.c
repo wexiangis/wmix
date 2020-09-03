@@ -2030,7 +2030,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                     pthread_mutex_unlock(&rcs->lock);
                     if (ret < 1)
                     {
-                        fprintf(stderr, "wmix_rtp_send_aac_thread: rtp_send err !!\r\n");
+                        // fprintf(stderr, "wmix_rtp_send_aac_thread: rtp_send err !!\r\n");
                         delayus(1000000);
                         //重连
                         rtpChain_reconnect(rcs);
@@ -2205,7 +2205,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
             //     ;
             else
             {
-                fprintf(stderr, "wmix_rtp_recv_aac_thread: rtp_recv err !!\r\n");
+                // fprintf(stderr, "wmix_rtp_recv_aac_thread: rtp_recv err !!\r\n");
                 delayus(1000000);
                 //重连
                 rtpChain_reconnect(rcs);
@@ -2390,14 +2390,14 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
             pthread_mutex_unlock(&rcs->lock);
             if (ret < 0)
             {
-                fprintf(stderr, "wmix_rtp_send_pcma_thread: rtp_send err !!\r\n");
+                // fprintf(stderr, "wmix_rtp_send_pcma_thread: rtp_send err !!\r\n");
                 delayus(1000000);
                 //重连
                 rtpChain_reconnect(rcs);
                 continue;
             }
             //理论上无须延时,阻塞取数据足矣
-            // DELAY_US(18000);
+            DELAY_US(15000);
         }
         else
         {
@@ -2528,7 +2528,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
             //     ;
             else
             {
-                fprintf(stderr, "wmix_rtp_recv_pcma_thread: rtp_recv err !!\r\n");
+                // fprintf(stderr, "wmix_rtp_recv_pcma_thread: rtp_recv err !!\r\n");
                 delayus(1000000);
                 //重连
                 rtpChain_reconnect(rcs);
