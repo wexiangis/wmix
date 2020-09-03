@@ -383,18 +383,21 @@ int main(int argc, char **argv)
     {
         wmix_set_volume(volume);
         helpFalg = false;
+        usleep(100000);
     }
 
     if (volumeMic >= 0)
     {
         wmix_set_volumeMic(volumeMic);
         helpFalg = false;
+        usleep(100000);
     }
 
     if (volumeAgc >= 0)
     {
         wmix_set_volumeAgc(volumeAgc);
         helpFalg = false;
+        usleep(100000);
     }
 
     if (log >= 0)
@@ -457,22 +460,26 @@ int main(int argc, char **argv)
     {
         ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
         helpFalg = false;
+        usleep(100000);
     }
     if (rtpr)
     {
         ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
         helpFalg = false;
+        usleep(100000);
     }
 
     if (rtps_aac)
     {
         ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
         helpFalg = false;
+        usleep(100000);
     }
     if (rtpr_aac)
     {
         ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
         helpFalg = false;
+        usleep(100000);
     }
 
     if (filePath && filePath[0] == '.')
