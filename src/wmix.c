@@ -3358,6 +3358,8 @@ WMix_Struct *wmix_init(void)
 #if (WMIX_MODE == 1)
     //承受不了这个CPU占用率
     wmix->webrtcEnable[WR_AEC] = 0;
+    //关闭vad
+    wmix->webrtcEnable[WR_vad] = 0;
     //关闭agc
     wmix->webrtcEnable[WR_AGC] = 0;
 #endif
@@ -3369,18 +3371,6 @@ WMix_Struct *wmix_init(void)
 
     wmix_volume(wmix->volume);
     wmix_volumeMic(wmix->volumeMic);
-
-    printf("\n---- WMix info -----\r\n"
-           "   chn: %d\r\n"
-           "   freq: %d Hz\r\n"
-           "   sample: %d bit\r\n"
-           "   webrtc: vad/%d, aec/%d, ns/%d, ns_pa/%d agc/%d\r\n",
-           WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE,
-           wmix->webrtcEnable[WR_VAD],
-           wmix->webrtcEnable[WR_AEC],
-           wmix->webrtcEnable[WR_NS],
-           wmix->webrtcEnable[WR_NS_PA],
-           wmix->webrtcEnable[WR_AGC]);
 
     signal(SIGINT, signal_callback);
     signal(SIGTERM, signal_callback);
@@ -4478,6 +4468,11 @@ void help(char *argv0)
         "  -d : 显示debug信息\r\n"
         "  -v volume : 设置音量0~10\r\n"
         "  -vr volume : 设置录音音量0~10\r\n"
+        "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
+        "  -aec 0/1 : 关/开 webrtc.aec 回声消除\n"
+        "  -ns 0/1 : 关/开 webrtc.ns 噪音抑制(录音)\n"
+        "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
+        "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -? --help : 显示帮助\r\n"
         "\r\n"
         "软件版本: %s\r\n"
@@ -4486,6 +4481,21 @@ void help(char *argv0)
         "  %s &\r\n"
         "\r\n",
         argv0, WMIX_VERSION, argv0);
+}
+
+void show_steup(void)
+{
+    printf("\n---- WMix info -----\r\n"
+           "   chn: %d\r\n"
+           "   freq: %d Hz\r\n"
+           "   sample: %d bit\r\n"
+           "   webrtc: vad/%d, aec/%d, ns/%d, ns_pa/%d agc/%d\r\n",
+           WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE,
+           main_wmix->webrtcEnable[WR_VAD],
+           main_wmix->webrtcEnable[WR_AEC],
+           main_wmix->webrtcEnable[WR_NS],
+           main_wmix->webrtcEnable[WR_NS_PA],
+           main_wmix->webrtcEnable[WR_AGC]);
 }
 
 #if (WMIX_MERGE_MODE == 2)
@@ -4517,6 +4527,7 @@ void wmix_start()
     main_wmix = wmix_init();
     if (main_wmix)
     {
+        show_steup();
         wmix_volume(10);
         wmix_volumeMic(10);
         wmix_throwOut_thread(main_wmix, 0, NULL, 0, &_wmix_loop);
@@ -4539,7 +4550,8 @@ void wmix_getSignal(int id)
 int main(int argc, char **argv)
 {
     int i, volume = -1, volumeMic = -1, volumeAgc = -1;
-    char *p, *path = NULL;
+    char *p;
+    char *path = NULL;//启动音频路径
 
     //传入参数处理
     if (argc > 1)
@@ -4584,6 +4596,41 @@ int main(int argc, char **argv)
                 {
                     sscanf(argv[++i], "%d", &volumeAgc);
                 }
+                else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i + 1 < argc)
+                {
+                    if (argv[++i][0] == '1')
+                        main_wmix->webrtcEnable[WR_VAD] = true;
+                    else
+                        main_wmix->webrtcEnable[WR_VAD] = false;
+                }
+                else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i + 1 < argc)
+                {
+                    if (argv[++i][0] == '1')
+                        main_wmix->webrtcEnable[WR_AEC] = 1;
+                    else
+                        main_wmix->webrtcEnable[WR_AEC] = 0;
+                }
+                else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i + 1 < argc)
+                {
+                    if (argv[++i][0] == '1')
+                        main_wmix->webrtcEnable[WR_NS] = 1;
+                    else
+                        main_wmix->webrtcEnable[WR_NS] = 0;
+                }
+                else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i + 1 < argc)
+                {
+                    if (argv[++i][0] == '1')
+                        main_wmix->webrtcEnable[WR_NS_PA] = 1;
+                    else
+                        main_wmix->webrtcEnable[WR_NS_PA] = 0;
+                }
+                else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i + 1 < argc)
+                {
+                    if (argv[++i][0] == '1')
+                        main_wmix->webrtcEnable[WR_AGC] = 1;
+                    else
+                        main_wmix->webrtcEnable[WR_AGC] = 0;
+                }
                 else if (strstr(p, ".wav") || strstr(p, ".mp3") || strstr(p, ".aac"))
                     path = p;
             }
@@ -4603,6 +4650,7 @@ int main(int argc, char **argv)
             }
         }
 
+        show_steup();
         sleep(1);
         while (1)
         {
