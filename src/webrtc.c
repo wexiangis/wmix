@@ -38,7 +38,7 @@ typedef struct
 void *vad_init(int chn, int freq, int intervalMs)
 {
     Vad_Struct *vs;
-    if(freq > 32000)
+    if(freq > 32000 || freq % 8000 != 0)
         return NULL;
     vs = (Vad_Struct *)calloc(1, sizeof(Vad_Struct));
     if (WebRtcVad_Create(&vs->handle) == 0)
@@ -219,7 +219,7 @@ typedef struct
 void *aec_init(int chn, int freq, int intervalMs)
 {
     Aec_Struct *as;
-    if(freq > 16000)
+    if(freq > 16000 || freq % 8000 != 0)
         return NULL;
     as = (Aec_Struct *)calloc(1, sizeof(Aec_Struct));
     AecConfig config = {
@@ -618,7 +618,7 @@ typedef struct
 void *ns_init(int chn, int freq)
 {
     Ns_Struct *ns;
-    if(freq > 32000)
+    if(freq > 32000 || freq % 8000 != 0)
         return NULL;
     ns = (Ns_Struct *)calloc(1, sizeof(Ns_Struct));
     if (WebRtcNsX_Create(&ns->nsxInst) == 0)
@@ -769,7 +769,7 @@ void *agc_init(int chn, int freq, int intervalMs, int value)
         .compressionGaindB = value, // default 9 dB
         .limiterEnable = kAgcFalse, // default kAgcTrue (on)
     };
-    if(freq > 32000)
+    if(freq > 32000 || freq % 8000 != 0)
         return NULL;
     as = (Agc_Struct *)calloc(1, sizeof(Agc_Struct));
     if (WebRtcAgc_Create(&as->agcInst) == 0)

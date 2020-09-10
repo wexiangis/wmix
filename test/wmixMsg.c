@@ -44,7 +44,7 @@ void help(char *argv0)
         "  -rtpr-aac ip port : 启动rtp aac接收播音,需使用-rc,-rr准确指定通道和频率\n"
         "  -rtps-aac ip port : 启动rtp aac录音发送,需使用-rc,-rr准确指定通道和频率\n"
         "                    : 生成/tmp/record-aac.sdp,用vlc播放时,端口必须设置为9832\n"
-        "  -bind : rtp以bind绑定端口(两设备对讲时,必须有一方为bind方式)\n"
+        "  -bind : rtp以bind绑定端口(此时rtp设定的ip必须为本机ip;两设备对讲时,必须有一方为bind方式)\n"
         "\n"
         "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
         "  -aec 0/1 : 关/开 webrtc.aec 回声消除\n"

@@ -1002,7 +1002,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 
 #if (WMIX_WEBRTC_NS)
                     //噪音抑制
-                    if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000)
+                    if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_NS] == NULL)
                             wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
@@ -1020,7 +1020,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 
 #if (WMIX_WEBRTC_AEC)
                     //回声消除 (16000Hz时要求CPU算力较高)
-                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000)
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
@@ -1051,7 +1051,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 
 #if (WMIX_WEBRTC_AGC)
                     //录音增益
-                    if (wmix->webrtcEnable[WR_AGC] && WMIX_FREQ <= 32000)
+                    if (wmix->webrtcEnable[WR_AGC] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AGC] == NULL)
                             wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, wmix->volumeAgc);
@@ -1069,7 +1069,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 
 #if (WMIX_WEBRTC_VAD)
                     //人声识别
-                    if (wmix->webrtcEnable[WR_VAD] && WMIX_FREQ <= 32000)
+                    if (wmix->webrtcEnable[WR_VAD] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         // 人声识别,初始化
                         if (wmix->webrtcPoint[WR_VAD] == NULL)
@@ -1911,7 +1911,9 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     int16_t record_addr = -1;
     uint8_t *buff, *buff2, *pBuff2_S, *pBuff2_E;
     void *aacEnc = NULL;
-    uint8_t aacbuff[2048];
+    uint8_t aacbuff[4096];
+    //
+    DELAY_US_INIT;
     //
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
@@ -1919,7 +1921,6 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
-    //
     //参数检查,是否在允许的变参范围内
     if (freq > WMIX_FREQ)
     {
@@ -1993,6 +1994,8 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         //msg 检查
         WMIX_RTP_CTRL_MSG_RECV("RTP-SEND-AAC");
         //
+        DELAY_US_RESET();
+        //
         ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
         if (ret > 0)
         {
@@ -2028,17 +2031,18 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                     pthread_mutex_lock(&rcs->lock);
                     ret = rtp_send(rcs->ss, &rtpPacket, ret);
                     pthread_mutex_unlock(&rcs->lock);
-                    if (ret < 1)
+                    if (ret < 0)
                     {
                         // fprintf(stderr, "wmix_rtp_send_aac_thread: rtp_send err !!\r\n");
                         delayus(1000000);
                         //重连
                         rtpChain_reconnect(rcs);
-                        continue;
+                        break;
                     }
+                    //理论上无须延时,阻塞取数据足矣
+                    DELAY_US(19000);
                 }
                 pBuff2_S += buffSizeR;
-                delayus(5000);
             }
             if (ret < 0)
                 break;
@@ -2301,7 +2305,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
     //参数检查,是否在允许的变参范围内
-    if (freq != WMIX_FREQ)
+    if (freq > WMIX_FREQ)
     {
         fprintf(stderr, "wmix_rtp_send_pcma_thread: freq err, %dHz != %dHz(machine)\r\n", freq, WMIX_FREQ);
         return;
@@ -2343,7 +2347,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         path, port, chn, freq,
         RTP_PAYLOAD_TYPE_PCMA);
     //
-    bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    bytes_p_second = chn * sample / 8 * freq;
     //每次从ai读取字节数
     buffSize = 320;
     buff = malloc(2 * WMIX_SAMPLE / 8 * 1024);
@@ -2397,7 +2401,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 continue;
             }
             //理论上无须延时,阻塞取数据足矣
-            DELAY_US(15000);
+            DELAY_US(18000);
         }
         else
         {
@@ -2453,7 +2457,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
-    int intervalUs = 10000;
+    int intervalUs = 5000;
     //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
@@ -3136,7 +3140,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 
 #if (WMIX_WEBRTC_NS)
                     //噪音抑制
-                    if (wmix->webrtcEnable[WR_NS_PA] && WMIX_FREQ <= 32000)
+                    if (wmix->webrtcEnable[WR_NS_PA] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_NS_PA] == NULL)
                             wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
@@ -3155,7 +3159,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #ifdef AEC_FILE_STREAM_TEST
 #if (WMIX_WEBRTC_AEC)
                     //回声消除,文件流干扰测试
-                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000)
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
                             wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
