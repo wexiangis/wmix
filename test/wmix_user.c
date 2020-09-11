@@ -242,7 +242,7 @@ void wmix_kill_all()
 {
     WMix_Msg msg;
     //msg初始化
-    MSG_INIT();
+    MSG_INIT_VOID();
     //装填 message
     msg.type = WMT_CLEAN_ALL;
     //发出
@@ -749,7 +749,7 @@ void wmix_info(char *path)
     //装填 message
     msg.type = WMT_INFO;
     if (path)
-        strcpy(msg.value, path);
+        strcpy((char*)(msg.value), path);
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }
@@ -782,4 +782,54 @@ int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type)
     msg.type = ctrl_type;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+    return 0;
+}
+
+#include <dirent.h>
+void wmix_list(void)
+{
+    FILE *fp;
+    char path[512];
+    DIR *dir;
+    struct dirent *ptr;
+    //打开路径
+    if ((dir = opendir(WMIX_MSG_PATH)) == NULL)
+        return;
+    printf("wmix_list:\r\n");
+    //只遍历一级目录
+    while ((ptr = readdir(dir)) != NULL)
+    {
+        //这是文件
+        if (ptr->d_type == 8)
+        {
+            //拼接绝对路径
+            memset(path, 0, sizeof(path));
+            sprintf(path, "%s/%s", WMIX_MSG_PATH, ptr->d_name);
+            //读取文件描述
+            fp = fopen(path, "r");
+            if (fp)
+            {
+                memset(path, 0, sizeof(path));
+                if (fread(path, 1, sizeof(path), fp) > 0)
+                    printf("  ID %s : %s \r\n", ptr->d_name, path);
+                fclose(fp);
+            }
+        }
+        else
+            continue;
+        /*if(strcmp(ptr->d_name,".")==0 || strcmp(ptr->d_name,"..")==0)    ///current dir OR parrent dir
+            continue;
+        else if(ptr->d_type == 8)    ///file
+            printf("d_name:%s/%s\n",basePath,ptr->d_name);
+        else if(ptr->d_type == 10)    ///link file
+            printf("d_name:%s/%s\n",basePath,ptr->d_name);
+        else if(ptr->d_type == 4) { ///dir
+            memset(base,'\0',sizeof(base));
+            strcpy(base,basePath);
+            strcat(base,"/");
+            strcat(base,ptr->d_name);
+            readFileList(base);
+        }*/
+    }
+    closedir(dir);
 }

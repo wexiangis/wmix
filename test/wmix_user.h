@@ -188,6 +188,9 @@ typedef enum
  */
 int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type);
 
+//打印所有任务信息
+void wmix_list(void);
+
 #ifdef __cplusplus
 };
 #endif

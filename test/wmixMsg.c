@@ -7,6 +7,7 @@
  * 
  **************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "wmix_user.h"
@@ -63,6 +64,7 @@ void help(char *argv0)
         "\n"
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
+        "  -list : 打印所有任务信息\n"
         "  -info path: 打印信息,path可以指定终端或输出文件的路径,path可以不带\n"
         "  -? --help : 显示帮助\n"
         "\n"
@@ -135,6 +137,7 @@ int main(int argc, char **argv)
 
     int log = -1;
     bool reset = false;
+    bool list = false;
 
     int ctrl = -1;
 
@@ -383,6 +386,10 @@ int main(int argc, char **argv)
         {
             reset = true;
         }
+        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-list"))
+        {
+            list = true;
+        }
         else if (strlen(argv[i]) == 5 && strstr(argv[i], "-info"))
         {
             info = true;
@@ -407,6 +414,12 @@ int main(int argc, char **argv)
     {
         wmix_reset();
         return 0;
+    }
+
+    if (list)
+    {
+        wmix_list();
+        helpFalg = false;
     }
 
     if (info)
@@ -518,7 +531,7 @@ int main(int argc, char **argv)
         usleep(100000);
     }
 
-    if(rtpsr)
+    if (rtpsr)
     {
         ret_id = wmix_rtp_recv(rtp_local_ip, rtp_remote_port, rc, rr, 0, true);
         usleep(100000);
@@ -527,7 +540,7 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
-    if(rtpsr_aac)
+    if (rtpsr_aac)
     {
         ret_id = wmix_rtp_recv(rtp_aac_local_ip, rtp_aac_remote_port, rc, rr, 1, true);
         usleep(100000);

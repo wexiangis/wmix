@@ -1893,6 +1893,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
+    FILE *fp;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -1951,7 +1952,13 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     {
         //创建消息挂靠路径
         if (access(msgPath, F_OK) != 0)
-            creat(msgPath, 0777);
+            creat(msgPath, 0666);
+        //写节点描述
+        if ((fp = fopen(msgPath, "w")))
+        {
+            fprintf(fp, "rtp send aac %s:%d", path, port);
+            fclose(fp);
+        }
         //创建消息
         if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) > 0)
             msg_fd = msgget(msg_key, IPC_CREAT | 0666);
@@ -2033,7 +2040,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                     // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
                     //     ;
                     // else
-                        ret = rtp_send(rcs->ss, &rtpPacket, ret);
+                    ret = rtp_send(rcs->ss, &rtpPacket, ret);
                     pthread_mutex_unlock(&rcs->lock);
                     if (ret < 0)
                     {
@@ -2088,6 +2095,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
+    FILE *fp;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -2104,7 +2112,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     WMix_Point head, src;
     uint32_t tick, total = 0;
     uint32_t second = 0, bpsCount = 0;
-    uint8_t rdce = (wmtp->flag >> 8) & 0xFF + 1, rdceIsMe = 0;
+    uint8_t rdce = ((wmtp->flag >> 8) & 0xFF) + 1, rdceIsMe = 0;
     //aac解码句柄
     void *aacDec = NULL;
     int datUse = 0;
@@ -2132,7 +2140,13 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     {
         //创建消息挂靠路径
         if (access(msgPath, F_OK) != 0)
-            creat(msgPath, 0777);
+            creat(msgPath, 0666);
+        //写节点描述
+        if ((fp = fopen(msgPath, "w")))
+        {
+            fprintf(fp, "rtp recv aac %s:%d", path, port);
+            fclose(fp);
+        }
         //创建消息
         if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) > 0)
             msg_fd = msgget(msg_key, IPC_CREAT | 0666);
@@ -2283,6 +2297,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
+    FILE *fp;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -2338,7 +2353,13 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     {
         //创建消息挂靠路径
         if (access(msgPath, F_OK) != 0)
-            creat(msgPath, 0777);
+            creat(msgPath, 0666);
+        //写节点描述
+        if ((fp = fopen(msgPath, "w")))
+        {
+            fprintf(fp, "rtp send pcma %s:%d", path, port);
+            fclose(fp);
+        }
         //创建消息
         if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) > 0)
             msg_fd = msgget(msg_key, IPC_CREAT | 0666);
@@ -2398,7 +2419,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
             // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
             //     ;
             // else
-                ret = rtp_send(rcs->ss, &rtpPacket, ret);
+            ret = rtp_send(rcs->ss, &rtpPacket, ret);
             pthread_mutex_unlock(&rcs->lock);
             if (ret < 0)
             {
@@ -2443,6 +2464,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
+    FILE *fp;
     WMix_Msg msg;
     //
     uint8_t chn = wmtp->param[0];
@@ -2458,7 +2480,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     WMix_Point head, src;
     uint32_t tick, total = 0;
     uint32_t second = 0, bpsCount = 0;
-    uint8_t rdce = (wmtp->flag >> 8) & 0xFF + 1, rdceIsMe = 0;
+    uint8_t rdce = ((wmtp->flag >> 8) & 0xFF) + 1, rdceIsMe = 0;
     //
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
@@ -2482,7 +2504,13 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     {
         //创建消息挂靠路径
         if (access(msgPath, F_OK) != 0)
-            creat(msgPath, 0777);
+            creat(msgPath, 0666);
+        //写节点描述
+        if ((fp = fopen(msgPath, "w")))
+        {
+            fprintf(fp, "rtp recv pcma %s:%d", path, port);
+            fclose(fp);
+        }
         //创建消息
         if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) > 0)
             msg_fd = msgget(msg_key, IPC_CREAT | 0666);
@@ -2606,6 +2634,7 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
+    FILE *fp;
     //
     bool run = true, joinQueue = false;
     //
@@ -2621,7 +2650,13 @@ void wmix_load_audio_thread(WMixThread_Param *wmtp)
     {
         //创建消息挂靠路径
         if (access(msgPath, F_OK) != 0)
-            creat(msgPath, 0777);
+            creat(msgPath, 0666);
+        //写节点描述
+        if ((fp = fopen(msgPath, "w")))
+        {
+            fprintf(fp, "play %s", name);
+            fclose(fp);
+        }
         //创建消息
         if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) > 0)
             msg_fd = msgget(msg_key, IPC_CREAT | 0666);
@@ -3371,7 +3406,7 @@ WMix_Struct *wmix_init(void)
     //承受不了这个CPU占用率
     wmix->webrtcEnable[WR_AEC] = 0;
     //关闭vad
-    wmix->webrtcEnable[WR_vad] = 0;
+    // wmix->webrtcEnable[WR_VAD] = 0;
     //关闭agc
     wmix->webrtcEnable[WR_AGC] = 0;
 #endif
@@ -4487,7 +4522,7 @@ void help(char *argv0)
         "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -? --help : 显示帮助\r\n"
         "\r\n"
-        "软件版本: %s\r\n"
+        "Version: %s\r\n"
         "\r\n"
         "Example:\r\n"
         "  %s &\r\n"
@@ -4563,7 +4598,7 @@ int main(int argc, char **argv)
 {
     int i, volume = -1, volumeMic = -1, volumeAgc = -1;
     char *p;
-    char *path = NULL;//启动音频路径
+    char *path = NULL; //启动音频路径
 
     //传入参数处理
     if (argc > 1)

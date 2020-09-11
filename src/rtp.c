@@ -341,7 +341,6 @@ void rtpChain_release(RtpChain_Struct *rcs, bool send)
 
 void rtpChain_reconnect(RtpChain_Struct *rcs)
 {
-    size_t ret;
     if (!rcs)
         return;
     // printf("rtpChain_reconnect bindMode/%d fd/%d %s:%d\r\n",
