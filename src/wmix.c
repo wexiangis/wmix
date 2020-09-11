@@ -2029,7 +2029,11 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                     ret -= 7;
                     memcpy(&rtpPacket.payload[4], &aacbuff[7], ret);
                     pthread_mutex_lock(&rcs->lock);
-                    ret = rtp_send(rcs->ss, &rtpPacket, ret);
+                    //bindMode时,作为主机的一端必须先收到数据才开始发送数据
+                    // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
+                    //     ;
+                    // else
+                        ret = rtp_send(rcs->ss, &rtpPacket, ret);
                     pthread_mutex_unlock(&rcs->lock);
                     if (ret < 0)
                     {
@@ -2040,7 +2044,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                         break;
                     }
                     //理论上无须延时,阻塞取数据足矣
-                    DELAY_US(19000);
+                    DELAY_US(15000);
                 }
                 pBuff2_S += buffSizeR;
             }
@@ -2148,7 +2152,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     //
     if (wmtp->wmix->debug)
         printf(
-            "<< RTP-RECV: %s:%d start >>\r\n"
+            "<< RTP-RECV-AAC: %s:%d start >>\r\n"
             "   通道数: %d\r\n"
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
@@ -2191,7 +2195,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 //
                 if (wmtp->wmix->debug)
                     printf(
-                        "<< RTP-RECV: %s:%d start >>\r\n"
+                        "<< RTP-RECV-AAC: %s:%d start >>\r\n"
                         "   通道数: %d\r\n"
                         "   采样位数: %d bit\r\n"
                         "   采样率: %d Hz\r\n",
@@ -2243,7 +2247,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
                 bpsCount -= bytes_p_second;
                 second = total / bytes_p_second;
                 if (wmtp->wmix->debug)
-                    printf("  RTP-RECV: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
+                    printf("  RTP-RECV-AAC: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
             }
             continue;
         }
@@ -2252,7 +2256,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     }
     //
     if (wmtp->wmix->debug)
-        printf(">> RTP-RECV: %s:%d end <<\r\n", path, port);
+        printf(">> RTP-RECV-AAC: %s:%d end <<\r\n", path, port);
     //删除文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
@@ -2390,7 +2394,11 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
             ret = PCM2G711a((char *)buff, (char *)rtpPacket.payload, ret, 0);
             rtpPacket.rtpHeader.timestamp += ret;
             pthread_mutex_lock(&rcs->lock);
-            ret = rtp_send(rcs->ss, &rtpPacket, ret);
+            //bindMode时,作为主机的一端必须先收到数据才开始发送数据
+            // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
+            //     ;
+            // else
+                ret = rtp_send(rcs->ss, &rtpPacket, ret);
             pthread_mutex_unlock(&rcs->lock);
             if (ret < 0)
             {
@@ -2401,7 +2409,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 continue;
             }
             //理论上无须延时,阻塞取数据足矣
-            DELAY_US(18000);
+            DELAY_US(15000);
         }
         else
         {
@@ -2457,7 +2465,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
-    int intervalUs = 5000;
+    int intervalUs = 10000;
     //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;

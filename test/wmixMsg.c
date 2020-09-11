@@ -40,11 +40,13 @@ void help(char *argv0)
         "\n"
         "  -rtpr ip port : 启动rtp pcma接收播音,固定单声道8000Hz\n"
         "  -rtps ip port : 启动rtp pcma录音发送,固定单声道8000Hz\n"
-        "                : 生成/tmp/record.sdp,用vlc播放时,端口必须设置为9832\n"
         "  -rtpr-aac ip port : 启动rtp aac接收播音,需使用-rc,-rr准确指定通道和频率\n"
         "  -rtps-aac ip port : 启动rtp aac录音发送,需使用-rc,-rr准确指定通道和频率\n"
-        "                    : 生成/tmp/record-aac.sdp,用vlc播放时,端口必须设置为9832\n"
+        "\n"
         "  -bind : rtp以bind绑定端口(此时rtp设定的ip必须为本机ip;两设备对讲时,必须有一方为bind方式)\n"
+        "\n"
+        "  -rtp local_ip remote_ip port : 启动rtp pcma双通对讲,固定单声道8000Hz\n"
+        "  -rtp-aac local_ip remote_ip port : 启动rtp aac双通对讲,需使用-rc,-rr准确指定通道和频率\n"
         "\n"
         "  -vad 0/1 : 关/开 webrtc.vad 人声识别,录音辅助,在没人说话时主动静音\n"
         "  -aec 0/1 : 关/开 webrtc.aec 回声消除\n"
@@ -120,6 +122,16 @@ int main(int argc, char **argv)
     bool rtpr_aac = false;
 
     bool rtp_bind = false;
+
+    char *rtp_local_ip;
+    char *rtp_remote_ip;
+    int rtp_remote_port;
+    bool rtpsr = false;
+
+    char *rtp_aac_local_ip;
+    char *rtp_aac_remote_ip;
+    int rtp_aac_remote_port;
+    bool rtpsr_aac = false;
 
     int log = -1;
     bool reset = false;
@@ -286,6 +298,30 @@ int main(int argc, char **argv)
             }
             else
                 warn("-rtpr-aac", 2);
+        }
+        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-rtp"))
+        {
+            if (i + 3 < argc)
+            {
+                rtp_local_ip = argv[++i];
+                rtp_remote_ip = argv[++i];
+                sscanf(argv[++i], "%d", &rtp_remote_port);
+                rtpsr = true;
+            }
+            else
+                warn("-rtp", 3);
+        }
+        else if (strlen(argv[i]) == 8 && strstr(argv[i], "-rtp-aac"))
+        {
+            if (i + 3 < argc)
+            {
+                rtp_aac_local_ip = argv[++i];
+                rtp_aac_remote_ip = argv[++i];
+                sscanf(argv[++i], "%d", &rtp_aac_remote_port);
+                rtpsr_aac = true;
+            }
+            else
+                warn("-rtp-aac", 3);
         }
         else if (strlen(argv[i]) == 5 && strstr(argv[i], "-bind"))
         {
@@ -456,30 +492,48 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
-    if (rtps)
-    {
-        ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
-        helpFalg = false;
-        usleep(100000);
-    }
     if (rtpr)
     {
         ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
         helpFalg = false;
         usleep(100000);
     }
+    if (rtps)
+    {
+        ret_id = wmix_rtp_send(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
+        helpFalg = false;
+        usleep(100000);
+    }
 
+    if (rtpr_aac)
+    {
+        ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
+        helpFalg = false;
+        usleep(100000);
+    }
     if (rtps_aac)
     {
         ret_id = wmix_rtp_send(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
         helpFalg = false;
         usleep(100000);
     }
-    if (rtpr_aac)
+
+    if(rtpsr)
     {
-        ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
-        helpFalg = false;
+        ret_id = wmix_rtp_recv(rtp_local_ip, rtp_remote_port, rc, rr, 0, true);
         usleep(100000);
+        ret_id = wmix_rtp_send(rtp_remote_ip, rtp_remote_port, rc, rr, 0, false);
+        usleep(100000);
+        helpFalg = false;
+    }
+
+    if(rtpsr_aac)
+    {
+        ret_id = wmix_rtp_recv(rtp_aac_local_ip, rtp_aac_remote_port, rc, rr, 1, true);
+        usleep(100000);
+        ret_id = wmix_rtp_send(rtp_aac_remote_ip, rtp_aac_remote_port, rc, rr, 1, false);
+        usleep(100000);
+        helpFalg = false;
     }
 
     if (filePath && filePath[0] == '.')

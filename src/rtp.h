@@ -113,6 +113,7 @@ typedef struct RtpChainStruct
     SocketStruct *ss;        //连接句柄
     bool send_run, recv_run; //正在使用的发收线程(一套ip和端口只允许一个s和一个r在使用)
     bool bindMode;
+    int flagRecv;            //bindMode时,作为主机的一端必须先收到数据才开始发送数据
     struct RtpChainStruct *last, *next; //链表
     pthread_mutex_t lock;
 } RtpChain_Struct;
