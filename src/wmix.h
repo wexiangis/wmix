@@ -224,6 +224,7 @@ typedef struct
 typedef struct
 {
 #if (WMIX_MODE != 1)
+    //alsa初始化指针
     SNDPCMContainer_t *playback, *recordback;
 #endif
     uint8_t *buff;         //缓冲区
@@ -249,19 +250,19 @@ typedef struct
     key_t msg_key; //接收来自客户端的消息
     int msg_fd;    //客户端消息句柄
     //
-    uint8_t reduceMode;   //背景消减模式
+    uint8_t reduceMode;   //背景消减倍数,平时为1(即播放音频数据/1,混音时大小不变)
     bool debug;           //打印log?
     WMix_Queue queue;     //排队头尾标记
     uint32_t onPlayCount; //当前排队总数
 
     //webrtc modules
-    int webrtcEnable[WR_TOTAL];
-    void *webrtcPoint[WR_TOTAL];
+    int webrtcEnable[WR_TOTAL]; //webrtc各模块启用标志
+    void *webrtcPoint[WR_TOTAL];//webrtc各模块初始化后的指针管理
 
-    //自收发测试
+    //自收发测试标志
     bool rwTest;
 
-    //音量
+    //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;
 } WMix_Struct;
 

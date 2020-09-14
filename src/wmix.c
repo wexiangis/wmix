@@ -3373,8 +3373,8 @@ WMix_Struct *wmix_init(void)
     if (!playback)
         return NULL;
     SNDPCMContainer_t *recordback = NULL; //wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
-
 #endif
+
     wmix = (WMix_Struct *)calloc(1, sizeof(WMix_Struct));
     wmix->buff = (uint8_t *)calloc(WMIX_BUFF_SIZE + 4, sizeof(uint8_t));
 #if (WMIX_MODE != 1)
@@ -3425,6 +3425,7 @@ WMix_Struct *wmix_init(void)
     return wmix;
 }
 
+//两声音相加
 static int16_t volumeAdd(int16_t L1, int16_t L2)
 {
     int32_t sum;
@@ -3436,6 +3437,7 @@ static int16_t volumeAdd(int16_t L1, int16_t L2)
     else
     {
         sum = (int32_t)L1 + L2;
+        //防止爆表
         if (sum < -32768)
             return -32768;
         else if (sum > 32767)
@@ -3445,6 +3447,7 @@ static int16_t volumeAdd(int16_t L1, int16_t L2)
     }
 }
 
+//要播放的音频数据变更频率后,叠加到播放循环缓冲区数据中(即混音)
 WMix_Point wmix_load_wavStream(
     WMix_Struct *wmix,
     WMix_Point src,
