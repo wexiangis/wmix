@@ -36,6 +36,9 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize)
 {
     int ret;
 
+    if (!ss || !rtpPacket)
+        return -1;
+
     rtpPacket->rtpHeader.seq = htons(rtpPacket->rtpHeader.seq);
     rtpPacket->rtpHeader.timestamp = htonl(rtpPacket->rtpHeader.timestamp);
     rtpPacket->rtpHeader.ssrc = htonl(rtpPacket->rtpHeader.ssrc);
@@ -69,6 +72,9 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize)
 int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize)
 {
     int ret;
+
+    if (!ss || !rtpPacket)
+        return -1;
 
     ret = recvfrom(
         ss->fd,
@@ -274,8 +280,8 @@ RtpChain_Struct *rtpChain_get(char *ip, int port, bool send, bool bindMode)
                 rcs->recv_run = true;
             //有效返回
             rtpChain_busy = false;
-            printf("rtpChain_get the same node send/%d bindMode/%d fd/%d %s:%d\r\n",
-                   send ? 1 : 0, bindMode ? 1 : 0, rcs->ss->fd, ip, port);
+            printf("rtpChain_get the same node send/%d bindMode/%d %s:%d\r\n",
+                   send ? 1 : 0, bindMode ? 1 : 0, ip, port);
             return rcs;
         }
     }
@@ -302,8 +308,8 @@ RtpChain_Struct *rtpChain_get(char *ip, int port, bool send, bool bindMode)
     pthread_mutex_init(&rcs->lock, NULL);
     //有效返回
     rtpChain_busy = false;
-    printf("rtpChain_get a new node send/%d bindMode/%d fd/%d %s:%d\r\n",
-           send ? 1 : 0, bindMode ? 1 : 0, rcs->ss->fd, ip, port);
+    printf("rtpChain_get a new node send/%d bindMode/%d %s:%d\r\n",
+           send ? 1 : 0, bindMode ? 1 : 0, ip, port);
     return rcs;
 }
 
@@ -325,14 +331,16 @@ void rtpChain_release(RtpChain_Struct *rcs, bool send)
     {
         //关闭连接
         if (rcs->ss)
+        {
             rtp_socket_close(rcs->ss);
+            free(rcs->ss);
+        }
         //移除节点
         if (rcs->next)
             rcs->next->last = rcs->last;
         rcs->last->next = rcs->next; //上一个节点必然存在
         //释放内存
         pthread_mutex_destroy(&rcs->lock);
-        free(rcs->ss);
         free(rcs);
     }
     //
@@ -343,11 +351,14 @@ void rtpChain_reconnect(RtpChain_Struct *rcs)
 {
     if (!rcs)
         return;
-    // printf("rtpChain_reconnect bindMode/%d fd/%d %s:%d\r\n",
-    //        rcs->bindMode ? 1 : 0, rcs->ss->fd, rcs->ip, rcs->port);
+    // printf("rtpChain_reconnect bindMode/%d %s:%d\r\n",
+    //        rcs->bindMode ? 1 : 0, rcs->ip, rcs->port);
     pthread_mutex_lock(&rcs->lock);
-    rtp_socket_close(rcs->ss);
-    free(rcs->ss);
+    if (rcs->ss)
+    {
+        rtp_socket_close(rcs->ss);
+        free(rcs->ss);
+    }
     rcs->ss = rtp_socket(rcs->ip, rcs->port, rcs->bindMode);
     pthread_mutex_unlock(&rcs->lock);
 }

@@ -3399,7 +3399,7 @@ WMix_Struct *wmix_init(void)
     wmix->webrtcEnable[WR_VAD] = 1;
     wmix->webrtcEnable[WR_AEC] = 1;
     wmix->webrtcEnable[WR_NS] = 1;
-    wmix->webrtcEnable[WR_NS_PA] = 0;
+    wmix->webrtcEnable[WR_NS_PA] = 1;
     wmix->webrtcEnable[WR_AGC] = 1;
 
 #if (WMIX_MODE == 1)
