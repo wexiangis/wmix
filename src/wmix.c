@@ -2030,7 +2030,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
             //
             while (pBuff2_E - pBuff2_S >= buffSizeR)
             {
-                ret = aac_encode(&aacEnc, pBuff2_S, buffSizeR, aacbuff, 4096, chn, freq);
+                ret = aac_encode(&aacEnc, pBuff2_S, buffSizeR, aacbuff, sizeof(aacbuff), chn, freq);
                 if (ret > 0)
                 {
                     ret -= 7;
@@ -2051,7 +2051,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                         break;
                     }
                     //理论上无须延时,阻塞取数据足矣
-                    DELAY_US(15000);
+                    DELAY_US(10000);
                 }
                 pBuff2_S += buffSizeR;
             }
@@ -2430,7 +2430,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 continue;
             }
             //理论上无须延时,阻塞取数据足矣
-            DELAY_US(15000);
+            DELAY_US(10000);
         }
         else
         {
@@ -2487,7 +2487,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
-    int intervalUs = 10000;
+    int intervalUs = 8000;
     //
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;

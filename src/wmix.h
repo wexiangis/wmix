@@ -58,7 +58,7 @@ typedef struct SNDPCMContainer
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.3 - 20200911"
+#define WMIX_VERSION "V5.3 - 20200914"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -79,7 +79,7 @@ typedef struct SNDPCMContainer
  *    频率分 8000,16000,32000,48000 和 11025,22050,44100 两个系列(后者不被webrtc支持),
  *    有些硬件由于时钟配置原因,使用不适配的频率可能导致录音变声(听起来变了个人)
  */
-#define WMIX_CHANNELS 2
+#define WMIX_CHANNELS 1
 #define WMIX_SAMPLE 16
 #define WMIX_FREQ 8000
 
