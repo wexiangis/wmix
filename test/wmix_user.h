@@ -59,13 +59,11 @@ void wmix_kill_all();
 
 /* ----- 播放音频流,用于播放录音 -----
  * 成功返回fd(fifo的写入端)  失败返回0
- * backgroundReduce: 播放当前音频时,降低背景音量
- *   0: 不启用
- *   >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
- *   (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
+ * backgroundReduce: 同上面
  * channels: 声道数(取值1,2)
  * sample: 采样位数bit(取值16)
  * freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ * path: fifo路径
  * 正常返回>0的fd
  */
 int wmix_stream_open(
@@ -77,13 +75,10 @@ int wmix_stream_open(
 
 /* ----- 录音 -----
  * 成功返回fd(fifo的读取端)  失败返回0
- * backgroundReduce: 播放当前音频时,降低背景音量
- *   0: 不启用
- *   >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
- * 注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得)
  * channels: 声道数(取值1,2)
  * sample: 采样位数bit(取值16)
  * freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ * path: fifo路径
  * 正常返回>0的fd
  */
 int wmix_record_stream_open(
@@ -96,6 +91,8 @@ int wmix_record_stream_open(
  * channels: 声道数(取值1,2)
  * sample: 采样位数bit(取值16)
  * freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ * second: 录音时长秒
+ * useAAC: 录制aac文件,否则wav
  * 正常返回0
  */
 int wmix_record(
@@ -111,9 +108,10 @@ int wmix_record(
  * chn: pcma只支持1通道
  * freq: pcma只支持8000Hz
  * bindMode: 以服务器形式连接(bind),这个设置很重要
+ * backgroundReduce: 同上面
  * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
-int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode);
+int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode, uint8_t backgroundReduce);
 
 /* ----- rtp -----
  * type: 0/pcma 1/aac

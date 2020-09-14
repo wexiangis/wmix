@@ -507,7 +507,7 @@ int main(int argc, char **argv)
 
     if (rtpr)
     {
-        ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_bind);
+        ret_id = wmix_rtp_recv(rtp_ip, rtp_port, rc, rr, 0, rtp_bind, reduce);
         helpFalg = false;
         usleep(100000);
     }
@@ -520,7 +520,7 @@ int main(int argc, char **argv)
 
     if (rtpr_aac)
     {
-        ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind);
+        ret_id = wmix_rtp_recv(rtp_aac_ip, rtp_aac_port, rc, rr, 1, rtp_bind, reduce);
         helpFalg = false;
         usleep(100000);
     }
@@ -533,7 +533,7 @@ int main(int argc, char **argv)
 
     if (rtpsr)
     {
-        ret_id = wmix_rtp_recv(rtp_local_ip, rtp_remote_port, rc, rr, 0, true);
+        ret_id = wmix_rtp_recv(rtp_local_ip, rtp_remote_port, rc, rr, 0, true, reduce);
         usleep(100000);
         ret_id = wmix_rtp_send(rtp_remote_ip, rtp_remote_port, rc, rr, 0, false);
         usleep(100000);
@@ -542,7 +542,7 @@ int main(int argc, char **argv)
 
     if (rtpsr_aac)
     {
-        ret_id = wmix_rtp_recv(rtp_aac_local_ip, rtp_aac_remote_port, rc, rr, 1, true);
+        ret_id = wmix_rtp_recv(rtp_aac_local_ip, rtp_aac_remote_port, rc, rr, 1, true, reduce);
         usleep(100000);
         ret_id = wmix_rtp_send(rtp_aac_remote_ip, rtp_aac_remote_port, rc, rr, 1, false);
         usleep(100000);

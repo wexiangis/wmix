@@ -163,7 +163,7 @@ int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, 
     //
     if (strlen(msgPath) + strlen(wavOrMp3) + 2 > WMIX_MSG_BUFF_SIZE)
     {
-        fprintf(stderr, "wmix_play_wav: %s > max len (%ld)\n",
+        fprintf(stderr, "wmix_play: %s > max len (%ld)\n",
                 wavOrMp3, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 2));
         return 0;
     }
@@ -422,7 +422,7 @@ int wmix_record(
     //
     if (strlen(wavPath) > WMIX_MSG_BUFF_SIZE - 7)
     {
-        fprintf(stderr, "wmix_play_wav: %s > max len (%d)\n", wavPath, WMIX_MSG_BUFF_SIZE - 7);
+        fprintf(stderr, "wmix_record: %s > max len (%d)\n", wavPath, WMIX_MSG_BUFF_SIZE - 7);
         return -1;
     }
     strcpy((char *)&msg.value[6], wavPath);
@@ -443,7 +443,7 @@ int wmix_reset(void)
     return 0;
 }
 
-int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool bindMode)
+int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool bindMode, uint8_t backgroundReduce)
 {
     WMix_Msg msg;
     char msgPath[128] = {0};
@@ -456,7 +456,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     //
     if (strlen(msgPath) + strlen(ip) + 6 + 3 > WMIX_MSG_BUFF_SIZE)
     {
-        fprintf(stderr, "wmix_play_wav: %s > max len (%ld)\n",
+        fprintf(stderr, "_wmix_rtp: %s > max len (%ld)\n",
                 ip, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 6 - 3));
         return 0;
     }
@@ -468,6 +468,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
         msg.type = isSend ? WMT_RTP_SEND_AAC : WMT_RTP_RECV_AAC;
     else
         msg.type = isSend ? WMT_RTP_SEND_PCMA : WMT_RTP_RECV_PCMA;
+    msg.type += backgroundReduce * 0x100;
     msg.value[0] = chn;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xff;
@@ -501,14 +502,14 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     return redId;
 }
 
-int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode)
+int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode, uint8_t backgroundReduce)
 {
-    return _wmix_rtp(ip, port, chn, freq, false, type, bindMode);
+    return _wmix_rtp(ip, port, chn, freq, false, type, bindMode, backgroundReduce);
 }
 
 int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool bindMode)
 {
-    return _wmix_rtp(ip, port, chn, freq, true, type, bindMode);
+    return _wmix_rtp(ip, port, chn, freq, true, type, bindMode, 1);
 }
 
 //rtp流控制

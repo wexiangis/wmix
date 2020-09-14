@@ -188,10 +188,6 @@ int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t frame_num)
     size_t count = frame_num;
     uint8_t *data = sndpcm->data_buf;
 
-    // if (count != sndpcm->chunk_size) {
-    //     count = sndpcm->chunk_size;
-    // }
-
     while (count > 0)
     {
         ret = snd_pcm_readi(sndpcm->handle, data, count);
@@ -247,13 +243,6 @@ int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
     int result = 0;
     uint8_t *data = sndpcm->data_buf;
 
-    // if (wcount < sndpcm->chunk_size) {
-    //     snd_pcm_format_set_silence(sndpcm->format,
-    //         data + wcount * sndpcm->bits_per_frame / 8,
-    //         (sndpcm->chunk_size - wcount) * sndpcm->channels);
-    //     wcount = sndpcm->chunk_size;
-    // }
-
     while (wcount > 0)
     {
         ret = snd_pcm_writei(sndpcm->handle, data, wcount);
@@ -296,13 +285,11 @@ int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
 int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels, uint8_t sample)
 {
     snd_pcm_hw_params_t *hwparams;
-    snd_pcm_format_t format;
     uint32_t exact_rate;
     uint32_t buffer_time, period_time;
 
     /* 分配snd_pcm_hw_params_t结构体  Allocate the snd_pcm_hw_params_t structure on the stack. */
     snd_pcm_hw_params_alloca(&hwparams);
-
     /* 初始化hwparams  Init hwparams with full configuration space */
     if (snd_pcm_hw_params_any(sndpcm->handle, hwparams) < 0)
     {
@@ -318,22 +305,20 @@ int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels,
 
     /* 初始化采样格式,16位 Set sample format */
     if (sample == 8)
-        format = SND_PCM_FORMAT_S8;
+        sndpcm->format = SND_PCM_FORMAT_S8;
     else if (sample == 16)
-        format = SND_PCM_FORMAT_S16_LE;
+        sndpcm->format = SND_PCM_FORMAT_S16_LE;
     else if (sample == 24)
-        format = SND_PCM_FORMAT_S24_LE;
+        sndpcm->format = SND_PCM_FORMAT_S24_LE;
     else if (sample == 32)
-        format = SND_PCM_FORMAT_S32_LE;
+        sndpcm->format = SND_PCM_FORMAT_S32_LE;
     else
         return -1;
-
-    if (snd_pcm_hw_params_set_format(sndpcm->handle, hwparams, format) < 0)
+    if (snd_pcm_hw_params_set_format(sndpcm->handle, hwparams, sndpcm->format) < 0)
     {
         fprintf(stderr, "Error snd_pcm_hw_params_set_format\r\n");
         return -1;
     }
-    sndpcm->format = format;
 
     /* 设置通道数量 Set number of channels */
     if (snd_pcm_hw_params_set_channels(sndpcm->handle, hwparams, channels) < 0)
@@ -342,6 +327,7 @@ int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels,
         return -1;
     }
     sndpcm->channels = channels;
+
     //设置采样率，如果硬件不支持我们设置的采样率，将使用最接近的
     /* Set sample rate. If the exact rate is not supported */
     /* by the hardware, use nearest possible rate.         */
@@ -368,6 +354,10 @@ int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels,
         buffer_time = 500000;
     period_time = buffer_time / 4;
 
+    // buffer_time = 371519; //atmel 44100,22050,11025
+    // buffer_time = WMIX_INTERVAL_MS * 1000 * 2;
+    // period_time = period_time * 8;
+
     if (snd_pcm_hw_params_set_buffer_time_near(sndpcm->handle, hwparams, &buffer_time, 0) < 0)
     {
         fprintf(stderr, "Error snd_pcm_hw_params_set_buffer_time_near\r\n");
@@ -380,6 +370,14 @@ int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels,
         return -1;
     }
 
+    snd_pcm_hw_params_get_period_size(hwparams, &sndpcm->period_size, 0);
+    snd_pcm_hw_params_get_buffer_size(hwparams, &sndpcm->buffer_size);
+    if (sndpcm->period_size == sndpcm->buffer_size)
+    {
+        fprintf(stderr, "Can't use period equal to buffer size (%lu == %lu)\r\n", sndpcm->period_size, sndpcm->buffer_size);
+        return -1;
+    }
+
     /* Set hw params */
     if (snd_pcm_hw_params(sndpcm->handle, hwparams) < 0)
     {
@@ -387,37 +385,29 @@ int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels,
         return -1;
     }
 
-    snd_pcm_hw_params_get_period_size(hwparams, &sndpcm->chunk_size, 0);
-    snd_pcm_hw_params_get_buffer_size(hwparams, &sndpcm->buffer_size);
-    if (sndpcm->chunk_size == sndpcm->buffer_size)
-    {
-        fprintf(stderr, "Can't use period equal to buffer size (%lu == %lu)\r\n", sndpcm->chunk_size, sndpcm->buffer_size);
-        return -1;
-    }
-
-    sndpcm->bits_per_sample = snd_pcm_format_physical_width(format);
+    sndpcm->bits_per_sample = snd_pcm_format_physical_width(sndpcm->format);
     sndpcm->bits_per_frame = sndpcm->bits_per_sample * channels;
-    sndpcm->chunk_bytes = sndpcm->chunk_size * sndpcm->bits_per_frame / 8;
+    sndpcm->period_bytes = sndpcm->period_size * sndpcm->bits_per_frame / 8;
 
     printf("\n---- SNDWAV_SetParams -----\r\n"
-           "  chunk_size: %d\r\n"             //每次写入帧数
+           "  period_size: %d\r\n"            //每次写入帧数
            "  bits_per_frame/8: %d Bytes\r\n" //每帧字节数
-           "  chunk_bytes: %d Bytes\r\n"      //每次读写字节数
-           "  buffer_size: %d Bytes\r\n"      //缓冲区大小
-           "  buffer_time: %d Bytes\r\n"      //缓冲区大小
+           "  period_bytes: %d Bytes\r\n"     //每次读写字节数(等于period_size * bits_per_frame / 8)
+           "  buffer_size: %d Bytes\r\n"      //缓冲区大小(一般为2~4倍period_bytes)
+           "  buffer_time: %d Bytes\r\n"      //buffer_size 对应的时间长度
            "  period_time: %d Bytes\r\n",     //缓冲区大小
-           (int)sndpcm->chunk_size,
+           (int)sndpcm->period_size,
            (int)(sndpcm->bits_per_frame / 8),
-           (int)sndpcm->chunk_bytes,
+           (int)sndpcm->period_bytes,
            (int)sndpcm->buffer_size,
            buffer_time,
            period_time);
 
     /* Allocate audio data buffer */
 #if (WMIX_CHANNELS == 1)
-    sndpcm->data_buf = (uint8_t *)malloc(sndpcm->chunk_bytes * 2 + 1);
+    sndpcm->data_buf = (uint8_t *)malloc(sndpcm->period_bytes * 2 + 1);
 #else
-    sndpcm->data_buf = (uint8_t *)malloc(sndpcm->chunk_bytes + 1);
+    sndpcm->data_buf = (uint8_t *)malloc(sndpcm->period_bytes + 1);
 #endif
     if (!sndpcm->data_buf)
     {
@@ -1383,7 +1373,7 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
 #if (WMIX_MODE == 1)
     totalWait = bytes_p_second / 2;
 #else
-    totalWait = wmtp->wmix->playback->chunk_bytes;
+    totalWait = wmtp->wmix->playback->period_bytes;
 #endif
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
     //
@@ -2051,7 +2041,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
                         break;
                     }
                     //理论上无须延时,阻塞取数据足矣
-                    DELAY_US(10000);
+                    DELAY_US(18000);
                 }
                 pBuff2_S += buffSizeR;
             }
@@ -2430,7 +2420,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 continue;
             }
             //理论上无须延时,阻塞取数据足矣
-            DELAY_US(10000);
+            DELAY_US(18000);
         }
         else
         {
@@ -3154,7 +3144,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             memset(write_buff, 0, sizeof(write_buff));
             for (count = countTotal = 0, dist.U8 = playBuff = write_buff; countTotal < pkg_size * 4;) //每次最多传x8帧
 #else
-            memset(playback->data_buf, 0, playback->chunk_bytes);
+            memset(playback->data_buf, 0, playback->period_bytes);
             for (count = countTotal = 0, dist.U8 = playBuff = playback->data_buf; countTotal < pkg_size * 4;) //每次最多传x4帧
 #endif
             {
@@ -3373,8 +3363,8 @@ WMix_Struct *wmix_init(void)
     if (!playback)
         return NULL;
     SNDPCMContainer_t *recordback = NULL; //wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
-
 #endif
+
     wmix = (WMix_Struct *)calloc(1, sizeof(WMix_Struct));
     wmix->buff = (uint8_t *)calloc(WMIX_BUFF_SIZE + 4, sizeof(uint8_t));
 #if (WMIX_MODE != 1)
@@ -3425,6 +3415,7 @@ WMix_Struct *wmix_init(void)
     return wmix;
 }
 
+//两声音相加
 static int16_t volumeAdd(int16_t L1, int16_t L2)
 {
     int32_t sum;
@@ -3436,6 +3427,7 @@ static int16_t volumeAdd(int16_t L1, int16_t L2)
     else
     {
         sum = (int32_t)L1 + L2;
+        //防止爆表
         if (sum < -32768)
             return -32768;
         else if (sum > 32767)
@@ -3445,6 +3437,7 @@ static int16_t volumeAdd(int16_t L1, int16_t L2)
     }
 }
 
+//要播放的音频数据变更频率后,叠加到播放循环缓冲区数据中(即混音)
 WMix_Point wmix_load_wavStream(
     WMix_Struct *wmix,
     WMix_Point src,

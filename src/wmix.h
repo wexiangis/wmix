@@ -9,6 +9,15 @@
 //0/alsa 1/hi3516
 #define WMIX_MODE 0
 
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+#if (WMIX_MODE == 1)
+#include "hiaudio.h"
+#else
+#include <alsa/asoundlib.h>
+#endif
+
 /* ---------- 接收来自Makefile的宏定义 ---------- */
 
 #ifdef MAKE_MP3
@@ -21,36 +30,6 @@
 #define WMIX_AAC MAKE_AAC
 #else
 #define WMIX_AAC 1
-#endif
-
-/* ---------- rtp ---------- */
-
-//rtp发收同fd
-#define RTP_ONE_SR 1
-
-/* ---------- alsa ---------- */
-
-#include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
-#if (WMIX_MODE == 1)
-#include "hiaudio.h"
-#else
-#include <alsa/asoundlib.h>
-typedef struct SNDPCMContainer
-{
-    snd_pcm_t *handle;
-    snd_output_t *log;
-    snd_pcm_uframes_t chunk_size;
-    snd_pcm_uframes_t buffer_size; //缓冲区大小
-    snd_pcm_format_t format;
-    uint16_t channels;
-    size_t chunk_bytes; //每次读取到缓冲区的字节数
-    size_t bits_per_sample;
-    size_t bits_per_frame;
-
-    uint8_t *data_buf;
-} SNDPCMContainer_t;
 #endif
 
 /* ---------- wmix ---------- */
@@ -66,22 +45,23 @@ typedef struct SNDPCMContainer
 #define WMIX_MSG_ID 'w'
 #define WMIX_MSG_BUFF_SIZE 128
 
-#if (WMIX_MODE == 1)
+#if (WMIX_MODE == 1) //hi3516
 
-//hiaudio只支持单声道
+//使用内置aec,anr,hpf模块时,仅支持单声道
 #define WMIX_CHANNELS 1
 #define WMIX_SAMPLE 16
 #define WMIX_FREQ 8000
 
-#else
+#else //wmix
 
 /*  注意事项:
- *    频率分 8000,16000,32000,48000 和 11025,22050,44100 两个系列(后者不被webrtc支持),
- *    有些硬件由于时钟配置原因,使用不适配的频率可能导致录音变声(听起来变了个人)
+ *    1.频率分 8000,16000,32000,48000 和 11025,22050,44100 两个系列,
+ *    有些硬件由于时钟配置原因,使用不适配的频率可能导致录播音变声(听起来变了个人);
+ *    2.过高的频率和44100系列频率不被webrtc支持,具体支持情况看readme.
  */
-#define WMIX_CHANNELS 1
+#define WMIX_CHANNELS 2
 #define WMIX_SAMPLE 16
-#define WMIX_FREQ 8000
+#define WMIX_FREQ 16000
 
 #endif
 
@@ -95,10 +75,16 @@ typedef struct SNDPCMContainer
 #define WMIX_FRAME_SIZE (WMIX_CHANNELS * WMIX_SAMPLE / 8)
 
 //按 WMIX_INTERVAL_MS 采样,每次采样帧数
-#define WMIX_FRAME_NUM (WMIX_FREQ / 1000 * WMIX_INTERVAL_MS)
+#define WMIX_FRAME_NUM (WMIX_FREQ * WMIX_INTERVAL_MS / 1000)
 
 //按 WMIX_INTERVAL_MS 采样,每次采样字节数
 #define WMIX_PKG_SIZE (WMIX_FRAME_SIZE * WMIX_FRAME_NUM)
+
+//播放循环缓冲区大小 1秒数据量
+#define WMIX_BUFF_SIZE (WMIX_FRAME_SIZE * WMIX_FREQ * 1000 / 1000)
+
+//录音共享内存循环缓冲区大小,必须和 wmix_user.c 中的一致
+#define AI_CIRCLE_BUFF_LEN 10240
 
 /*
  * 保存AEC 左(录音) 右(播音) 声道数据,用于校正AEC时延
@@ -114,7 +100,10 @@ typedef struct SNDPCMContainer
  */
 // #define AEC_SYNC_SAVE_FILE "/tmp/aec.pcm"
 
-//回声消除,时间间隔估算,必须是 WMIX_INTERVAL_MS 的倍数
+/*
+ *  回声消除,时间间隔估算,必须是 WMIX_INTERVAL_MS 的倍数
+ *  不同设备、结构回声时间不一样,这里测算的400ms
+ */
 #if (WMIX_MODE == 1)
 #define AEC_INTERVAL_MS 760
 #else
@@ -126,6 +115,23 @@ typedef struct SNDPCMContainer
 
 //录、播音同步,将把"录音线程"改为"心跳函数"内嵌到"播音线程"中
 #define WMIX_RECORD_PLAY_SYNC
+
+#if (WMIX_MODE != 1)
+typedef struct SNDPCMContainer
+{
+    snd_pcm_t *handle;
+    snd_output_t *log;
+    snd_pcm_uframes_t period_size; //每次写入帧数
+    snd_pcm_uframes_t buffer_size; //缓冲区大小
+    snd_pcm_format_t format;
+    uint16_t channels;
+    size_t period_bytes; //每次写入字节数
+    size_t bits_per_sample;
+    size_t bits_per_frame;
+
+    uint8_t *data_buf;
+} SNDPCMContainer_t;
+#endif
 
 //客户端 发 服务端 消息类型
 typedef enum
@@ -187,12 +193,6 @@ typedef struct
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 } WMix_Msg;
 
-//循环缓冲区大小
-#define WMIX_BUFF_SIZE 262144 //256K //131072//128K //262144//256K 524288//512K //1048576//1M
-
-//共享内存循环缓冲区大小
-#define AI_CIRCLE_BUFF_LEN 10240
-
 //多功能指针
 typedef union {
     int8_t *S8;
@@ -224,6 +224,7 @@ typedef struct
 typedef struct
 {
 #if (WMIX_MODE != 1)
+    //alsa初始化指针
     SNDPCMContainer_t *playback, *recordback;
 #endif
     uint8_t *buff;         //缓冲区
@@ -249,19 +250,19 @@ typedef struct
     key_t msg_key; //接收来自客户端的消息
     int msg_fd;    //客户端消息句柄
     //
-    uint8_t reduceMode;   //背景消减模式
+    uint8_t reduceMode;   //背景消减倍数,平时为1(即播放音频数据/1,混音时大小不变)
     bool debug;           //打印log?
     WMix_Queue queue;     //排队头尾标记
     uint32_t onPlayCount; //当前排队总数
 
     //webrtc modules
-    int webrtcEnable[WR_TOTAL];
-    void *webrtcPoint[WR_TOTAL];
+    int webrtcEnable[WR_TOTAL];  //webrtc各模块启用标志
+    void *webrtcPoint[WR_TOTAL]; //webrtc各模块初始化后的指针管理
 
-    //自收发测试
+    //自收发测试标志
     bool rwTest;
 
-    //音量
+    //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;
 } WMix_Struct;
 
