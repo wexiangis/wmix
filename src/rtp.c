@@ -107,7 +107,7 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool bindMode)
     fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0)
     {
-        fprintf(stderr, "socket err\n");
+        fprintf(stderr, "wmix: rtp_socket err\n");
         return NULL;
     }
 
@@ -129,7 +129,7 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool bindMode)
         ret = bind(fd, (const struct sockaddr *)&ss->addr, ss->addrSize);
         if (ret < 0)
         {
-            fprintf(stderr, "bind err\n");
+            fprintf(stderr, "wmix: rtp_socket bind %s:%d err\n", ip, port);
             free(ss);
             return NULL;
         }
@@ -232,8 +232,8 @@ __time_t getTickUs(void)
     return tv.tv_sec * 1000000u + tv.tv_usec;
 }
 
-/* ----- 辅助 wmix 添加的链表管理结构 ----- */
-/* ----- 检索到新增同ip和端口连接时使用现存,关闭时由最后使用者回收内存 ----- */
+/* ----- 辅助 wmix 添加的链表管理结构 -----
+** ----- 检索到新增同ip和端口连接时,使用现存的socket句柄,关闭时由最后使用者回收内存 ----- */
 
 //本地保留一个链表头,不参与遍历
 static RtpChain_Struct rtpChain_struct = {

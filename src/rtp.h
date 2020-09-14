@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <netinet/in.h>
-#include <pthread.h> //mtex
+#include <pthread.h> //mutex_lock
 #include <sys/time.h>
 
 #define RTP_VESION 2
@@ -85,25 +85,31 @@ typedef struct
     bool bindMode;
 } SocketStruct;
 
+//rtp包参数初始化,详细说明看上面结构体 RtpHeader 定义
 void rtp_header(RtpPacket *rtpPacket, uint8_t cc, uint8_t x,
                 uint8_t p, uint8_t v, uint8_t pt, uint8_t m,
                 uint16_t seq, uint32_t timestamp, uint32_t ssrc);
 
-int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize);
-
-int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
-
+//建立rtp socket连接, bindMode 指定本机IP端口的时候才用
 SocketStruct *rtp_socket(char *ip, uint16_t port, bool bindMode);
 
-void rtp_socket_close(SocketStruct *ss); //之后自行free(ss);
+//关闭socket之后,需自行free(ss);
+void rtp_socket_close(SocketStruct *ss);
 
+//rtp 发包
+int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize);
+
+//rtp 收包
+int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
+
+//创建dsp文件(用于vlc播放)
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
 //系统当前毫秒数获取
 __time_t getTickUs(void);
 
-/* ----- 辅助 wmix 添加的链表管理结构 ----- */
-/* ----- 检索到新增同ip和端口连接时使用现存,关闭时由最后使用者回收内存 ----- */
+/* ----- 辅助 wmix 添加的链表管理结构 -----
+** ----- 检索到新增同ip和端口连接时,使用现存的socket句柄,关闭时由最后使用者回收内存 ----- */
 
 //链表节点,又来记录当前这套ip和端口的使用情况
 typedef struct RtpChainStruct
