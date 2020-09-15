@@ -995,7 +995,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_NS] == NULL)
-                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
+                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ, &wmix->debug);
                         if (wmix->webrtcPoint[WR_NS])
                         {
                             //开始转换
@@ -1013,7 +1013,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
 
@@ -1044,7 +1044,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AGC] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AGC] == NULL)
-                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, wmix->volumeAgc);
+                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, wmix->volumeAgc, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AGC])
                         {
                             //开始转换
@@ -1063,7 +1063,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     {
                         // 人声识别,初始化
                         if (wmix->webrtcPoint[WR_VAD] == NULL)
-                            wmix->webrtcPoint[WR_VAD] = vad_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                            wmix->webrtcPoint[WR_VAD] = vad_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
                         if (wmix->webrtcPoint[WR_VAD])
                             vad_process(
                                 wmix->webrtcPoint[WR_VAD],
@@ -1115,7 +1115,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #if (WMIX_MODE != 1)
                 if ((wmix->recordback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c')))
                 {
-                    printf("wmix record: start\r\n");
+                    if (wmix->debug)
+                        printf("wmix record: start\r\n");
                     buff = wmix->recordback->data_buf;
                     //丢弃一包数据
                     SNDWAV_ReadPcm(wmix->recordback, frame_num);
@@ -1129,7 +1130,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #else
                 if (hiaudio_ai_state() == 0)
                 {
-                    printf("wmix record: start\r\n");
+                    if (wmix->debug)
+                        printf("wmix record: start\r\n");
                     hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS);
 
 #ifdef WMIX_RECORD_PLAY_SYNC
@@ -1151,14 +1153,16 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #if (WMIX_MODE != 1)
             if (wmix->recordback)
             {
-                printf("wmix record: clear\r\n");
+                if (wmix->debug)
+                    printf("wmix record: clear\r\n");
                 wmix_alsa_release(wmix->recordback);
                 wmix->recordback = NULL;
             }
 #else
             if (hiaudio_ai_state())
             {
-                printf("wmix record: clear\r\n");
+                if (wmix->debug)
+                    printf("wmix record: clear\r\n");
                 hiaudio_ai_exit();
             }
 #endif
@@ -1715,8 +1719,9 @@ void wmix_record_wav_thread(WMixThread_Param *wmtp)
         }                                                    \
         else                                                 \
         {                                                    \
-            printf("%s: msg recv %ld\r\n",                   \
-                   thread_name, msg.type);                   \
+            if (wmtp->wmix->debug)                           \
+                printf("%s: msg recv %ld\r\n",               \
+                       thread_name, msg.type);               \
             ctrlType = msg.type & 0xFF;                      \
             if (ctrlType == WCT_RESET)                       \
             {                                                \
@@ -3019,7 +3024,8 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 //再清理tick
                 else if (playTickTimeout != 9999)
                 {
-                    printf("wmix play: clear\r\n");
+                    if (wmix->debug)
+                        printf("wmix play: clear\r\n");
                     playTickTimeout = 9999;
                     wmix->playRun = false;
                     wmix->head.U8 = wmix->tail.U8 = wmix->start.U8;
@@ -3044,7 +3050,6 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             {
                 if (recordTickTimeout != 9999)
                 {
-                    // printf("wmix record: clear\r\n"); //不在这里打印
                     recordTickTimeout = 9999;
                     wmix->recordRun = false;
                 }
@@ -3176,7 +3181,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_NS_PA] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_NS_PA] == NULL)
-                            wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ);
+                            wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ, &wmix->debug);
                         if (wmix->webrtcPoint[WR_NS_PA])
                         {
                             //开始转换
@@ -3195,7 +3200,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS);
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
                             memset(fileBuff, 0, sizeof(fileBuff));
@@ -3387,7 +3392,7 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
     wmix->webrtcEnable[WR_VAD] = 1;
-    wmix->webrtcEnable[WR_AEC] = 1;
+    wmix->webrtcEnable[WR_AEC] = 0;
     wmix->webrtcEnable[WR_NS] = 1;
     wmix->webrtcEnable[WR_NS_PA] = 1;
     wmix->webrtcEnable[WR_AGC] = 1;
@@ -3398,7 +3403,7 @@ WMix_Struct *wmix_init(void)
     //关闭vad
     // wmix->webrtcEnable[WR_VAD] = 0;
     //关闭agc
-    wmix->webrtcEnable[WR_AGC] = 0;
+    // wmix->webrtcEnable[WR_AGC] = 0;
 #endif
 
     //默认音量
@@ -3610,10 +3615,6 @@ WMix_Point wmix_load_wavStream(
         {
             divPow = (float)freqErr / freq;
             //
-            // printf("smallFreq: head = %ld , divPow = %f, divCount = %f, freqErr/%d, freq/%d\r\n",
-            //     pHead.U8 - wmix->start.U8,
-            //     divPow, divCount, freqErr, freq);
-            //
             switch (sample)
             {
             //8bit采样 //--- 重复代码比较多且使用可能极小,为减小函数入栈容量,不写了 ---
@@ -3671,11 +3672,9 @@ WMix_Point wmix_load_wavStream(
                                 divCount2 = (int)divCount + 1;
                                 repairTemp = *(pSrc.S16 - 2);
                                 repairStep = (float)((*pSrc.S16) - repairTemp) / divCount2;
-                                // printf(">> S/%d, E/%d, ERR/%.2f\r\n", repairTemp, (*pSrc.S16), repairStep);
                                 for (repairBuffCount = 0, repairStepSum = repairStep; repairBuffCount < divCount2;)
                                 {
                                     repairBuff[repairBuffCount] = repairTemp + repairStepSum;
-                                    // printf("%d\r\n", repairBuff[repairBuffCount]);
                                     repairBuffCount += 1;
                                     repairStepSum += repairStep;
                                 }
@@ -3732,11 +3731,9 @@ WMix_Point wmix_load_wavStream(
                                 divCount2 = (int)divCount + 1;
                                 repairTemp = *(pSrc.S16 - 1);
                                 repairStep = (float)((*pSrc.S16) - repairTemp) / divCount2;
-                                // printf(">> S/%d, E/%d, ERR/%.2f\r\n", repairTemp, (*pSrc.S16), repairStep);
                                 for (repairBuffCount = 0, repairStepSum = repairStep; repairBuffCount < divCount2;)
                                 {
                                     repairBuff[repairBuffCount] = repairTemp + repairStepSum;
-                                    // printf("%d\r\n", repairBuff[repairBuffCount]);
                                     repairBuffCount += 1;
                                     repairStepSum += repairStep;
                                 }

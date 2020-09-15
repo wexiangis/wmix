@@ -61,7 +61,7 @@
  */
 #define WMIX_CHANNELS 2
 #define WMIX_SAMPLE 16
-#define WMIX_FREQ 16000
+#define WMIX_FREQ 8000
 
 #endif
 

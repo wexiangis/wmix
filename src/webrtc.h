@@ -6,7 +6,10 @@
 #ifndef _WEBRTC_H_
 #define _WEBRTC_H_
 
-#define WMIX_WEBRTC_DEBUG
+#include <stdint.h>
+#include <stdbool.h>
+
+// #define WMIX_WEBRTC_DEBUG
 
 /* ---------- 接收来自Makefile的宏定义 ---------- */
 /* ----------   若要强制使能,手动置1   ---------- */
@@ -35,12 +38,10 @@
 #define WMIX_WEBRTC_AGC 1
 #endif
 
-#include <stdint.h>
-
 /* ==================== VAD 人声识别模块 ==================== */
 
 #if (WMIX_WEBRTC_VAD)
-void *vad_init(int chn, int freq, int intervalMs);
+void *vad_init(int chn, int freq, int intervalMs, bool *debug);
 void vad_process(void *fp, int16_t *frame, int frameNum);
 void vad_release(void *fp);
 #endif
@@ -48,7 +49,7 @@ void vad_release(void *fp);
 /* ==================== AEC 回声消除 ==================== */
 
 #if (WMIX_WEBRTC_AEC)
-void *aec_init(int chn, int freq, int intervalMs);
+void *aec_init(int chn, int freq, int intervalMs, bool *debug);
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameNum);
 int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms);
 int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms);
@@ -59,7 +60,7 @@ void aec_release(void *fp);
 /* ==================== NS 噪音抑制 ==================== */
 
 #if (WMIX_WEBRTC_NS)
-void *ns_init(int chn, int freq);
+void *ns_init(int chn, int freq, bool *debug);
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum);
 void ns_release(void *fp);
 #endif
@@ -67,7 +68,7 @@ void ns_release(void *fp);
 /* ==================== AGC 自动增益 ==================== */
 
 #if (WMIX_WEBRTC_AGC)
-void *agc_init(int chn, int freq, int intervalMs, int value);
+void *agc_init(int chn, int freq, int intervalMs, int value, bool *debug);
 int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum);
 void agc_addition(void *fp, uint8_t value);
 void agc_release(void *fp);
