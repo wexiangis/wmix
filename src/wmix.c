@@ -59,7 +59,7 @@ void delayus(unsigned int us)
 /* 自动校准的延时3件套 */
 /* 把reset放在死循环的开头,delay放在任务完成之后 */
 #define DELAY_US_INIT \
-    __time_t _tick1, _tick2;
+    __time_t _tick1 = 0, _tick2 = 0, _tickErr;
 
 #define DELAY_US_RESET() \
     _tick1 = getTickUs();
@@ -68,6 +68,30 @@ void delayus(unsigned int us)
     _tick2 = getTickUs();                        \
     if (_tick2 > _tick1 && _tick2 - _tick1 < us) \
         delayus(us - (_tick2 - _tick1));         \
+    _tick1 = getTickUs();
+
+//逐级逼近20ms延时,时差大则用大延时,时差小则用小延时
+#define DELAY_US_NEAR()             \
+    _tick2 = getTickUs();           \
+    if (_tick2 > _tick1)            \
+    {                               \
+        _tickErr = _tick2 - _tick1; \
+        if (_tickErr < 10000)       \
+        {                           \
+            delayus(5000);          \
+            continue;               \
+        }                           \
+        else if (_tickErr < 17000)  \
+        {                           \
+            delayus(2000);          \
+            continue;               \
+        }                           \
+        else if (_tickErr < 19000)  \
+        {                           \
+            delayus(1000);          \
+            continue;               \
+        }                           \
+    }                               \
     _tick1 = getTickUs();
 
 /*******************************************************************************
@@ -622,7 +646,7 @@ typedef struct
 
     "/tmp/wmix", 'I'： 单通道8000Hz这里录音并写入，客户端读取录音数据
 
-    "/tmp/wmix", 'L'： 双通道44100Hz这里录音并写入，客户端读取或混音器自己的录音线程取用
+    "/tmp/wmix", 'L'： 原始录音数据写入，客户端读取或混音器自己的录音线程取用
  */
 
 static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL, *ao_circleLocal = NULL;
@@ -655,7 +679,7 @@ int wmix_mem_destroy(int id)
     return shmctl(id, IPC_RMID, NULL);
 }
 
-//len和返回长度都按int16计算长度
+//单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
@@ -696,7 +720,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
-//len和返回长度都按int16计算长度
+//原始录音共享内存数据, len和返回长度都按int16计算长度
 int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
@@ -737,7 +761,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
-//len和返回长度都按int16计算长度
+//单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
 int16_t wmix_mem_write(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
@@ -764,7 +788,7 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     return i;
 }
 
-//len和返回长度都按int16计算长度
+//原始录音共享内存数据, len和返回长度都按int16计算长度
 int16_t wmix_mem_write2(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
@@ -1918,11 +1942,11 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
     //参数检查,是否在允许的变参范围内
-    if (freq > WMIX_FREQ)
-    {
-        fprintf(stderr, "wmix_rtp_send_aac_thread: freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
-        return;
-    }
+    // if (freq > WMIX_FREQ)
+    // {
+    //     fprintf(stderr, "wmix_rtp_send_aac_thread: freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
+    //     return;
+    // }
     if (sample != WMIX_SAMPLE)
     {
         fprintf(stderr, "wmix_rtp_send_aac_thread: sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
@@ -2304,7 +2328,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     //
     size_t buffSize;
     WMix_Point src, dist;
-    ssize_t ret, total = 0;
+    ssize_t ret = 0, total = 0;
     uint32_t second = 0, bytes_p_second, bpsCount = 0;
     //
     RtpChain_Struct *rcs;
@@ -2319,10 +2343,10 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
     //参数检查,是否在允许的变参范围内
-    if (freq > WMIX_FREQ)
+    if (freq != 8000)
     {
-        fprintf(stderr, "wmix_rtp_send_pcma_thread: freq err, %dHz != %dHz(machine)\r\n", freq, WMIX_FREQ);
-        return;
+        fprintf(stderr, "wmix_rtp_send_pcma_thread: freq warnning, must be 8000Hz \r\n");
+        freq = 8000;
     }
     if (sample != WMIX_SAMPLE)
     {
@@ -2384,14 +2408,11 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     //
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
-        //msg 检查
-        WMIX_RTP_CTRL_MSG_RECV("RTP-SEND-PCM");
-        //
-        DELAY_US_RESET();
-        //
-        ret = wmix_mem_read((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
+        //发数据
         if (ret > 0)
         {
+            //逐级逼近20ms延时
+            DELAY_US_NEAR();
             //使用0数据
             if (ctrlType == WCT_SILENCE)
                 memset(buff, 0, ret);
@@ -2424,14 +2445,11 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
                 rtpChain_reconnect(rcs);
                 continue;
             }
-            //理论上无须延时,阻塞取数据足矣
-            DELAY_US(18000);
         }
-        else
-        {
-            fprintf(stderr, "wmix_rtp_send_pcma_thread: read mem err %d\r\n", (int)ret);
-            break;
-        }
+        //发完数据,趁空闲立即取数据
+        ret = wmix_mem_read((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
+        //msg 检查
+        WMIX_RTP_CTRL_MSG_RECV("RTP-SEND-PCM");
     }
     //
     if (wmtp->wmix->debug)
