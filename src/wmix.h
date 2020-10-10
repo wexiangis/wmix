@@ -37,7 +37,7 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.3 - 20200914"
+#define WMIX_VERSION "V5.4 - 20201010"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -163,8 +163,9 @@ typedef enum
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
 
-    WMT_LOG_SW = 100, //开关log
-    WMT_INFO = 101,   //打印信息
+    WMT_LOG_SW = 100,  //开关log
+    WMT_INFO = 101,    //打印信息
+    WMT_CONSOLE = 102, //重定向打印输出路径
     WMT_TOTAL,
 } WMIX_MSG_TYPE;
 
@@ -262,6 +263,9 @@ typedef struct
 
     //自收发测试标志
     bool rwTest;
+
+    //终端类型,用于确认是否需要fsync: 0/dev终端 1/文件
+    char consoleType;
 
     //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;

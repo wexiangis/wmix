@@ -65,7 +65,8 @@ void help(char *argv0)
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
         "  -list : 打印所有任务信息\n"
-        "  -info path: 打印信息,path可以指定终端或输出文件的路径,path可以不带\n"
+        "  -info : 打印运行信息\n"
+        "  -console path : 重定向打印信息输出路径,path示例: /dev/console /dev/ttyAMA0 或者文件\n"
         "  -? --help : 显示帮助\n"
         "\n"
         "Return:\n"
@@ -142,7 +143,8 @@ int main(int argc, char **argv)
     int ctrl = -1;
 
     bool info = false;
-    char infoPath[128] = {0};
+
+    char *consolePath = NULL;
 
     int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
@@ -150,6 +152,7 @@ int main(int argc, char **argv)
     char tmpPath[128] = {0};
     char tmpPath2[128] = {0};
 
+    int argvLen;
     if (argc < 2)
     {
         help(argv[0]);
@@ -158,107 +161,109 @@ int main(int argc, char **argv)
 
     for (i = 1; i < argc; i++)
     {
-        if (strlen(argv[i]) == 2 && strstr(argv[i], "-r"))
+        argvLen = strlen(argv[i]);
+
+        if (argvLen == 2 && strstr(argv[i], "-r"))
         {
             record = true;
             rAcc = false;
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-log"))
+        else if (argvLen == 4 && strstr(argv[i], "-log"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &log);
             else
                 warn("-log", 1);
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-raac"))
+        else if (argvLen == 5 && strstr(argv[i], "-raac"))
         {
             record = true;
             rAcc = true;
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rt"))
+        else if (argvLen == 3 && strstr(argv[i], "-rt"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &rt);
             else
                 warn("-rt", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rc"))
+        else if (argvLen == 3 && strstr(argv[i], "-rc"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &rc);
             else
                 warn("-rc", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rr"))
+        else if (argvLen == 3 && strstr(argv[i], "-rr"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &rr);
             else
                 warn("-rr", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-b"))
+        else if (argvLen == 2 && strstr(argv[i], "-b"))
         {
             order = -1;
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-m"))
+        else if (argvLen == 2 && strstr(argv[i], "-m"))
         {
             order = 2;
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-i"))
+        else if (argvLen == 2 && strstr(argv[i], "-i"))
         {
             order = 1;
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-l"))
+        else if (argvLen == 2 && strstr(argv[i], "-l"))
         {
             order = 0;
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-t"))
+        else if (argvLen == 2 && strstr(argv[i], "-t"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &interval);
             else
                 warn("-t", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-d"))
+        else if (argvLen == 2 && strstr(argv[i], "-d"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &reduce);
             else
                 warn("-d", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-v"))
+        else if (argvLen == 2 && strstr(argv[i], "-v"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &volume);
             else
                 warn("-v", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-vr"))
+        else if (argvLen == 3 && strstr(argv[i], "-vr"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &volumeMic);
             else
                 warn("-vr", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-va"))
+        else if (argvLen == 3 && strstr(argv[i], "-va"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &volumeAgc);
             else
                 warn("-va", 1);
         }
-        else if (strlen(argv[i]) == 2 && strstr(argv[i], "-k"))
+        else if (argvLen == 2 && strstr(argv[i], "-k"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &kill_id);
             else
                 warn("-k", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ka"))
+        else if (argvLen == 3 && strstr(argv[i], "-ka"))
         {
             kill_all = true;
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtps"))
+        else if (argvLen == 5 && strstr(argv[i], "-rtps"))
         {
             if (i + 2 < argc)
             {
@@ -269,7 +274,7 @@ int main(int argc, char **argv)
             else
                 warn("-rtps", 2);
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-rtpr"))
+        else if (argvLen == 5 && strstr(argv[i], "-rtpr"))
         {
             if (i + 2 < argc)
             {
@@ -280,7 +285,7 @@ int main(int argc, char **argv)
             else
                 warn("-rtpr", 2);
         }
-        else if (strlen(argv[i]) == 9 && strstr(argv[i], "-rtps-aac"))
+        else if (argvLen == 9 && strstr(argv[i], "-rtps-aac"))
         {
             if (i + 2 < argc)
             {
@@ -291,7 +296,7 @@ int main(int argc, char **argv)
             else
                 warn("-rtps-aac", 2);
         }
-        else if (strlen(argv[i]) == 9 && strstr(argv[i], "-rtpr-aac"))
+        else if (argvLen == 9 && strstr(argv[i], "-rtpr-aac"))
         {
             if (i + 2 < argc)
             {
@@ -302,7 +307,7 @@ int main(int argc, char **argv)
             else
                 warn("-rtpr-aac", 2);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-rtp"))
+        else if (argvLen == 4 && strstr(argv[i], "-rtp"))
         {
             if (i + 3 < argc)
             {
@@ -314,7 +319,7 @@ int main(int argc, char **argv)
             else
                 warn("-rtp", 3);
         }
-        else if (strlen(argv[i]) == 8 && strstr(argv[i], "-rtp-aac"))
+        else if (argvLen == 8 && strstr(argv[i], "-rtp-aac"))
         {
             if (i + 3 < argc)
             {
@@ -326,53 +331,53 @@ int main(int argc, char **argv)
             else
                 warn("-rtp-aac", 3);
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-bind"))
+        else if (argvLen == 5 && strstr(argv[i], "-bind"))
         {
             rtp_bind = true;
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad"))
+        else if (argvLen == 4 && strstr(argv[i], "-vad"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &vad);
             else
                 warn("-vad", 1);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec"))
+        else if (argvLen == 4 && strstr(argv[i], "-aec"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &aec);
             else
                 warn("-aec", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns"))
+        else if (argvLen == 3 && strstr(argv[i], "-ns"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &ns);
             else
                 warn("-ns", 1);
         }
-        else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa"))
+        else if (argvLen == 6 && strstr(argv[i], "-ns_pa"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &ns_pa);
             else
                 warn("-ns_pa", 1);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc"))
+        else if (argvLen == 4 && strstr(argv[i], "-agc"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &agc);
             else
                 warn("-agc", 1);
         }
-        else if (strlen(argv[i]) == 3 && strstr(argv[i], "-rw"))
+        else if (argvLen == 3 && strstr(argv[i], "-rw"))
         {
             if (i + 1 < argc)
                 sscanf(argv[++i], "%d", &rw);
             else
                 warn("-rw", 1);
         }
-        else if (strlen(argv[i]) == 4 && strstr(argv[i], "-ctl"))
+        else if (argvLen == 4 && strstr(argv[i], "-ctl"))
         {
             if (i + 2 < argc)
             {
@@ -382,22 +387,24 @@ int main(int argc, char **argv)
             else
                 warn("-ctl", 2);
         }
-        else if (strlen(argv[i]) == 6 && strstr(argv[i], "-reset"))
+        else if (argvLen == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-list"))
+        else if (argvLen == 5 && strstr(argv[i], "-list"))
         {
             list = true;
         }
-        else if (strlen(argv[i]) == 5 && strstr(argv[i], "-info"))
+        else if (argvLen == 5 && strstr(argv[i], "-info"))
         {
             info = true;
+        }
+        else if (argvLen == 8 && strstr(argv[i], "-console"))
+        {
             if (i + 1 < argc)
-            {
-                memset(infoPath, 0, sizeof(infoPath));
-                strcpy(infoPath, argv[++i]);
-            }
+                consolePath = argv[++i];
+            else
+                warn("-console", 1);
         }
         else if (strstr(argv[i], "-?") || strstr(argv[i], "-help"))
         {
@@ -424,7 +431,13 @@ int main(int argc, char **argv)
 
     if (info)
     {
-        wmix_info(infoPath);
+        wmix_info();
+        helpFalg = false;
+    }
+
+    if (consolePath)
+    {
+        wmix_console(consolePath);
         helpFalg = false;
     }
 

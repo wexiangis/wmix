@@ -4,6 +4,7 @@
  *  服务端+客户端(或用wmix_user.h自己开发) 组建的混音器、音频托管工具
  * 
  **************************************************/
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -93,6 +94,54 @@ void delayus(unsigned int us)
         }                           \
     }                               \
     _tick1 = getTickUs();
+
+/*******************************************************************************
+ * 名称: wmix_console
+ * 功能: 重定向输出
+ * 参数: path 终端或文件路径
+ * 返回: 无
+ * 说明: 无
+ ******************************************************************************/
+void wmix_console(WMix_Struct *wmix, char *path)
+{
+    FILE *fp;
+
+    //空路径
+    if (!path || path[0] == 0)
+        return;
+
+    //这是/dev下的终端?
+    if (strncmp(path, "/dev/", 5) == 0)
+    {
+        //路径不存在?
+        if (access(path, F_OK) != 0)
+        {
+            printf("wmix_msg_thread: console %s not exist !!\r\n", path);
+            return;
+        }
+        wmix->consoleType = 0;
+    }
+    //这是文件
+    else
+    {
+        //尝试追加打开
+        fp = fopen(path, "a+");
+        if (!fp)
+        {
+            printf("wmix_msg_thread: file %s open faile !!\r\n", path);
+            return;
+        }
+        else
+            fclose(fp);
+        wmix->consoleType = 1;
+    }
+
+    printf("wmix_msg_thread: console point to %s \r\n", path);
+
+    //重定向
+    if (!freopen(path, wmix->consoleType == 0 ? "w" : "a+", stdout))
+        fprintf(stderr, "wmix_msg_thread: freopen %s error !!\r\n", path);
+}
 
 /*******************************************************************************
  * 名称: wmix_volume
@@ -3014,6 +3063,10 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->debug ? 1 : 0,
                     WMIX_VERSION);
                 break;
+            //重定向打印信息输出路径
+            case WMT_CONSOLE:
+                wmix_console(wmix, msg.value);
+                break;
             }
             continue;
         }
@@ -4529,6 +4582,7 @@ void help(char *argv0)
         "  -ns_pa 0/1 : 关/开 webrtc.ns 噪音抑制(播音)\n"
         "  -agc 0/1 : 关/开 webrtc.agc 自动增益\n"
         "  -? --help : 显示帮助\r\n"
+        "  -console path : 重定向打印信息输出路径,path示例: /dev/console /dev/ttyAMA0 或者文件\n"
         "\r\n"
         "Version: %s\r\n"
         "\r\n"
@@ -4553,14 +4607,14 @@ void show_steup(void)
            main_wmix->webrtcEnable[WR_AGC]);
 }
 
-#if (WMIX_MERGE_MODE == 2)
-void _wmix_loop(WMixThread_Param *wmtp)
+void main_loop(WMixThread_Param *wmtp)
 {
+    int consoleSyncCount = 0;
     sleep(1);
     while (1)
     {
-        //--- 重启 ---
-        if (wmtp->wmix->run == 0 &&
+        //各线程全都关闭时,reset混音器
+        if (wmtp->wmix->run == false &&
             wmtp->wmix->thread_sys == 0 &&
             wmtp->wmix->thread_record == 0 &&
             wmtp->wmix->thread_play == 0)
@@ -4575,17 +4629,29 @@ void _wmix_loop(WMixThread_Param *wmtp)
             wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_play_thread);
         }
         delayus(500000);
+
+        //当stdout指向文件时,定时刷新输出
+        consoleSyncCount += 500;
+        if (consoleSyncCount > 1999)
+        {
+            consoleSyncCount = 0;
+            if (wmtp->wmix->consoleType == 1)
+                fflush(stdout);
+        }
     }
 }
+
+#if (WMIX_MERGE_MODE == 2)
 void wmix_start()
 {
     main_wmix = wmix_init();
     if (main_wmix)
     {
+        //开始
         show_steup();
         wmix_volume(10);
         wmix_volumeMic(10);
-        wmix_throwOut_thread(main_wmix, 0, NULL, 0, &_wmix_loop);
+        wmix_throwOut_thread(main_wmix, 0, NULL, 0, &main_loop);
     }
     else
         printf("audio init failed !!\r\n");
@@ -4605,15 +4671,16 @@ void wmix_getSignal(int id)
 int main(int argc, char **argv)
 {
     int i, volume = -1, volumeMic = -1, volumeAgc = -1;
-    char *p;
     char *path = NULL; //启动音频路径
+    char *consolePath = NULL;
+    int argvLen;
 
     //传入参数处理
     if (argc > 1)
     {
         for (i = 1; i < argc; i++)
         {
-            if (strstr(argv[1], "-?") || strstr(argv[1], "help"))
+            if (strstr(argv[i], "-?") || strstr(argv[i], "help"))
             {
                 help(argv[0]);
                 return 0;
@@ -4633,62 +4700,68 @@ int main(int argc, char **argv)
         {
             for (i = 1; i < argc; i++)
             {
-                p = argv[i];
-                //
-                if (strlen(argv[i]) == 2 && strstr(argv[i], "-d"))
+                argvLen = strlen(argv[i]);
+
+                if (argvLen == 2 && strstr(argv[i], "-d"))
                 {
                     main_wmix->debug = true;
                 }
-                else if (strlen(argv[i]) == 2 && strstr(argv[i], "-v") && i + 1 < argc)
+                else if (argvLen == 2 && strstr(argv[i], "-v") && i + 1 < argc)
                 {
                     sscanf(argv[++i], "%d", &volume);
                 }
-                else if (strlen(argv[i]) == 3 && strstr(argv[i], "-vr") && i + 1 < argc)
+                else if (argvLen == 3 && strstr(argv[i], "-vr") && i + 1 < argc)
                 {
                     sscanf(argv[++i], "%d", &volumeMic);
                 }
-                else if (strlen(argv[i]) == 3 && strstr(argv[i], "-va") && i + 1 < argc)
+                else if (argvLen == 3 && strstr(argv[i], "-va") && i + 1 < argc)
                 {
                     sscanf(argv[++i], "%d", &volumeAgc);
                 }
-                else if (strlen(argv[i]) == 4 && strstr(argv[i], "-vad") && i + 1 < argc)
+                else if (argvLen == 4 && strstr(argv[i], "-vad") && i + 1 < argc)
                 {
                     if (argv[++i][0] == '1')
                         main_wmix->webrtcEnable[WR_VAD] = true;
                     else
                         main_wmix->webrtcEnable[WR_VAD] = false;
                 }
-                else if (strlen(argv[i]) == 4 && strstr(argv[i], "-aec") && i + 1 < argc)
+                else if (argvLen == 4 && strstr(argv[i], "-aec") && i + 1 < argc)
                 {
                     if (argv[++i][0] == '1')
                         main_wmix->webrtcEnable[WR_AEC] = 1;
                     else
                         main_wmix->webrtcEnable[WR_AEC] = 0;
                 }
-                else if (strlen(argv[i]) == 3 && strstr(argv[i], "-ns") && i + 1 < argc)
+                else if (argvLen == 3 && strstr(argv[i], "-ns") && i + 1 < argc)
                 {
                     if (argv[++i][0] == '1')
                         main_wmix->webrtcEnable[WR_NS] = 1;
                     else
                         main_wmix->webrtcEnable[WR_NS] = 0;
                 }
-                else if (strlen(argv[i]) == 6 && strstr(argv[i], "-ns_pa") && i + 1 < argc)
+                else if (argvLen == 6 && strstr(argv[i], "-ns_pa") && i + 1 < argc)
                 {
                     if (argv[++i][0] == '1')
                         main_wmix->webrtcEnable[WR_NS_PA] = 1;
                     else
                         main_wmix->webrtcEnable[WR_NS_PA] = 0;
                 }
-                else if (strlen(argv[i]) == 4 && strstr(argv[i], "-agc") && i + 1 < argc)
+                else if (argvLen == 4 && strstr(argv[i], "-agc") && i + 1 < argc)
                 {
                     if (argv[++i][0] == '1')
                         main_wmix->webrtcEnable[WR_AGC] = 1;
                     else
                         main_wmix->webrtcEnable[WR_AGC] = 0;
                 }
-                else if (strstr(p, ".wav") || strstr(p, ".mp3") || strstr(p, ".aac"))
-                    path = p;
+                else if (argvLen == 8 && strstr(argv[i], "-console") && i + 1 < argc)
+                {
+                    consolePath = argv[++i];
+                }
+                else if (strstr(argv[i], ".wav") || strstr(argv[i], ".mp3") || strstr(argv[i], ".aac"))
+                    path = argv[i];
             }
+            if (consolePath)
+                wmix_console(main_wmix, consolePath);
             if (volume >= 0)
                 wmix_volume(volume);
             if (volumeMic >= 0)
@@ -4704,28 +4777,11 @@ int main(int argc, char **argv)
                                      &wmix_load_audio_thread);
             }
         }
-
+        //开始
         show_steup();
-        sleep(1);
+        wmix_throwOut_thread(main_wmix, 0, NULL, 0, &main_loop);
         while (1)
-        {
-            //--- 重启 ---
-            if (main_wmix->run == 0 &&
-                main_wmix->thread_sys == 0 &&
-                main_wmix->thread_record == 0 &&
-                main_wmix->thread_play == 0)
-            {
-                delayus(500000);
-                main_wmix->run = true;
-#ifndef WMIX_RECORD_PLAY_SYNC
-                wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_shmem_write_circle);
-#endif
-                // wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_shmem_read_circle);
-                wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_msg_thread);
-                wmix_throwOut_thread(main_wmix, 0, NULL, 0, &wmix_play_thread);
-            }
             delayus(500000);
-        }
     }
     return 0;
 }

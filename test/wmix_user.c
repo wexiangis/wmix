@@ -51,8 +51,9 @@ typedef enum
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
 
-    WMT_LOG_SW = 100, //开关log
-    WMT_INFO = 101,   //打印信息
+    WMT_LOG_SW = 100,  //开关log
+    WMT_INFO = 101,    //打印信息
+    WMT_CONSOLE = 102, //重定向打印输出路径
     WMT_TOTAL,
 } WMIX_MSG_TYPE;
 
@@ -512,41 +513,6 @@ int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool bindMode
     return _wmix_rtp(ip, port, chn, freq, true, type, bindMode, 1);
 }
 
-//rtp流控制
-//id: 从上面两个函数返回的id值
-//ctrl: 0/运行 1/停止 2/重连(启用ip,port参数)
-void wmix_rtp_ctrl(int id, int ctrl, char *ip, int port)
-{
-    char msgPath[128] = {0};
-    WMix_Msg msg;
-    //
-    if (id == 0)
-        return;
-    //
-    wmix_auto_path(msgPath, id);
-    //
-    key_t msg_key;
-    int msg_fd;
-    if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) == -1)
-    {
-        fprintf(stderr, "wmix_rtp_ctrl: ftok err\n");
-        return;
-    }
-    if ((msg_fd = msgget(msg_key, 0666)) == -1)
-    {
-        fprintf(stderr, "wmix_rtp_ctrl: msgget err\n");
-        return;
-    }
-    //装填 message
-    memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = ctrl;
-    msg.value[0] = (port >> 8) & 0xff;
-    msg.value[1] = port & 0xff;
-    strcpy((char *)&msg.value[2], ip);
-    //发出
-    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-}
-
 bool wmix_check_id(int id)
 {
     char msgPath[128] = {0};
@@ -742,15 +708,28 @@ void wmix_rw_test(bool on)
     _wmix_set_value(WMT_RW_TEST, on ? 1 : 0);
 }
 
-void wmix_info(char *path)
+void wmix_info(void)
 {
     WMix_Msg msg;
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
     msg.type = WMT_INFO;
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+}
+
+void wmix_console(char *path)
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT_VOID();
+    //装填 message
+    msg.type = WMT_CONSOLE;
     if (path)
-        strcpy((char*)(msg.value), path);
+        strcpy(msg.value, path);
+    else
+        memset(msg.value, 0, sizeof(msg.value));
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }

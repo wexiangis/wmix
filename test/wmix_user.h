@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.3 - 20200914"
+#define WMIX_VERSION "V5.4 - 20201010"
 
 /* ----- 设置音量 -----
  * value: 音量 0~10
@@ -122,13 +122,6 @@ int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode
  */
 int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool bindMode);
 
-/* ----- rtp -----
- * rtp流控制
- * id: 从上面两个函数返回的id值
- * ctrl: 0/运行 1/停止 2/重连(启用ip,port参数)
- */
-void wmix_rtp_ctrl(int id, int ctrl, char *ip, int port);
-
 // 重置wmix, 正常返回0
 int wmix_reset(void);
 
@@ -165,8 +158,11 @@ void wmix_webrtc_agc(bool on);    // 自动增益
 // 自收发测试
 void wmix_rw_test(bool on);
 
-// 打印信息,path可以指定终端或输出文件的路径,NULL不使用
-void wmix_info(char *path);
+// 打印信息
+void wmix_info(void);
+
+// 重定向打印信息输出路径,path可以为终端路径,也可以为文件路径
+void wmix_console(char *path);
 
 //客户端(根据id) 发 服务端线程 控制类型
 typedef enum
