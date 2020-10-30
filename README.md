@@ -20,13 +20,13 @@
 
 * wmix -d &
 
-4. 录音10秒到wav文件 (设备要具备录音条件)
+4. 播放音频文件, -v 10 表示用最大音量(0~10)
+
+* wmixMsg ./audio/1x8000.wav -v 10
+
+5. 录音10秒到wav文件 (设备要具备录音条件)
 
 * wmixMsg -r ./xxx.wav -rt 10
-
-5. 播放音频文件, -v 10 表示用最大音量(0~10)
-
-* wmixMsg ./xxx.wav -v 10
 
 6. 清空播放列表
 
@@ -98,7 +98,7 @@
 
 3. 不要用127.0.0.1代替本机IP,别的设备会连不进来;
 
-4. 使用-rtps-aac或-rtpr-aac时,需指定声道和频率,如"-rtps 192.168.43.180 9999 -rc 2 -rr 44100"
+4. 使用-rtps-aac或-rtpr-aac时,需指定声道和频率,如"-rtps-aac 192.168.43.180 9999 -rc 2 -rr 44100"
 
 ---
 
@@ -170,4 +170,4 @@
 
 * 在 Makefile 改用 cross:=arm-linux-gnueabihf 再编译, MAKE_WEBRTC_AEC 库用 gcc 编译不过;
 
-* ps. 树莓派用 gcc 和 arm-linux-gnueabihf-gcc 编译的应用是通用的
+* ps. 树莓派自带编译器 gcc 和 arm-linux-gnueabihf-gcc 编译的应用是通用的

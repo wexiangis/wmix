@@ -1,4 +1,4 @@
-# cross:=arm-linux-gnueabihf
+cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
@@ -28,6 +28,9 @@ MAKE_WEBRTC_AGC=1
 
 # speex开源音频库
 MAKE_SPEEX=0
+
+# speexbeta3开源音频库(带aec)
+MAKE_SPEEX_BETA3=0
 
 host:=
 cc:=gcc
@@ -99,6 +102,12 @@ endif
 ifeq ($(MAKE_SPEEX),1)
 obj-flags+= -lspeex
 targetlib+= libspeex
+endif
+
+# SPEEX_BETA3 LIB
+ifeq ($(MAKE_SPEEX_BETA3),1)
+obj-flags+= -logg -lspeex -lspeexdsp
+targetlib+= libogg libspeexbeta3
 endif
 
 obj-wmixmsg+=./test/wmix_user.c \
@@ -224,6 +233,22 @@ libspeex:
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/speex-1.2.0 -rf
+
+libspeexbeta3:
+	@tar -xzf $(ROOT)/pkg/speex-1.2beta3.tar.gz -C $(ROOT)/libs && \
+	cd $(ROOT)/libs/speex-1.2beta3 && \
+	./configure --prefix=$(ROOT)/libs --host=$(host) --with-ogg=$(ROOT)/libs && \
+	make -j4 && make install && \
+	cd - && \
+	rm $(ROOT)/libs/speex-1.2beta3 -rf
+
+libogg:
+	@tar -xJf $(ROOT)/pkg/libogg-1.3.4.tar.xz -C $(ROOT)/libs && \
+	cd $(ROOT)/libs/libogg-1.3.4 && \
+	./configure --prefix=$(ROOT)/libs --host=$(host) && \
+	make -j4 && make install && \
+	cd - && \
+	rm $(ROOT)/libs/libogg-1.3.4 -rf
 
 cleanall: clean
 	@rm -rf $(ROOT)/libs/* -rf

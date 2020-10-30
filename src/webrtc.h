@@ -53,7 +53,6 @@ void *aec_init(int chn, int freq, int intervalMs, bool *debug);
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameNum);
 int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms);
 int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms);
-int aec_process3(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, float reduce);
 void aec_release(void *fp);
 #endif
 

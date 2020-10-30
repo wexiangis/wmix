@@ -483,55 +483,6 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
 }
 
 /*
- *  二合一回声消除
- * 
- *  param:
- *      frameFar <in> : 远端音频数据(即录音数据)
- *      frameNear <in> : 近端数据(即将要播放的音频数据)
- *      frameOut <out> : 处理好的播音数据
- *      frameNum <in> : 帧数(每帧chn*2字节), 必须为 chn*freq/1000*10ms 的倍数
- *      reduce <in> : frameFar乘上的倍数, 决定了消音强度, 推荐范围0.1 ~ 1.0
- *  return:
- *      0/OK
- *      -1/failed
- */
-int aec_process3(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, float reduce)
-{
-    Aec_Struct *as = fp;
-    int cLen, cPkg, cChn;
-    int realFrameLen, realPkgFrame;
-
-    //实际 frameFar 的 int16_t 字数
-    realFrameLen = frameNum * as->chn;
-
-    //实际每包数据的 int16_t 字数
-    realPkgFrame = as->pkgFrame * as->chn;
-
-    for (cLen = 0; cLen < realFrameLen; cLen += realPkgFrame)
-    {
-        //装载数据,把 int6_t 转为 AEC_FRAME_TYPE (双声道时,把左右声拆分到ns->out[2])
-        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
-        {
-            for (cChn = 0; cChn < as->chn; cChn++)
-            {
-                as->in[cChn][cPkg] = (AEC_FRAME_TYPE)(*frameFar++);
-                as->out[cChn][cPkg] = (AEC_FRAME_TYPE)(*frameNear++);
-            }
-        }
-        // 把 as->out[2] 中的 as->in[2] (frameFar) 减去
-        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
-            for (cChn = 0; cChn < as->chn; cChn++)
-                as->out[cChn][cPkg] = as->out[cChn][cPkg] - (AEC_FRAME_TYPE)(as->in[cChn][cPkg] * reduce);
-        //提取输出数据
-        for (cPkg = 0; cPkg < as->pkgFrame; cPkg++)
-            for (cChn = 0; cChn < as->chn; cChn++)
-                *frameOut++ = (int16_t)as->out[cChn][cPkg];
-    }
-
-    return 0;
-}
-
-/*
  *  内存回收 
  */
 void aec_release(void *fp)
