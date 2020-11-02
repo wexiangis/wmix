@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     SocketStruct *ss;
     RtpPacket rtpPacket;
     unsigned char buff[1024];
-    int readSize = RTP_PCMA_PKT_SIZE;
+    uint32_t readSize = RTP_PCMA_PKT_SIZE;
     WAVContainer_t container;
     bool bindMode = false;
     char *ip = RTP_IP;
@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
         if (ret > 0)
         {
             printf("rtp_recv: %d / %d + %d\n", ret, ret - readSize, readSize);
-            ret = G711a2PCM(rtpPacket.payload, buff, readSize, 0);
+            ret = G711a2PCM((char *)rtpPacket.payload, (char *)buff, readSize, 0);
             write(fd, buff, ret);
             continue;
         }

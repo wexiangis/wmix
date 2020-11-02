@@ -103,9 +103,9 @@ int main(int argc, char *argv[])
 
         //格式转换
         if (pkgType == 1)
-            ret = PCM2G711u(pcm, rtpPacket.payload, ret, 0); //PCM -> PCMU
+            ret = PCM2G711u((char *)pcm, (char *)rtpPacket.payload, ret, 0); //PCM -> PCMU
         else
-            ret = PCM2G711a(pcm, rtpPacket.payload, ret, 0); //PCM -> PCMA
+            ret = PCM2G711a((char *)pcm, (char *)rtpPacket.payload, ret, 0); //PCM -> PCMA
 
         //发包
         ret = rtp_send(ss, &rtpPacket, ret);

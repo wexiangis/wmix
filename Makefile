@@ -1,4 +1,4 @@
-cross:=arm-linux-gnueabihf
+# cross:=arm-linux-gnueabihf
 # cross:=arm-himix200-linux
 # cross:=arm-himix100-linux
 
@@ -30,7 +30,7 @@ MAKE_WEBRTC_AGC=1
 MAKE_SPEEX=0
 
 # speexbeta3开源音频库(带aec)
-MAKE_SPEEX_BETA3=0
+MAKE_SPEEX_BETA3=1
 
 host:=
 cc:=gcc

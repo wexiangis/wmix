@@ -97,8 +97,8 @@ int main(int argc, char *argv[])
 
         rtpPacket.rtpHeader.timestamp += (AacHeader.adtsBufferFullness + 1) / 2;
 
-        usleep(
-            (AacHeader.adtsBufferFullness + 1) / 2 * 1000 * 1000 / aac_freqList[AacHeader.samplingFreqIndex] - 1000);
+        usleep((AacHeader.adtsBufferFullness + 1) / 2 * 1000 * 1000 /
+                aac_freqList[AacHeader.samplingFreqIndex] - 1000);
     }
 
     close(fd);

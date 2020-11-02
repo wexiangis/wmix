@@ -727,7 +727,7 @@ void wmix_console(char *path)
     //装填 message
     msg.type = WMT_CONSOLE;
     if (path)
-        strcpy(msg.value, path);
+        strcpy((char *)msg.value, path);
     else
         memset(msg.value, 0, sizeof(msg.value));
     //发出

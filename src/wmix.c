@@ -59,10 +59,10 @@ void delayus(unsigned int us)
 
 /* 自动校准的延时3件套 */
 /* 把reset放在死循环的开头,delay放在任务完成之后 */
-#define DELAY_US_INIT \
-    __time_t _tick1 = 0, _tick2 = 0, _tickErr;
+#define DELAY_INIT \
+    __time_t _tick1 = 0, _tick2;
 
-#define DELAY_US_RESET() \
+#define DELAY_RESET() \
     _tick1 = getTickUs();
 
 #define DELAY_US(us)                             \
@@ -71,29 +71,22 @@ void delayus(unsigned int us)
         delayus(us - (_tick2 - _tick1));         \
     _tick1 = getTickUs();
 
+#define DELAY_INIT2 \
+    __time_t _tick = 0, _tickErr;
+
 //逐级逼近20ms延时,时差大则用大延时,时差小则用小延时
-#define DELAY_US_NEAR()             \
-    _tick2 = getTickUs();           \
-    if (_tick2 > _tick1)            \
-    {                               \
-        _tickErr = _tick2 - _tick1; \
-        if (_tickErr < 10000)       \
-        {                           \
-            delayus(5000);          \
-            continue;               \
-        }                           \
-        else if (_tickErr < 17000)  \
-        {                           \
-            delayus(2000);          \
-            continue;               \
-        }                           \
-        else if (_tickErr < 19000)  \
-        {                           \
-            delayus(1000);          \
-            continue;               \
-        }                           \
-    }                               \
-    _tick1 = getTickUs();
+#define DELAY_US2(us, err)             \
+    _tickErr = getTickUs() - _tick;    \
+    if (_tickErr > 0 && us > _tickErr) \
+    {                                  \
+        _tickErr = us - _tickErr;      \
+        if (_tickErr > err)            \
+        {                              \
+            delayus(_tickErr / 2);     \
+            continue;                  \
+        }                              \
+    }                                  \
+    _tick = getTickUs();
 
 /*******************************************************************************
  * 名称: wmix_console
@@ -971,7 +964,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     size_t buffSize2;
 #ifndef WMIX_RECORD_PLAY_SYNC
     //严格录音间隔
-    DELAY_US_INIT;
+    DELAY_INIT;
     //采样时间间隔us
     int intervalUs = WMIX_INTERVAL_MS * 1000 - 2000;
 #endif
@@ -1007,7 +1000,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #else
     //线程数+1
     wmix->thread_sys += 1;
-    DELAY_US_RESET();
+    DELAY_RESET();
     while (wmix->run)
 #endif
     {
@@ -1334,77 +1327,6 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 #endif
 }
 
-void wmix_shmem_read_circle(WMixThread_Param *wmtp)
-{
-#if 0
-    WMix_Struct *wmix = wmtp->wmix;
-    //
-    uint8_t buff[320];
-    int16_t addr = -1, ret;
-    WMix_Point head, src;
-    uint32_t tick;
-    uint8_t rdce = 2;
-    //
-    uint32_t bpsCount = 0, total = 0, totalWait;
-    uint32_t second = 0, bytes_p_second = WMIX_FREQ*WMIX_CHANNELS*WMIX_SAMPLE/8;
-    int timeout;
-    //
-    //独占 reduceMode
-    if(rdce > 1)
-        wmix->reduceMode = rdce;
-    //
-    src.U8 = buff;
-    head.U8 = 0;
-    tick = 0;
-    //
-    totalWait = bytes_p_second/2;
-    //
-    wmix->thread_sys += 1;
-    //
-    while(wmix->run)
-    {
-        ret = wmix_mem_read((int16_t*)buff, 160, &addr, false)*2;
-        if(ret > 0)
-        {
-            //等播放指针赶上写入进度
-            // timeout = 0;
-            // while(wmix->run && timeout++ < 200 &&
-            //     tick > wmix->tick && 
-            //     tick - wmix->tick > totalWait)
-            //     delayus(5000);
-            // if(!wmix->run)
-            //     break;
-            //
-            head = wmix_load_wavStream(
-                wmix, 
-                src, ret, WMIX_FREQ, WMIX_CHANNELS, WMIX_SAMPLE, head, rdce, &tick);
-            //
-            bpsCount += ret;
-            total += ret;
-            //播放时间
-            if(bpsCount > bytes_p_second)
-            {
-                bpsCount -= bytes_p_second;
-                second = total/bytes_p_second;
-                if(wmix->debug) printf("  SHMEM-PLAY: %02d:%02d\r\n", second/60, second%60);
-            }
-            //
-            delayus(1000);
-            continue;
-        }
-        //
-        delayus(10000);
-    }
-    //
-    if(wmix->debug) printf(">> SHMEM-PLAY: end <<\r\n");
-    //
-    if(rdce > 1)
-        wmix->reduceMode = 1;
-    //
-    wmix->thread_sys -= 1;
-#endif
-}
-
 //============= shm =============
 
 void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
@@ -1420,9 +1342,9 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     uint32_t buffSize;
     //
     WMix_Point head, src;
-    ssize_t ret, total = 0, total2 = 0, totalWait;
-    double buffSizePow;
-    uint32_t tick, second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
+    ssize_t ret, total = 0;
+    // ssize_t totalWait;
+    uint32_t tick, second = 0, bytes_p_second, bpsCount = 0;
     uint8_t rdce = ((wmtp->flag >> 8) & 0xFF) + 1, rdceIsMe = 0;
     //
     // int timeout;
@@ -1447,15 +1369,12 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = chn * sample / 8 * freq;
     buffSize = bytes_p_second;
-#if (WMIX_MODE == 1)
-    totalWait = bytes_p_second / 2;
-#else
-    totalWait = wmtp->wmix->playback->period_bytes;
-#endif
+// #if (WMIX_MODE == 1)
+//     totalWait = bytes_p_second / 2;
+// #else
+//     totalWait = wmtp->wmix->playback->period_bytes;
+// #endif
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
-    //
-    bytes_p_second2 = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    buffSizePow = (double)bytes_p_second2 / bytes_p_second;
     //
     if (wmtp->wmix->debug)
         printf("<< FIFO-W: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n\r\n",
@@ -1488,7 +1407,6 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
             //
             bpsCount += ret;
             total += ret;
-            total2 = total * buffSizePow;
             //播放时间
             if (bpsCount > bytes_p_second)
             {
@@ -1969,7 +1887,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     //
     size_t buffSize, buffSizeR, buffSize2, frame_size, count;
     WMix_Point src, dist;
@@ -1982,7 +1900,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
     void *aacEnc = NULL;
     uint8_t aacbuff[4096];
     //
-    DELAY_US_INIT;
+    DELAY_INIT;
     //
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
@@ -2069,7 +1987,7 @@ void wmix_rtp_send_aac_thread(WMixThread_Param *wmtp)
         //msg 检查
         WMIX_RTP_CTRL_MSG_RECV("RTP-SEND-AAC");
         //
-        DELAY_US_RESET();
+        DELAY_RESET();
         //
         ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
         if (ret > 0)
@@ -2171,7 +2089,7 @@ void wmix_rtp_recv_aac_thread(WMixThread_Param *wmtp)
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     uint32_t bytes_p_second;
     int chnInt, freqInt; //用于decode参数
     //
@@ -2373,10 +2291,10 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     //
     size_t buffSize;
-    WMix_Point src, dist;
+    // WMix_Point src, dist;
     ssize_t ret = 0, total = 0;
     uint32_t second = 0, bytes_p_second, bpsCount = 0;
     //
@@ -2384,7 +2302,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
     RtpPacket rtpPacket;
     long ctrlType = 0;
     //
-    DELAY_US_INIT;
+    DELAY_INIT2;
     //
     int16_t record_addr = -1;
     uint8_t *buff;
@@ -2461,7 +2379,7 @@ void wmix_rtp_send_pcma_thread(WMixThread_Param *wmtp)
         if (ret > 0)
         {
             //逐级逼近20ms延时
-            DELAY_US_NEAR();
+            DELAY_US2(19500, 50);
             //使用0数据
             if (ctrlType == WCT_SILENCE)
                 memset(buff, 0, ret);
@@ -2534,7 +2452,7 @@ void wmix_rtp_recv_pcma_thread(WMixThread_Param *wmtp)
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
+    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
     uint32_t bytes_p_second;
     //
     int ret = 0;
@@ -3065,7 +2983,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 break;
             //重定向打印信息输出路径
             case WMT_CONSOLE:
-                wmix_console(wmix, msg.value);
+                wmix_console(wmix, (char *)msg.value);
                 break;
             }
             continue;
@@ -3458,7 +3376,6 @@ WMix_Struct *wmix_init(void)
 #ifndef WMIX_RECORD_PLAY_SYNC
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle);
 #endif
-    // wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_read_circle);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
@@ -3863,9 +3780,8 @@ void wmix_load_wav(
     //写循环缓冲区
     WMix_Point src, head;
     //播放计时
-    uint32_t tick, total = 0, total2 = 0, totalWait;
+    uint32_t tick, total = 0, totalWait;
     uint32_t second = 0, bpsCount = 0;
-    double totalPow;
     //背景消减和重复播放延时
     uint8_t rdce = reduce + 1, rdceIsMe = 0;
     uint16_t repeat = (uint16_t)repeatInterval * 10;
@@ -3920,7 +3836,6 @@ void wmix_load_wav(
     //默认缓冲区大小设为1秒字播放字节数
     buffSize = wav.format.bytes_p_second;
     buffSize2 = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    totalPow = (double)buffSize2 / buffSize;
     totalWait = buffSize2 / 2;
     //把每秒数据包拆得越细, 打断速度越快
     //以下拆包的倍数必须能同时被 wav.format.sample_rate 和 WMIX_FREQ 整除 !!
@@ -3987,7 +3902,6 @@ void wmix_load_wav(
             //写入的总字节数统计
             bpsCount += ret;
             total += ret;
-            total2 = total * totalPow;
             //播放时间
             if (bpsCount > wav.format.bytes_p_second)
             {
@@ -4051,7 +3965,7 @@ void wmix_load_wav(
                        wav.format.bytes_p_second,
                        repeat / 10);
             //
-            total = total2 = bpsCount = 0;
+            total = bpsCount = 0;
             src.U8 = buff;
             head.U8 = wmix->head.U8;
             tick = 0;
@@ -4083,9 +3997,8 @@ void wmix_load_aac(
     //写循环缓冲区
     WMix_Point src, head;
     //播放计时
-    uint32_t tick, total = 0, total2 = 0, totalWait;
+    uint32_t tick, total = 0, totalWait;
     uint32_t second = 0, bpsCount = 0;
-    double totalPow;
     //背景消减和重复播放延时
     uint8_t rdce = reduce + 1, rdceIsMe = 0;
     uint16_t repeat = (uint16_t)repeatInterval * 10;
@@ -4146,8 +4059,6 @@ void wmix_load_aac(
     else
         rdce = 1;
     //
-    totalPow = (double)(WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ) / bytes_p_second;
-    //
     totalWait = bytes_p_second / 2;
     //
     src.U8 = out;
@@ -4192,7 +4103,6 @@ void wmix_load_aac(
             //写入的总字节数统计
             bpsCount += ret;
             total += ret;
-            total2 = total * totalPow;
             //播放时间
             if (bpsCount > bytes_p_second)
             {
@@ -4254,7 +4164,7 @@ void wmix_load_aac(
                        bytes_p_second,
                        repeat / 10);
             //
-            total = total2 = bpsCount = 0;
+            total = bpsCount = 0;
             src.U8 = out;
             head.U8 = wmix->head.U8;
             tick = 0;
@@ -4294,10 +4204,9 @@ typedef struct
     WMix_Point head, src; //同步循环缓冲区的head指针 和 指向数据的src指针
     WMix_Struct *wmix;
     //
-    uint32_t tick;                     //循环缓冲区head指针走过了多少字节,用于防止数据写如缓冲区太快超过head指针
-    uint8_t loopWord;                  //每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放
-    uint32_t total, total2, totalWait; //total:文件读取字节数 total2:等比例转换为输出格式后的字节数
-    double totalPow;                   // totalPow = total2/total; total2 = total*totalPow
+    uint32_t tick;             //循环缓冲区head指针走过了多少字节,用于防止数据写如缓冲区太快超过head指针
+    uint8_t loopWord;          //每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放
+    uint32_t total, totalWait; //total:文件读取字节数
     //
     uint32_t bps, bpsCount; //bps:每秒字节数 bpsCount计数用于计算当前播放时间
     //
@@ -4329,8 +4238,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     if (wmm->head.U8 == 0)
     {
         wmm->bps = pcm->channels * 16 / 8 * header->samplerate;
-        wmm->totalPow = (double)(WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ) / wmm->bps;
-        wmm->totalWait = wmm->bps * wmm->totalPow / 2;
+        wmm->totalWait = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ / 2;//等半秒
         //
         if (wmm->wmix->debug)
             printf(
@@ -4346,7 +4254,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
                 wmm->bps,
                 wmm->repeat / 10);
         //
-        wmm->total = wmm->total2 = wmm->bpsCount = 0;
+        wmm->total = wmm->bpsCount = 0;
         wmm->head.U8 = 0;
         wmm->tick = 0;
     }
@@ -4408,7 +4316,6 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     //总字节数计数
     wmm->bpsCount += count;
     wmm->total += count;
-    wmm->total2 = wmm->total * wmm->totalPow;
     //播放时间
     if (wmm->bpsCount > wmm->bps)
     {
@@ -4624,7 +4531,6 @@ void main_loop(WMixThread_Param *wmtp)
 #ifndef WMIX_RECORD_PLAY_SYNC
             wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_shmem_write_circle);
 #endif
-            // wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_shmem_read_circle);
             wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_msg_thread);
             wmix_throwOut_thread(wmtp->wmix, 0, NULL, 0, &wmix_play_thread);
         }

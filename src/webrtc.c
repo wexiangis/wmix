@@ -686,7 +686,7 @@ typedef struct
  *      chn <in> : 声道数
  *      freq <in> : 8000, 16000, 32000
  *      intervalMs <int> : 分包间隔 10ms, 20ms
- *      value : 增益,范围1~20,0不起用,越大则维持音量越大(过大会破音)
+ *      value : 增益,范围1~50,0不起用,越大则维持音量越大(过大会破音)
  *      debug : debug标志指针,不使用则置NULL
  *  return:
  *      fp指针
@@ -814,9 +814,7 @@ int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
             for (cChn = 0; cChn < as->chn; cChn++)
                 *frameOut++ = (int16_t)as->out[0][cPkg];
     }
-    // #ifdef WMIX_WEBRTC_DEBUG
-    //     printf("WebRtcAgc_Process:  inMicLevel/%d != outMicLevel/%d\r\n", inMicLevel, outMicLevel);
-    // #endif
+    // printf("WebRtcAgc_Process:  inMicLevel/%d != outMicLevel/%d\r\n", inMicLevel, outMicLevel);
     return 0;
 }
 

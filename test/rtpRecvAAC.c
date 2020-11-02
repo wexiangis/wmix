@@ -18,9 +18,8 @@ int main(int argc, char *argv[])
     int fd;
     int ret;
     SocketStruct *ss;
-    int dataSize;
+    uint32_t dataSize;
     uint8_t aacBuff[2048];
-    AacHeader AacHeader;
     RtpPacket rtpPacket;
     bool bindMode = false;
     char *ip = RTP_IP;

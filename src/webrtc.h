@@ -9,8 +9,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// #define WMIX_WEBRTC_DEBUG
-
 /* ---------- 接收来自Makefile的宏定义 ---------- */
 /* ----------   若要强制使能,手动置1   ---------- */
 
