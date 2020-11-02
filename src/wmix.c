@@ -22,6 +22,7 @@
 #include "g711codec.h"
 #include "rtp.h"
 #include "webrtc.h"
+#include "speexlib.h"
 
 #if (WMIX_MP3)
 #include "mad.h"
@@ -1027,6 +1028,12 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
             aec_release(wmix->webrtcPoint[WR_AEC]);
             wmix->webrtcPoint[WR_AEC] = NULL;
         }
+#elif (WMIX_SPEEX_BETA3)
+        if (!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
+        {
+            spx_aec_release(wmix->webrtcPoint[WR_AEC]);
+            wmix->webrtcPoint[WR_AEC] = NULL;
+        }
 #endif
         //失能释放
 #if (WMIX_WEBRTC_AGC)
@@ -1101,6 +1108,23 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                                 (int16_t *)buff,                                          //输出的数据,得 人说话声音
                                 frame_num,
                                 0); //评估回声时延
+                        }
+                    }
+#elif (WMIX_SPEEX_BETA3)
+                    //回声消除 (16000Hz时要求CPU算力较高)
+                    if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000 && WMIX_FREQ % 8000 == 0)
+                    {
+                        if (wmix->webrtcPoint[WR_AEC] == NULL)
+                            wmix->webrtcPoint[WR_AEC] = spx_aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, 0, &wmix->debug);
+                        if (wmix->webrtcPoint[WR_AEC])
+                        {
+                            //开始转换
+                            spx_aec_process(
+                                wmix->webrtcPoint[WR_AEC],
+                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                                (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
+                                (int16_t *)buff,                                          //输出的数据,得 人说话声音
+                                frame_num);
                         }
                     }
 #endif
@@ -1299,6 +1323,12 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
         aec_release(wmix->webrtcPoint[WR_AEC]);
         wmix->webrtcPoint[WR_AEC] = NULL;
     }
+#elif (WMIX_SPEEX_BETA3)
+    if (!wmix->webrtcEnable[WR_AEC] && wmix->webrtcPoint[WR_AEC])
+    {
+        spx_aec_release(wmix->webrtcPoint[WR_AEC]);
+        wmix->webrtcPoint[WR_AEC] = NULL;
+    }
 #endif
     //失能释放
 #if (WMIX_WEBRTC_AGC)
@@ -1369,11 +1399,11 @@ void wmix_load_wav_fifo_thread(WMixThread_Param *wmtp)
     //
     bytes_p_second = chn * sample / 8 * freq;
     buffSize = bytes_p_second;
-// #if (WMIX_MODE == 1)
-//     totalWait = bytes_p_second / 2;
-// #else
-//     totalWait = wmtp->wmix->playback->period_bytes;
-// #endif
+    // #if (WMIX_MODE == 1)
+    //     totalWait = bytes_p_second / 2;
+    // #else
+    //     totalWait = wmtp->wmix->playback->period_bytes;
+    // #endif
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
     //
     if (wmtp->wmix->debug)
@@ -4238,7 +4268,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     if (wmm->head.U8 == 0)
     {
         wmm->bps = pcm->channels * 16 / 8 * header->samplerate;
-        wmm->totalWait = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ / 2;//等半秒
+        wmm->totalWait = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ / 2; //等半秒
         //
         if (wmm->wmix->debug)
             printf(

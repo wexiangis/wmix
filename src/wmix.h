@@ -37,7 +37,7 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.4 - 20201010"
+#define WMIX_VERSION "V5.4 - 20201102"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"

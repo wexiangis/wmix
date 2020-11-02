@@ -61,7 +61,8 @@ void *spx_aec_init(int chn, int freq, int intervalMs, int delayms, bool *debug)
     sas->pkgFrame = freq / 1000 * sas->intervalMs; //必须10ms每包
     //初始化
     sas->st = speex_echo_state_init(sas->pkgFrame, delayms);
-    if (!sas->st) {
+    if (!sas->st)
+    {
         if (debug && (*debug))
             printf("speex_echo_state_init failed !! \r\n");
         free(sas);
@@ -79,6 +80,7 @@ void *spx_aec_init(int chn, int freq, int intervalMs, int delayms, bool *debug)
     }
     if (debug && (*debug))
         printf("spx_aec_init: chn/%d freq/%d intervalMs/%d pkgFrame/%d x %d\r\n", chn, freq, sas->intervalMs, sas->pkgFrame, chn);
+    return sas;
 }
 
 /*
@@ -95,8 +97,7 @@ void *spx_aec_init(int chn, int freq, int intervalMs, int delayms, bool *debug)
  */
 int spx_aec_process(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum)
 {
-    SpxAec_Struct *sas;
-    int ret;
+    SpxAec_Struct *sas = (SpxAec_Struct *)fp;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
 
@@ -125,10 +126,10 @@ int spx_aec_process(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *fr
         }
         //开始处理
         speex_echo_cancellation(
-            sas->st, 
-            (const spx_int16_t *)sas->in[0], //仅单声道
+            sas->st,
+            (const spx_int16_t *)sas->in[0],  //仅单声道
             (const spx_int16_t *)sas->out[0], //仅单声道
-            (spx_int16_t *)sas->out[0]); //仅单声道
+            (spx_int16_t *)sas->out[0]);      //仅单声道
         //提取输出数据
         for (cPkg = 0; cPkg < sas->pkgFrame; cPkg++)
             for (cChn = 0; cChn < sas->chn; cChn++)

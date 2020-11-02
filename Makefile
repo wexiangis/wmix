@@ -18,7 +18,7 @@ MAKE_WEBRTC_VAD=1
 
 # 选择启用webrtc_aec回声消除 0/关 1/启用
 # (需启用 MAKE_WEBRTC_VAD, 否则编译 wmix 时报错)
-MAKE_WEBRTC_AEC=1
+MAKE_WEBRTC_AEC=0
 
 # 选择启用webrtc_ns噪音抑制 0/关 1/启用
 MAKE_WEBRTC_NS=1
@@ -29,7 +29,7 @@ MAKE_WEBRTC_AGC=1
 # speex开源音频库
 MAKE_SPEEX=0
 
-# speexbeta3开源音频库(带aec)
+# speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用
 MAKE_SPEEX_BETA3=1
 
 host:=
@@ -48,6 +48,7 @@ obj-wmix+= ./src/wav.c ./src/wav.h
 obj-wmix+= ./src/rtp.c ./src/rtp.h
 obj-wmix+= ./src/g711codec.c ./src/g711codec.h
 obj-wmix+= ./src/webrtc.c ./src/webrtc.h
+obj-wmix+= ./src/speexlib.c ./src/speexlib.h
 
 # -lxxx
 obj-flags= -lm -lpthread -lasound -ldl
