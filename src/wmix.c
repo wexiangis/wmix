@@ -4089,7 +4089,7 @@ void wmix_load_aac(
     else
         rdce = 1;
     //
-    totalWait = bytes_p_second / 2;
+    totalWait = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ / 2;
     //
     src.U8 = out;
     head.U8 = 0;

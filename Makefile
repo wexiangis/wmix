@@ -30,7 +30,7 @@ MAKE_WEBRTC_AGC=1
 MAKE_SPEEX=0
 
 # speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用
-MAKE_SPEEX_BETA3=1
+MAKE_SPEEX_BETA3=0
 
 host:=
 cc:=gcc
@@ -42,7 +42,17 @@ endif
 
 ROOT=$(shell pwd)
 
-# BASE
+# define
+DEF= -DMAKE_MP3=$(MAKE_MP3)
+DEF+= -DMAKE_AAC=$(MAKE_AAC)
+DEF+= -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
+DEF+= -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC)
+DEF+= -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS)
+DEF+= -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
+DEF+= -DMAKE_SPEEX=$(MAKE_SPEEX)
+DEF+= -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
+
+# base
 obj-wmix+= ./src/wmix.c ./src/wmix.h
 obj-wmix+= ./src/wav.c ./src/wav.h
 obj-wmix+= ./src/rtp.c ./src/rtp.h
@@ -142,7 +152,7 @@ obj-rtprecvaac+=./test/rtpRecvAAC.c \
 		./src/aac.h
 
 target: wmixmsg rtpTest
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) -DMAKE_MP3=$(MAKE_MP3) -DMAKE_AAC=$(MAKE_AAC) -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD) -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC) -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS) -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
+	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) $(DEF)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
