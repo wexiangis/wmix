@@ -37,7 +37,7 @@
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.4 - 20201102"
+#define WMIX_VERSION "V5.4 - 20201220"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -66,10 +66,11 @@
 
 #endif
 
-//1音量时的保底音量, 用户配置[1~10], 实际[11~20], 0还是0
-#define WMIX_VOLUME_BASE 10
+//1音量时的保底音量
+//配置音量为[1~10]时,实际[WMIX_VOLUME_BASE+1~WMIX_VOLUME_BASE+10],0还是0
+#define WMIX_VOLUME_BASE 5
 
-//录播音包间隔ms, 必须10的倍数且>=10
+//录播音包间隔ms,必须10的倍数且>=10
 #define WMIX_INTERVAL_MS 20
 
 //每帧字节数
@@ -162,6 +163,7 @@ typedef enum
     WMT_RTP_SEND_AAC = 23,    //rtp send pcma (value格式见wmix_user.c)
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
+    WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息
@@ -269,6 +271,10 @@ typedef struct
 
     //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;
+
+    //保存混音数据池的数据流到wav文件
+    int note_fd;//写wav文件的描述符
+    char note_path[WMIX_MSG_BUFF_SIZE];//首字符是否为0来判断是否在note模式
 } WMix_Struct;
 
 /* ---------- 混音器主要操作 ---------- */

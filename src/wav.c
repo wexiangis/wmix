@@ -194,3 +194,25 @@ void WAV_Params(WAVContainer_t *wav, uint32_t duration_time, uint8_t chn, uint8_
     wav->chunk.length = duration_time * wav->format.bytes_p_second;
     wav->header.length = wav->chunk.length + sizeof(wav->chunk) + sizeof(wav->format) + sizeof(wav->header) - 8;
 }
+
+//更新文件实际长度(fd需处于指向文件尾部状态)
+void WAV_WriteLen(int fd)
+{
+    unsigned int total = (unsigned int)lseek(fd, 0, SEEK_CUR);
+    unsigned int chunkLen;
+    //至少大于44
+    if (total >= 44)
+    {
+        chunkLen = total - 44;
+        total = total - 8;
+        //写入总长度信息
+        lseek(fd, 4, SEEK_SET);
+        write(fd, &total, 4);
+        //写入采样长度信息
+        lseek(fd, 40, SEEK_SET);
+        write(fd, &chunkLen, 4);
+        //指针移动回尾部,并保存
+        lseek(fd, 0, SEEK_END);
+        fsync(fd);
+    }
+}

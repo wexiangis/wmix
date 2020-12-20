@@ -18,7 +18,7 @@ MAKE_WEBRTC_VAD=1
 
 # 选择启用webrtc_aec回声消除 0/关 1/启用
 # (需启用 MAKE_WEBRTC_VAD, 否则编译 wmix 时报错)
-MAKE_WEBRTC_AEC=0
+MAKE_WEBRTC_AEC=1
 
 # 选择启用webrtc_ns噪音抑制 0/关 1/启用
 MAKE_WEBRTC_NS=1

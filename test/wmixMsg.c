@@ -62,6 +62,8 @@ void help(char *argv0)
         "              3    : WCT_RESET 重置/重连(rtp) \n"
         "              4    : WCT_SILENCE 静音,使用0数据运行 \n"
         "\n"
+        "  -note wavPath : 保存混音数据池的数据流到wav文件,写0关闭\n"
+        "\n"
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
         "  -list : 打印所有任务信息\n"
@@ -135,6 +137,8 @@ int main(int argc, char **argv)
     char *rtp_aac_remote_ip;
     int rtp_aac_remote_port;
     bool rtpsr_aac = false;
+
+    char *notePath = NULL;
 
     int log = -1;
     bool reset = false;
@@ -387,6 +391,13 @@ int main(int argc, char **argv)
             else
                 warn("-ctl", 2);
         }
+        else if (argvLen == 5 && strstr(argv[i], "-note"))
+        {
+            if (i + 1 < argc)
+                notePath = argv[++i];
+            else
+                warn("-note", 1);
+        }
         else if (argvLen == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
@@ -438,6 +449,12 @@ int main(int argc, char **argv)
     if (consolePath)
     {
         wmix_console(consolePath);
+        helpFalg = false;
+    }
+
+    if (notePath)
+    {
+        wmix_note(notePath[0] == '0' ? NULL : notePath);
         helpFalg = false;
     }
 

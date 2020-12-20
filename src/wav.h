@@ -99,4 +99,7 @@ int WAV_ReadHeader(int fd, WAVContainer_t *container);
 int WAV_WriteHeader(int fd, WAVContainer_t *container);
 void WAV_Params(WAVContainer_t *wav, uint32_t duration_time, uint8_t chn, uint8_t sample, uint16_t freq);
 
+//更新文件实际长度(fd需处于指向文件尾部状态)
+void WAV_WriteLen(int fd);
+
 #endif

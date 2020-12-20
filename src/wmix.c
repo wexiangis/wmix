@@ -989,7 +989,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     int16_t *pL, *pR;
     int aec_sync_c;
     if (fd == 0)
-        fd = open(AEC_SYNC_SAVE_FILE, O_WRONLY | O_CREAT, 0666);
+        fd = open(AEC_SYNC_SAVE_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 #endif
 
     //录音频率和目标频率的比值
@@ -2749,6 +2749,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     bool err_exit = false;
     //刚启动,playRun和recordRun都为false,这里置9999,不再清理
     int playTickTimeout = 9999, recordTickTimeout = 9999;
+    WAVContainer_t wav;
 
     //路径检查 //F_OK 是否存在 R_OK 是否有读权限 W_OK 是否有写权限 X_OK 是否有执行权限
     if (access(WMIX_MSG_PATH, F_OK) != 0)
@@ -2962,6 +2963,31 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 wmix->loopWordFifo += 1;
                 wmix->loopWordRtp += 1;
                 break;
+            //保存混音数据池的数据流到wav文件
+            case WMT_NOTE:
+                //关闭正在进行的note
+                wmix->note_path[0] = 0;
+                //这是一次关闭指令
+                if (!msg.value[0])
+                    break;
+                //等待关闭
+                while(wmix->note_fd > 0)
+                    delayus(5000);
+                //开始新文件
+                wmix->note_fd = open((const char *)msg.value, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                if (wmix->note_fd < 1)
+                {
+                    printf("wmix_msg_thread: create note %s failed !!\r\n", msg.value);
+                    wmix->note_fd = 0;
+                    break;
+                }
+                //创建wav头
+                WAV_Params(&wav, 10, WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
+                WAV_WriteHeader(wmix->note_fd, &wav);
+                fsync(wmix->note_fd);
+                //通知 wmix_play_thread 开始写数据
+                strcpy(wmix->note_path, (char *)msg.value);
+                break;
             //开关log
             case WMT_LOG_SW:
                 if (msg.value[0])
@@ -2989,6 +3015,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   queue: total/%d, head/%d, tail/%d\r\n"
                     "   shmemRun: %d\r\n"
                     "   reduceMode: %d\r\n"
+                    "   note: %s\r\n"
                     "   debug: %d\r\n"
                     "\r\n"
                     "   version: %s\r\n"
@@ -3008,6 +3035,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->onPlayCount, wmix->queue.head, wmix->queue.tail,
                     wmix->shmemRun,
                     wmix->reduceMode,
+                    wmix->note_path,
                     wmix->debug ? 1 : 0,
                     WMIX_VERSION);
                 break;
@@ -3253,6 +3281,19 @@ void wmix_play_thread(WMixThread_Param *wmtp)
 #else
                     SNDWAV_WritePcm(playback, frame_num);
 #endif
+                    //note模式,写文件
+                    if (wmix->note_fd > 0 && wmix->note_path[0])
+                    {
+                        write(wmix->note_fd, playBuff, pkg_size);
+                        fsync(wmix->note_fd);
+                    }
+                    //非note模式,关闭描述符
+                    else if (wmix->note_fd > 0 && !wmix->note_path[0])
+                    {
+                        WAV_WriteLen(wmix->note_fd);
+                        close(wmix->note_fd);
+                        wmix->note_fd = 0;
+                    }
 
 #ifndef AEC_FILE_STREAM_TEST
 #ifdef WMIX_RECORD_PLAY_SYNC
@@ -3311,6 +3352,13 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             wmix->webrtcPoint[WR_NS_PA] = NULL;
         }
 #endif
+        //非note模式,关闭描述符
+        if (wmix->note_fd > 0 && !wmix->note_path[0])
+        {
+            WAV_WriteLen(wmix->note_fd);
+            close(wmix->note_fd);
+            wmix->note_fd = 0;
+        }
     }
 #ifdef AEC_FILE_STREAM_TEST
     close(fd);
@@ -3409,10 +3457,10 @@ WMix_Struct *wmix_init(void)
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
     wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
 
-    wmix->webrtcEnable[WR_VAD] = 1;
+    wmix->webrtcEnable[WR_VAD] = 0;
     wmix->webrtcEnable[WR_AEC] = 0;
     wmix->webrtcEnable[WR_NS] = 1;
-    wmix->webrtcEnable[WR_NS_PA] = 1;
+    wmix->webrtcEnable[WR_NS_PA] = 0;//正常播放用不到
     wmix->webrtcEnable[WR_AGC] = 1;
 
 #if (WMIX_MODE == 1)
