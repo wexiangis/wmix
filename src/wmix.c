@@ -3424,7 +3424,7 @@ WMix_Struct *wmix_init(void)
     //路径检查 //F_OK 是否存在 R_OK 是否有读权限 W_OK 是否有写权限 X_OK 是否有执行权限
     if (access(WMIX_MSG_PATH, F_OK) != 0)
         mkdir(WMIX_MSG_PATH, 0777);
-
+    //播音、录音控制符初始化
 #if (WMIX_MODE == 1)
     if (hiaudio_ao_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS))
         return NULL;
@@ -3436,7 +3436,7 @@ WMix_Struct *wmix_init(void)
         return NULL;
     SNDPCMContainer_t *recordback = NULL; //wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
 #endif
-
+    //混音器内部数据初始化
     wmix = (WMix_Struct *)calloc(1, sizeof(WMix_Struct));
     wmix->buff = (uint8_t *)calloc(WMIX_BUFF_SIZE + 4, sizeof(uint8_t));
 #if (WMIX_MODE != 1)
@@ -3447,16 +3447,17 @@ WMix_Struct *wmix_init(void)
     wmix->end.U8 = wmix->buff + WMIX_BUFF_SIZE;
 
     // pthread_mutex_init(&wmix->lock, NULL);
-
     wmix->run = true;
     wmix->reduceMode = 1;
 
+    //混音器主要线程初始化
 #ifndef WMIX_RECORD_PLAY_SYNC
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle);
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle);//录音及数据写共享内存线程
 #endif
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);//接收客户端消息的线程
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);//从播音数据迟取数据并播放的线程
 
+    //webrtc功能默认启动状态
     wmix->webrtcEnable[WR_VAD] = 0;
     wmix->webrtcEnable[WR_AEC] = 0;
     wmix->webrtcEnable[WR_NS] = 1;
@@ -3476,10 +3477,11 @@ WMix_Struct *wmix_init(void)
     wmix->volume = 10;
     wmix->volumeMic = 10;
     wmix->volumeAgc = 5;
-
+    //设置音量
     wmix_volume(wmix->volume);
     wmix_volumeMic(wmix->volumeMic);
 
+    //接收 ctrl+c 信号,在进程关闭时做出内存释放处理
     signal(SIGINT, signal_callback);
     signal(SIGTERM, signal_callback);
 
@@ -4673,9 +4675,6 @@ int main(int argc, char **argv)
     }
 
     main_wmix = wmix_init();
-
-    signal(SIGPIPE, wmix_getSignal);
-    signal(SIGINT, wmix_getSignal);
 
     if (main_wmix)
     {

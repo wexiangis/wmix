@@ -235,25 +235,25 @@ typedef struct
     WMix_Point start, end; //缓冲区头尾指针
     WMix_Point head, tail; //当前缓冲区读写指针
     // pthread_mutex_t lock;//互斥锁
-    //
+
     bool run;               //全局正常运行标志
     uint8_t loopWord;       //全局播放循环标志(每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放)
     uint8_t loopWordRecord; //全局录音循环标志
     uint8_t loopWordFifo;   //全局fifo循环标志
     uint8_t loopWordRtp;    //全局rtp循环标志
     uint32_t tick;          //播放指针启动至今走过的字节数
-    //
+
     uint32_t thread_sys;    //线程计数 增加线程时+1 减少时-1 等于0时全部退出
     uint32_t thread_record; //线程计数 增加线程时+1 减少时-1 等于0时全部退出
     uint32_t thread_play;   //线程计数 增加线程时+1 减少时-1 等于0时全部退出
-    //
+
     bool playRun;   //指导 play_thread() 运行, thread_play=0 时暂停播放
     bool recordRun; //指导 wmix_shmem_write_circle() 运行, thread_record=0 时暂停播放
     int shmemRun;   //共享内存录音服务标志
-    //
+
     key_t msg_key; //接收来自客户端的消息
     int msg_fd;    //客户端消息句柄
-    //
+
     uint8_t reduceMode;   //背景消减倍数,平时为1(即播放音频数据/1,混音时大小不变)
     bool debug;           //打印log?
     WMix_Queue queue;     //排队头尾标记
@@ -276,10 +276,6 @@ typedef struct
     int note_fd;//写wav文件的描述符
     char note_path[WMIX_MSG_BUFF_SIZE];//首字符是否为0来判断是否在note模式
 } WMix_Struct;
-
-/* ---------- 混音器主要操作 ---------- */
-
-//-- 支持混音范围: 44100Hz及以下频率,采样为16bit的音频 --
 
 //初始化
 WMix_Struct *wmix_init(void);
