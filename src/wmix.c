@@ -17,18 +17,24 @@
 #include <arpa/inet.h>
 
 #include "wmix.h"
+#include "delay.h"
+
+//wav编码
 #include "wav.h"
-
+//g711和pcm互转编码
 #include "g711codec.h"
+//rtp协议和数据发收
 #include "rtp.h"
+//webrtc接口二次封装
 #include "webrtc.h"
+//speex接口二次封装
 #include "speexlib.h"
-
+//mp3编码
 #if (WMIX_MP3)
 #include "mad.h"
 #include "id3.h"
 #endif
-
+//aac编码
 #if (WMIX_AAC)
 #include "aac.h"
 #endif
@@ -47,47 +53,6 @@ static void signal_callback(int signo)
     }
     exit(0);
 }
-
-/* 稍微精准的延时 */
-#include <sys/time.h>
-void delayus(unsigned int us)
-{
-    struct timeval delay;
-    delay.tv_sec = us / 1000000;
-    delay.tv_usec = us % 1000000;
-    select(0, NULL, NULL, NULL, &delay);
-}
-
-/* 自动校准的延时3件套 */
-/* 把reset放在死循环的开头,delay放在任务完成之后 */
-#define DELAY_INIT \
-    __time_t _tick1 = 0, _tick2;
-
-#define DELAY_RESET() \
-    _tick1 = getTickUs();
-
-#define DELAY_US(us)                             \
-    _tick2 = getTickUs();                        \
-    if (_tick2 > _tick1 && _tick2 - _tick1 < us) \
-        delayus(us - (_tick2 - _tick1));         \
-    _tick1 = getTickUs();
-
-#define DELAY_INIT2 \
-    __time_t _tick = 0, _tickErr;
-
-//逐级逼近20ms延时,时差大则用大延时,时差小则用小延时
-#define DELAY_US2(us, err)             \
-    _tickErr = getTickUs() - _tick;    \
-    if (_tickErr > 0 && us > _tickErr) \
-    {                                  \
-        _tickErr = us - _tickErr;      \
-        if (_tickErr > err)            \
-        {                              \
-            delayus(_tickErr / 2);     \
-            continue;                  \
-        }                              \
-    }                                  \
-    _tick = getTickUs();
 
 /*******************************************************************************
  * 名称: wmix_console

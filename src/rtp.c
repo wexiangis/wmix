@@ -223,15 +223,6 @@ void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t 
     }
 }
 
-//
-__time_t getTickUs(void)
-{
-    // struct timespec tp={0};
-    struct timeval tv = {0};
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000000u + tv.tv_usec;
-}
-
 /* ----- 辅助 wmix 添加的链表管理结构 -----
 ** ----- 检索到新增同ip和端口连接时,使用现存的socket句柄,关闭时由最后使用者回收内存 ----- */
 

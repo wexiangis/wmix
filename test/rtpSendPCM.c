@@ -9,6 +9,7 @@
 
 #include "rtp.h"
 #include "g711codec.h"
+#include "delay.h"
 
 //网络参数,有些端口vlc是不支持的
 #define RTP_IP "127.0.0.1"

@@ -32,18 +32,17 @@ MAKE_SPEEX=0
 # speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用
 MAKE_SPEEX_BETA3=0
 
-host:=
-cc:=gcc
-
+# system
+HOST:=
+CC:=gcc
+ROOT=$(shell pwd)
 ifdef cross
-	host=$(cross)
-	cc=$(cross)-gcc
+	HOST=$(cross)
+	CC=$(cross)-gcc
 endif
 
-ROOT=$(shell pwd)
-
 # define
-DEF= -DMAKE_MP3=$(MAKE_MP3)
+DEF+= -DMAKE_MP3=$(MAKE_MP3)
 DEF+= -DMAKE_AAC=$(MAKE_AAC)
 DEF+= -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
 DEF+= -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC)
@@ -53,127 +52,131 @@ DEF+= -DMAKE_SPEEX=$(MAKE_SPEEX)
 DEF+= -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
 
 # base
-obj-wmix+= ./src/wmix.c ./src/wmix.h
-obj-wmix+= ./src/wav.c ./src/wav.h
-obj-wmix+= ./src/rtp.c ./src/rtp.h
-obj-wmix+= ./src/g711codec.c ./src/g711codec.h
-obj-wmix+= ./src/webrtc.c ./src/webrtc.h
-obj-wmix+= ./src/speexlib.c ./src/speexlib.h
+OBJ-WMIX+= ./src/wmix.c ./src/wmix.h
+OBJ-WMIX+= ./src/wav.c ./src/wav.h
+OBJ-WMIX+= ./src/rtp.c ./src/rtp.h
+OBJ-WMIX+= ./src/g711codec.c ./src/g711codec.h
+OBJ-WMIX+= ./src/webrtc.c ./src/webrtc.h
+OBJ-WMIX+= ./src/speexlib.c ./src/speexlib.h
+OBJ-WMIX+= ./src/delay.c ./src/delay.h
 
+# ui
+OBJ-WMIX+= ./ui/fbmap.c ./ui/fbmap.h
+OBJ-WMIX+= ./ui/wave.c ./ui/wave.h
+OBJ-WMIX+= ./ui/bmp.c ./ui/bmp.h
+
+# math
+OBJ-WMIX+= ./math/fft.c ./math/fft.h
+
+# wmixMsg
+OBJ-WMIXMSG+= ./test/wmixMsg.c
+OBJ-WMIXMSG+= ./test/wmix_user.c ./test/wmix_user.h
+
+# tools
+OBJ-RTPSENDPCM+= ./test/rtpSendPCM.c
+OBJ-RTPSENDPCM+= ./src/rtp.c ./src/rtp.h
+OBJ-RTPSENDPCM+= ./src/g711codec.c ./src/g711codec.h
+OBJ-RTPSENDPCM+= ./src/wav.c ./src/wav.h
+OBJ-RTPSENDPCM+= ./src/delay.c ./src/delay.h
+
+OBJ-RTPRECVPCM+= ./test/rtpRecvPCM.c
+OBJ-RTPRECVPCM+= ./src/rtp.c ./src/rtp.h
+OBJ-RTPRECVPCM+= ./src/g711codec.c ./src/g711codec.h
+OBJ-RTPRECVPCM+= ./src/wav.c ./src/wav.h
+
+OBJ-RTPSENDACC+= ./test/rtpSendAAC.c
+OBJ-RTPSENDACC+= ./src/rtp.c ./src/rtp.h
+OBJ-RTPSENDACC+= ./src/aac.c ./src/aac.h
+
+OBJ-RTPRECVACC+= ./test/rtpRecvAAC.c
+OBJ-RTPRECVACC+= ./src/rtp.c ./src/rtp.h
+OBJ-RTPRECVACC+= ./src/aac.c ./src/aac.h
+
+# -Ixxx
+CINC+= -I./src -I$(ROOT)/libs/include
+# -Lxxx
+CLIBS+= -L$(ROOT)/libs/lib
 # -lxxx
-obj-flags= -lm -lpthread -lasound -ldl
+CFLAGS+= -lm -lpthread -lasound -ldl
 
 # 选择要编译的库列表
-targetlib=
+TARGET-LIBS=
 
 # ALSA LIB
 ifeq ($(MAKE_ALSA),1)
-targetlib+= libalsa
+TARGET-LIBS+= libalsa
 endif
 
 # MP3 LIB
 ifeq ($(MAKE_MP3),1)
-obj-wmix+=./src/id3.c ./src/id3.h
-obj-flags+= -lmad
-targetlib+= libmad
+OBJ-WMIX+=./src/id3.c ./src/id3.h
+CFLAGS+= -lmad
+TARGET-LIBS+= libmad
 endif
 
 # AAC LIB
 ifeq ($(MAKE_AAC),1)
-obj-wmix+=./src/aac.c ./src/aac.h
-obj-flags+= -lfaac -lfaad
-targetlib+= libfaac libfaad
+OBJ-WMIX+=./src/aac.c ./src/aac.h
+CFLAGS+= -lfaac -lfaad
+TARGET-LIBS+= libfaac libfaad
 endif
 
 # WEBRTC_VAD LIB
 ifeq ($(MAKE_WEBRTC_VAD),1)
-obj-flags+= -lwebrtcvad
-targetlib+= libwebrtcvad
+CFLAGS+= -lwebrtcvad
+TARGET-LIBS+= libwebrtcvad
 endif
 
 # WEBRTC_AEC LIB
 ifeq ($(MAKE_WEBRTC_AEC),1)
-targetlib+= libwebrtcaec
-obj-flags+= -lwebrtcaec -lwebrtcaecm
+TARGET-LIBS+= libwebrtcaec
+CFLAGS+= -lwebrtcaec -lwebrtcaecm
 endif
 
 # WEBRTC_NS LIB
 ifeq ($(MAKE_WEBRTC_NS),1)
-obj-flags+= -lwebrtcns
-targetlib+= libwebrtcns
+CFLAGS+= -lwebrtcns
+TARGET-LIBS+= libwebrtcns
 endif
 
 # WEBRTC_AGC LIB
 ifeq ($(MAKE_WEBRTC_AGC),1)
-obj-flags+= -lwebrtcagc
-targetlib+= libwebrtcagc
+CFLAGS+= -lwebrtcagc
+TARGET-LIBS+= libwebrtcagc
 endif
 
 # SPEEX LIB
 ifeq ($(MAKE_SPEEX),1)
-obj-flags+= -lspeex
-targetlib+= libspeex
+CFLAGS+= -lspeex
+TARGET-LIBS+= libspeex
 endif
 
 # SPEEX_BETA3 LIB
 ifeq ($(MAKE_SPEEX_BETA3),1)
-obj-flags+= -logg -lspeex -lspeexdsp
-targetlib+= libogg libspeexbeta3
+CFLAGS+= -logg -lspeex -lspeexdsp
+TARGET-LIBS+= libogg libspeexbeta3
 endif
 
-obj-wmixmsg+=./test/wmix_user.c \
-		./test/wmix_user.h \
-		./test/wmixMsg.c
-
-obj-rtpsendpcm+=./test/rtpSendPCM.c \
-		./src/rtp.c \
-		./src/rtp.h \
-		./src/g711codec.c \
-		./src/g711codec.h
-
-obj-rtprecvpcm+=./test/rtpRecvPCM.c \
-		./src/rtp.c \
-		./src/rtp.h \
-		./src/g711codec.c \
-		./src/g711codec.h \
-		./src/wav.c \
-		./src/wav.h
-
-obj-rtpsendaac+=./test/rtpSendAAC.c \
-		./src/rtp.c \
-		./src/rtp.h \
-		./src/aac.c \
-		./src/aac.h
-
-obj-rtprecvaac+=./test/rtpRecvAAC.c \
-		./src/rtp.c \
-		./src/rtp.h \
-		./src/aac.c \
-		./src/aac.h
-
 target: wmixmsg rtpTest
-	@$(cc) -Wall -o wmix $(obj-wmix) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include $(obj-flags) $(DEF)
+	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ-WMIX) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
-	@$(cc) -Wall -o wmixMsg $(obj-wmixmsg) -lpthread
-
-fifo:
-	@$(cc) -Wall -o fifo -lpthread -I./test -I./src ./test/fifo.c ./test/wmix_user.c ./src/wav.c -lpthread
+	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-WMIXMSG) -lpthread
 
 rtpTest:
-	@$(cc) -Wall -o rtpSendPCM $(obj-rtpsendpcm) -I./src
-	@$(cc) -Wall -o rtpRecvPCM $(obj-rtprecvpcm) -I./src
-	@$(cc) -Wall -o rtpSendAAC $(obj-rtpsendaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
-	@$(cc) -Wall -o rtpRecvAAC $(obj-rtprecvaac) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(CC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I./src
+	@$(CC) -Wall -o $(ROOT)/tools/rtpRecvPCM $(OBJ-RTPRECVPCM) -I./src
+	@$(CC) -Wall -o $(ROOT)/tools/rtpSendAAC $(OBJ-RTPSENDACC) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(CC) -Wall -o $(ROOT)/tools/rtpRecvAAC $(OBJ-RTPRECVACC) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 
-libs: $(targetlib)
+libs: $(TARGET-LIBS)
 	@echo "---------- all complete !! ----------"
 
 libalsa:
 	@tar -xjf $(ROOT)/pkg/alsa-lib-1.1.9.tar.bz2 -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/alsa-lib-1.1.9 && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) && \
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/alsa-lib-1.1.9 -rf
@@ -181,7 +184,7 @@ libalsa:
 libmad:
 	@tar -xzf $(ROOT)/pkg/libmad-0.15.1b.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/libmad-0.15.1b && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) --enable-speed && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) --enable-speed && \
 	sed -i 's/-fforce-mem//g' ./Makefile && \
 	make -j4 && make install && \
 	cd - && \
@@ -190,7 +193,7 @@ libmad:
 libfaac:
 	@tar -xzf $(ROOT)/pkg/faac-1.29.9.2.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/faac-1.29.9.2 && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) && \
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/faac-1.29.9.2 -rf
@@ -198,7 +201,7 @@ libfaac:
 libfaad:
 	@tar -xzf $(ROOT)/pkg/faad2-2.8.8.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/faad2-2.8.8 && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) && \
 	make -j4 && make install && \
 	sed -i '/#pragma message/c // ignore update tips' $(ROOT)/libs/include/faad.h && \
 	cd - && \
@@ -207,7 +210,7 @@ libfaad:
 libwebrtcvad:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_vad_so.sh $(cc) && \
+	bash ./build_vad_so.sh $(CC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -215,8 +218,8 @@ libwebrtcvad:
 libwebrtcaec:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_aec_so.sh $(cc) && \
-	bash ./build_aecm_so.sh $(cc) && \
+	bash ./build_aec_so.sh $(CC) && \
+	bash ./build_aecm_so.sh $(CC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -224,7 +227,7 @@ libwebrtcaec:
 libwebrtcns:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_ns_so.sh $(cc) && \
+	bash ./build_ns_so.sh $(CC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -232,7 +235,7 @@ libwebrtcns:
 libwebrtcagc:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_agc_so.sh $(cc) && \
+	bash ./build_agc_so.sh $(CC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -240,7 +243,7 @@ libwebrtcagc:
 libspeex:
 	@tar -xzf $(ROOT)/pkg/speex-1.2.0.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/speex-1.2.0 && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) && \
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/speex-1.2.0 -rf
@@ -248,7 +251,7 @@ libspeex:
 libspeexbeta3:
 	@tar -xzf $(ROOT)/pkg/speex-1.2beta3.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/speex-1.2beta3 && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) --with-ogg=$(ROOT)/libs && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) --with-ogg=$(ROOT)/libs && \
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/speex-1.2beta3 -rf
@@ -256,13 +259,13 @@ libspeexbeta3:
 libogg:
 	@tar -xJf $(ROOT)/pkg/libogg-1.3.4.tar.xz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/libogg-1.3.4 && \
-	./configure --prefix=$(ROOT)/libs --host=$(host) && \
+	./configure --prefix=$(ROOT)/libs --host=$(HOST) && \
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/libogg-1.3.4 -rf
 
 cleanall: clean
-	@rm -rf $(ROOT)/libs/* -rf
+	@rm $(ROOT)/libs/* -rf
 
 clean:
-	@rm -rf ./wmix ./wmixMsg ./rtpSendPCM ./rtpRecvPCM ./rtpSendAAC ./rtpRecvAAC ./fifo
+	@rm $(ROOT)/wmix $(ROOT)/wmixMsg $(ROOT)/tools/* -rf

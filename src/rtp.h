@@ -105,9 +105,6 @@ int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
 //创建dsp文件(用于vlc播放)
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
-//系统当前毫秒数获取
-__time_t getTickUs(void);
-
 /* ----- 辅助 wmix 添加的链表管理结构 -----
 ** ----- 检索到新增同ip和端口连接时,使用现存的socket句柄,关闭时由最后使用者回收内存 ----- */
 
