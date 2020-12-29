@@ -7,23 +7,23 @@
 # 置1时编译外部alsa库,否则使用编译器自带
 MAKE_ALSA=1
 
-# 选择启用mp3播放支持 0/关 1/启用
+# 启用mp3播放支持 0/关 1/启用
 MAKE_MP3=1
 
-# 选择启用aac播放/录音 0/关 1/启用
+# 启用aac播放/录音 0/关 1/启用
 MAKE_AAC=1
 
-# 选择启用webrtc_vad人声识别 0/关 1/启用
+# 启用webrtc_vad人声识别 0/关 1/启用
 MAKE_WEBRTC_VAD=1
 
-# 选择启用webrtc_aec回声消除 0/关 1/启用
+# 启用webrtc_aec回声消除 0/关 1/启用
 # (需启用 MAKE_WEBRTC_VAD, 否则编译 wmix 时报错)
 MAKE_WEBRTC_AEC=1
 
-# 选择启用webrtc_ns噪音抑制 0/关 1/启用
+# 启用webrtc_ns噪音抑制 0/关 1/启用
 MAKE_WEBRTC_NS=1
 
-# 选择启用webrtc_agc自动增益 0/关 1/启用
+# 启用webrtc_agc自动增益 0/关 1/启用
 MAKE_WEBRTC_AGC=1
 
 # speex开源音频库
@@ -31,6 +31,10 @@ MAKE_SPEEX=0
 
 # speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用
 MAKE_SPEEX_BETA3=0
+
+# 启用FFT(快速傅立叶变换)采样点个数, 0/关闭 其它/开启
+# 必须为2的x次方,如4,8,16...513,1024
+MAKE_FFT_SAMPLE=1024
 
 # system
 HOST:=
@@ -50,6 +54,7 @@ DEF+= -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS)
 DEF+= -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
 DEF+= -DMAKE_SPEEX=$(MAKE_SPEEX)
 DEF+= -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
+DEF+= -DMAKE_FFT_SAMPLE=$(MAKE_FFT_SAMPLE)
 
 # base
 OBJ-WMIX+= ./src/wmix.c ./src/wmix.h

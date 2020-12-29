@@ -32,12 +32,18 @@
 #define WMIX_AAC 1
 #endif
 
+#ifdef MAKE_FFT_SAMPLE
+#define WMIX_FFT_SAMPLE MAKE_FFT_SAMPLE
+#else
+#define WMIX_FFT_SAMPLE 1024
+#endif
+
 /* ---------- wmix ---------- */
 
 #include <pthread.h>
 #include <sys/ipc.h>
 
-#define WMIX_VERSION "V5.4 - 20201220"
+#define WMIX_VERSION "V5.4 - 20201229"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -163,7 +169,8 @@ typedef enum
     WMT_RTP_SEND_AAC = 23,    //rtp send pcma (value格式见wmix_user.c)
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
-    WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件
+    WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件,写0关闭
+    WMT_FFT = 27,             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息
@@ -272,9 +279,17 @@ typedef struct
     //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;
 
+#if(WMIX_FFT_SAMPLE)
+    //FFT
+    char fftPath[WMIX_MSG_BUFF_SIZE];
+    float *fftStream;//数据池
+    float *fftOutAF;//输出幅-频曲线
+    float *fftOutPF;//输出相-频曲线
+#endif
+
     //保存混音数据池的数据流到wav文件
-    int note_fd;//写wav文件的描述符
-    char note_path[WMIX_MSG_BUFF_SIZE];//首字符是否为0来判断是否在note模式
+    int noteFd;//写wav文件的描述符
+    char notePath[WMIX_MSG_BUFF_SIZE];//首字符是否为0来判断是否在note模式
 } WMix_Struct;
 
 //初始化

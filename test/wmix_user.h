@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.4 - 20201220"
+#define WMIX_VERSION "V5.4 - 20201229"
 
 /* ----- 设置音量 -----
  * value: 音量 0~10
@@ -187,6 +187,9 @@ void wmix_list(void);
 
 //保存混音数据池的数据流到wav文件,置NULL关闭
 void wmix_note(char *wavPath);
+
+//输出fft图像,置NULL关闭
+void wmix_fft(char *path);
 
 #ifdef __cplusplus
 };

@@ -44,7 +44,7 @@ void IFFTR(
  *      in[inLen]: 新数据流
  *      inLen: 数据流长度,必须为2的整数倍
  *      stream[stLen]: 数据池,新数据in[]以先进先出的方式进入数据池,然后完成一次变换
- *      stLen: 数据池长度,必须为2的x次方,且大于inLen
+ *      stLen: 数据池长度,必须为2的x次方,且大于等于inLen
  *      outAF[stLen]: 持续更新的 幅-频曲线
  *      outPF[stLen]: 持续更新的 相-频曲线
  */

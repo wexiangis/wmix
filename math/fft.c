@@ -413,12 +413,12 @@ void IFFTR(
 void fft_stream(float in[], unsigned int inLen, float stream[], unsigned int stLen, float outAF[], float outPF[])
 {
     unsigned int i, j;
-    //平移
-    for (i = 0, j = inLen; i < inLen; i++, j++)
-        stream[i] = stream[j];
-    //新数据入池
-    for (j = 0; i < stLen && j < inLen; i++, j++)
-        stream[i] = in[j];
+	//平移
+	for (i = 0, j = inLen; i < inLen; i++, j++)
+		stream[i] = stream[j];
+	//新数据入池
+	for (j = 0; i < stLen && j < inLen; i++, j++)
+		stream[i] = in[j];
     //变换
     FFT(stream, NULL, NULL, NULL, outAF, outPF, stLen);
 }

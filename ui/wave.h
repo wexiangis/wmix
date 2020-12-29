@@ -40,8 +40,11 @@ typedef struct
 
 Wave_Struct *wave_init(int xOffset, int yOffset, int width, int height);
 void wave_release(Wave_Struct **ws);
+
 void wave_load(Wave_Struct *ws, int chn, short value);
+void wave_skip(Wave_Struct *ws);
+
 void wave_output(Wave_Struct *ws);
-void wave_output2(Wave_Struct *ws);//移动时间轴但不输出
+void wave_output2(Wave_Struct *ws, char *bmpPath);
 
 #endif

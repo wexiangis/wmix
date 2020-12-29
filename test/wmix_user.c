@@ -50,7 +50,8 @@ typedef enum
     WMT_RTP_SEND_AAC = 23,    //rtp send pcma (value格式见wmix_user.c)
     WMT_RTP_RECV_AAC = 24,    //rtp recv pcma (value格式见wmix_user.c)
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
-    WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件
+    WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件,写0关闭
+    WMT_FFT = 27,             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息
@@ -825,6 +826,22 @@ void wmix_note(char *wavPath)
     msg.type = WMT_NOTE;
     if (wavPath)
         strcpy((char *)msg.value, wavPath);
+    else
+        memset(msg.value, 0, sizeof(msg.value));
+    //发出
+    msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
+}
+
+//输出fft图像
+void wmix_fft(char *path)
+{
+    WMix_Msg msg;
+    //msg初始化
+    MSG_INIT_VOID();
+    //装填 message
+    msg.type = WMT_FFT;
+    if (path)
+        strcpy((char *)msg.value, path);
     else
         memset(msg.value, 0, sizeof(msg.value));
     //发出

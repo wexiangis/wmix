@@ -15,4 +15,12 @@ extern int fb_width, fb_height;
  */
 void fb_output(unsigned char *data, int offsetX, int offsetY, int width, int height);
 
+/*
+ *  截取屏幕保存为bmp文件
+ */
+void fb_screensShot(char *bmpPath);
+void fb_screensShot2(int order, char *folder);
+
+void fb_release(void);
+
 #endif

@@ -13,6 +13,8 @@
 #include <sys/mman.h>
 #include <linux/fb.h>
 
+#include "bmp.h"
+
 #define FB_PATH "/dev/fb0"
 
 typedef struct
@@ -28,16 +30,23 @@ typedef struct
 } FbMap;
 
 static FbMap *fbmap = NULL;
-int fb_width = 1024, fb_height = 600;
+int fb_width = 720, fb_height = 480;
 
 void fb_release(void)
 {
     if (!fbmap)
         return;
-    if (fbmap->fb)
-        munmap(fbmap->fb, fbmap->fbSize);
     if (fbmap->fd > 0)
+    {
+        if (fbmap->fb)
+            munmap(fbmap->fb, fbmap->fbSize);
         close(fbmap->fd);
+    }
+    else
+    {
+        if (fbmap->fb)
+            free(fbmap->fb);
+    }
     free(fbmap);
     fbmap = NULL;
 }
@@ -51,19 +60,23 @@ int fb_init(void)
     fbmap = (FbMap *)calloc(1, sizeof(FbMap));
 
     fbmap->fd = open(FB_PATH, O_RDWR);
-    if (fbmap->fd < 1)
+    if (fbmap->fd > 0)
     {
-        fprintf(stderr, "fb_init: open %s err \r\n", FB_PATH);
-        fb_release();
-        return -1;
+        if (ioctl(fbmap->fd, FBIOGET_VSCREENINFO, &fbmap->fbInfo) < 0)
+        {
+            fprintf(stderr, "fb_init: ioctl FBIOGET_VSCREENINFO err \r\n");
+            fb_release();
+            return -1;
+        }
+    }
+    else
+    {
+        fprintf(stderr, "fb_init: open %s failed \r\n", FB_PATH);
+        fbmap->fbInfo.xres = fb_width;
+        fbmap->fbInfo.yres = fb_height;
+        fbmap->fbInfo.bits_per_pixel = 3 * 8;
     }
 
-    if (ioctl(fbmap->fd, FBIOGET_VSCREENINFO, &fbmap->fbInfo) < 0)
-    {
-        fprintf(stderr, "fb_init: ioctl FBIOGET_VSCREENINFO err \r\n");
-        fb_release();
-        return -1;
-    }
     printf("frameBuffer: %s, %d x %d, %dbytes / %dbpp\r\n",
            FB_PATH, fbmap->fbInfo.xres, fbmap->fbInfo.yres, fbmap->fbInfo.bits_per_pixel / 8, fbmap->fbInfo.bits_per_pixel);
 
@@ -75,13 +88,18 @@ int fb_init(void)
     fb_width = fbmap->fbInfo.xres;
     fb_height = fbmap->fbInfo.yres;
 
-    fbmap->fb = (unsigned char *)mmap(0, fbmap->fbSize, PROT_READ | PROT_WRITE, MAP_SHARED, fbmap->fd, 0);
-    if (!fbmap->fb)
+    if (fbmap->fd > 0)
     {
-        fprintf(stderr, "fb_init: mmap size %d err \r\n", (int)fbmap->fbSize);
-        fb_release();
-        return -1;
+        fbmap->fb = (unsigned char *)mmap(0, fbmap->fbSize, PROT_READ | PROT_WRITE, MAP_SHARED, fbmap->fd, 0);
+        if (!fbmap->fb)
+        {
+            fprintf(stderr, "fb_init: mmap size %d err \r\n", (int)fbmap->fbSize);
+            fb_release();
+            return -1;
+        }
     }
+    else
+        fbmap->fb = (unsigned char *)calloc(fbmap->fbSize, sizeof(char));
 
     return 0;
 }
@@ -134,4 +152,23 @@ void fb_output(unsigned char *data, int offsetX, int offsetY, int width, int hei
             offset += fbmap->bpp;
         }
     }
+}
+
+/*
+ *  截取屏幕保存为bmp文件
+ */
+void fb_screensShot(char *bmpPath)
+{
+    //初始化检查
+    if (fb_init())
+        return;
+    bmp_create(bmpPath, fbmap->fb, fbmap->fbInfo.xres, fbmap->fbInfo.yres, fbmap->bpp);
+}
+
+void fb_screensShot2(int order, char *folder)
+{
+    //初始化检查
+    if (fb_init())
+        return;
+    bmp_create2(order, folder, fbmap->fb, fbmap->fbInfo.xres, fbmap->fbInfo.yres, fbmap->bpp);
 }

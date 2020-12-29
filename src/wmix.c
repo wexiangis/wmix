@@ -2928,31 +2928,45 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 wmix->loopWordFifo += 1;
                 wmix->loopWordRtp += 1;
                 break;
-            //保存混音数据池的数据流到wav文件
+            //保存混音数据池的数据流到wav文件,写0关闭
             case WMT_NOTE:
                 //关闭正在进行的note
-                wmix->note_path[0] = 0;
+                wmix->notePath[0] = 0;
                 //这是一次关闭指令
                 if (!msg.value[0])
                     break;
                 //等待关闭
-                while(wmix->note_fd > 0)
+                while(wmix->noteFd > 0)
                     delayus(5000);
                 //开始新文件
-                wmix->note_fd = open((const char *)msg.value, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-                if (wmix->note_fd < 1)
+                wmix->noteFd = open((const char *)msg.value, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                if (wmix->noteFd < 1)
                 {
                     printf("wmix_msg_thread: create note %s failed !!\r\n", msg.value);
-                    wmix->note_fd = 0;
+                    wmix->noteFd = 0;
                     break;
                 }
                 //创建wav头
                 WAV_Params(&wav, 10, WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
-                WAV_WriteHeader(wmix->note_fd, &wav);
-                fsync(wmix->note_fd);
+                WAV_WriteHeader(wmix->noteFd, &wav);
+                fsync(wmix->noteFd);
                 //通知 wmix_play_thread 开始写数据
-                strcpy(wmix->note_path, (char *)msg.value);
+                strcpy(wmix->notePath, (char *)msg.value);
                 break;
+#if(WMIX_FFT_SAMPLE)
+            //输出幅频/相频图像到fb设备或bmp文件,写0关闭
+            case WMT_FFT:
+                //这是一次关闭指令
+                if (!msg.value[0])
+                {
+                    if (!wmix->fftPath[0])
+                    {
+                        wmix->fftPath[0] = 0;
+                    }
+                    break;
+                }
+                break;
+#endif
             //开关log
             case WMT_LOG_SW:
                 if (msg.value[0])
@@ -2981,6 +2995,9 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   shmemRun: %d\r\n"
                     "   reduceMode: %d\r\n"
                     "   note: %s\r\n"
+#if(WMIX_FFT_SAMPLE)
+                    "   fft: %s\r\n"
+#endif
                     "   debug: %d\r\n"
                     "\r\n"
                     "   version: %s\r\n"
@@ -3000,7 +3017,10 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->onPlayCount, wmix->queue.head, wmix->queue.tail,
                     wmix->shmemRun,
                     wmix->reduceMode,
-                    wmix->note_path,
+                    wmix->notePath,
+#if(WMIX_FFT_SAMPLE)
+                    wmix->fftPath,
+#endif
                     wmix->debug ? 1 : 0,
                     WMIX_VERSION);
                 break;
@@ -3247,17 +3267,17 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     SNDWAV_WritePcm(playback, frame_num);
 #endif
                     //note模式,写文件
-                    if (wmix->note_fd > 0 && wmix->note_path[0])
+                    if (wmix->noteFd > 0 && wmix->notePath[0])
                     {
-                        write(wmix->note_fd, playBuff, pkg_size);
-                        fsync(wmix->note_fd);
+                        write(wmix->noteFd, playBuff, pkg_size);
+                        fsync(wmix->noteFd);
                     }
                     //非note模式,关闭描述符
-                    else if (wmix->note_fd > 0 && !wmix->note_path[0])
+                    else if (wmix->noteFd > 0 && !wmix->notePath[0])
                     {
-                        WAV_WriteLen(wmix->note_fd);
-                        close(wmix->note_fd);
-                        wmix->note_fd = 0;
+                        WAV_WriteLen(wmix->noteFd);
+                        close(wmix->noteFd);
+                        wmix->noteFd = 0;
                     }
 
 #ifndef AEC_FILE_STREAM_TEST
@@ -3318,11 +3338,11 @@ void wmix_play_thread(WMixThread_Param *wmtp)
         }
 #endif
         //非note模式,关闭描述符
-        if (wmix->note_fd > 0 && !wmix->note_path[0])
+        if (wmix->noteFd > 0 && !wmix->notePath[0])
         {
-            WAV_WriteLen(wmix->note_fd);
-            close(wmix->note_fd);
-            wmix->note_fd = 0;
+            WAV_WriteLen(wmix->noteFd);
+            close(wmix->noteFd);
+            wmix->noteFd = 0;
         }
     }
 #ifdef AEC_FILE_STREAM_TEST
@@ -3368,7 +3388,6 @@ void wmix_exit(WMix_Struct *wmix)
         } while (wmix->thread_sys > 0 ||
                  wmix->thread_play > 0 ||
                  wmix->thread_record > 0);
-        //
 #if (WMIX_MODE == 1)
         hiaudio_exit();
 #else
@@ -3378,6 +3397,11 @@ void wmix_exit(WMix_Struct *wmix)
             wmix_alsa_release(wmix->recordback);
 #endif
         // pthread_mutex_destroy(&wmix->lock);
+#if(WMIX_FFT_SAMPLE)
+        free(wmix->fftStream);
+        free(wmix->fftOutAF);
+        free(wmix->fftOutPF);
+#endif
         free(wmix);
     }
 }
@@ -3449,6 +3473,12 @@ WMix_Struct *wmix_init(void)
     //接收 ctrl+c 信号,在进程关闭时做出内存释放处理
     signal(SIGINT, signal_callback);
     signal(SIGTERM, signal_callback);
+
+#if(WMIX_FFT_SAMPLE)
+    wmix->fftStream = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
+    wmix->fftOutAF = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
+    wmix->fftOutPF = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
+#endif
 
     return wmix;
 }

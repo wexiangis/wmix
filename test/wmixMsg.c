@@ -62,8 +62,6 @@ void help(char *argv0)
         "              3    : WCT_RESET 重置/重连(rtp) \n"
         "              4    : WCT_SILENCE 静音,使用0数据运行 \n"
         "\n"
-        "  -note wavPath : 保存混音数据池的数据流到wav文件,写0关闭\n"
-        "\n"
         "  -log 0/1 : 关闭/显示log\n"
         "  -reset : 重置混音器\n"
         "  -list : 打印所有任务信息\n"
@@ -75,6 +73,12 @@ void help(char *argv0)
         "  0/OK <0/ERROR >0/id use to \"-k id\"\n"
         "\n"
         "Version: %s\n"
+        "\n"
+        "Extra:\n"
+        "  -note wavPath : 保存混音数据池的数据流到wav文件,写0关闭(如-note 0)\n"
+        "  -fft path : 1.指定fb设备路径(如/dev/fb0)连续输出幅频/相频图像,写0关闭(如-fft 0)\n"
+        "            : 2.指定.bmp文件路径(如./fft.bmp)输出幅频/相频图像\n"
+        "            : <将根据path内容自动选择模式>\n"
         "\n"
         "Example:\n"
         "  %s -v 10\n"
@@ -149,6 +153,8 @@ int main(int argc, char **argv)
     bool info = false;
 
     char *consolePath = NULL;
+
+    char *fft = NULL;
 
     int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
@@ -398,6 +404,13 @@ int main(int argc, char **argv)
             else
                 warn("-note", 1);
         }
+        else if (argvLen == 4 && strstr(argv[i], "-fft"))
+        {
+            if (i + 1 < argc)
+                fft = argv[++i];
+            else
+                warn("-fft", 1);
+        }
         else if (argvLen == 6 && strstr(argv[i], "-reset"))
         {
             reset = true;
@@ -452,9 +465,15 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
+    if (fft)
+    {
+        wmix_fft((fft[0] == '0' && strlen(fft) == 1) ? NULL : fft);
+        helpFalg = false;
+    }
+
     if (notePath)
     {
-        wmix_note(notePath[0] == '0' ? NULL : notePath);
+        wmix_note((notePath[0] == '0' && strlen(notePath) == 1) ? NULL : notePath);
         helpFalg = false;
     }
 

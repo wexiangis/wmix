@@ -5,6 +5,7 @@
 #include <string.h>
 #include "wave.h"
 #include "fbmap.h"
+#include "bmp.h"
 
 WAVE_COLOR
 
@@ -116,7 +117,7 @@ void wave_load(Wave_Struct *ws, int chn, short value)
 }
 
 //移动时间轴但不输出
-void wave_output2(Wave_Struct *ws)
+void wave_skip(Wave_Struct *ws)
 {
     int i, j;
     if (!ws)
@@ -135,7 +136,7 @@ void wave_output2(Wave_Struct *ws)
     }
 }
 
-void wave_output(Wave_Struct *ws)
+void _wave_output(Wave_Struct *ws, char *path)
 {
     int i, j;
     int x, y;           //新点
@@ -167,8 +168,23 @@ void wave_output(Wave_Struct *ws)
             oy = y;
         }
     }
+    //输出到bmp
+    if (path)
+        bmp_create(path, ws->map, ws->width, ws->height, 3);
     //输出到屏幕
-    fb_output(ws->map, ws->xOffset, ws->yOffset, ws->width, ws->height);
-    //
-    wave_output2(ws);
+    else
+        fb_output(ws->map, ws->xOffset, ws->yOffset, ws->width, ws->height);
+    //移动
+    wave_skip(ws);
+}
+
+void wave_output(Wave_Struct *ws)
+{
+    _wave_output(ws, NULL);
+}
+
+//输出到bmp文件
+void wave_output2(Wave_Struct *ws, char *bmpPath)
+{
+    _wave_output(ws, bmpPath);
 }
