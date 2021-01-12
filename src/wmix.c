@@ -2896,10 +2896,11 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             //录音音量增益设置
             case WMT_VOLUME_AGC:
 #if (WMIX_WEBRTC_AGC)
-                if (wmix->webrtcEnable[WR_AGC] && wmix->webrtcPoint[WR_AGC])
+                if (wmix->webrtcEnable[WR_AGC])
                 {
                     wmix->volumeAgc = msg.value[0];
-                    agc_addition(wmix->webrtcPoint[WR_AGC], msg.value[0]);
+                    if (wmix->webrtcPoint[WR_AGC])
+                        agc_addition(wmix->webrtcPoint[WR_AGC], msg.value[0]);
                 }
 #endif
                 break;
