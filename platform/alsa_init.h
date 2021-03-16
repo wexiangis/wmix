@@ -18,4 +18,7 @@ int alsa_ai_vol_get(void *objAi);
 void alsa_ao_exit(void *objAo);
 void alsa_ai_exit(void *objAi);
 
+uint8_t *alsa_ao_buffer(void *objAo, int *retSize);
+uint8_t *alsa_ai_buffer(void *objAi, int *retSize);
+
 #endif

@@ -4,6 +4,7 @@
  *  服务端+客户端(或用wmix_user.h自己开发) 组建的混音器、音频托管工具
  * 
  **************************************************/
+#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -39,21 +40,6 @@
 #include "aac.h"
 #endif
 
-static WMix_Struct *main_wmix = NULL;
-
-/* 信号事件接收,主要是识别ctrl+c结束时完成收尾工作 */
-static void signal_callback(int signo)
-{
-    if (SIGINT == signo || SIGTERM == signo)
-    {
-        wmix_exit(main_wmix);
-#if (WMIX_MODE == 1)
-        hiaudio_exit();
-#endif
-    }
-    exit(0);
-}
-
 /*******************************************************************************
  * 名称: wmix_console
  * 功能: 重定向输出
@@ -64,11 +50,9 @@ static void signal_callback(int signo)
 void wmix_console(WMix_Struct *wmix, char *path)
 {
     FILE *fp;
-
     //空路径
     if (!path || path[0] == 0)
         return;
-
     //这是/dev下的终端?
     if (strncmp(path, "/dev/", 5) == 0)
     {
@@ -94,375 +78,11 @@ void wmix_console(WMix_Struct *wmix, char *path)
             fclose(fp);
         wmix->consoleType = 1;
     }
-
     printf("wmix_msg_thread: console point to %s \r\n", path);
-
     //重定向
     if (!freopen(path, wmix->consoleType == 0 ? "w" : "a+", stdout))
         fprintf(stderr, "wmix_msg_thread: freopen %s error !!\r\n", path);
 }
-
-/*******************************************************************************
- * 名称: wmix_volume
- * 功能: 扬声器音量设置
- * 参数: value 设置的音量值 (范围：0-10之间)
- * 返回: 无
- * 说明: 无
- ******************************************************************************/
-void wmix_volume(uint8_t value)
-{
-#if (WMIX_MODE == 1)
-    int volume_value = value;
-    if (volume_value > 10)
-        volume_value = 10;
-    //
-    if (main_wmix)
-        main_wmix->volume = volume_value;
-    // 范围: [-120, 6] db,这已是最大音量,不要改动
-    if (volume_value == 0)
-        hiaudio_set_volume(-120);
-    else
-        hiaudio_set_volume(6 - (10 - volume_value) * 5);
-#else
-#endif
-    printf("wmix volume playback: %ld\r\n", volume_value == 0 ? 0 : volume_value - WMIX_VOLUME_BASE);
-}
-
-/*******************************************************************************
- * 名称: wmix_volumeMic
- * 功能: 录音音量设置
- * 参数: value 设置的音量值 (范围：0-10之间)
- * 返回: 无
- * 说明: 无
- ******************************************************************************/
-void wmix_volumeMic(uint8_t value)
-{
-#if (WMIX_MODE == 1)
-    int volume_value = value;
-    if (volume_value > 10)
-        volume_value = 10;
-    //
-    if (main_wmix)
-        main_wmix->volumeMic = volume_value;
-    // 范围: [-10,56] db,不要乱动这个范围,录音音量不足可以开agc
-    // 范围: [-10,80] db
-    if (volume_value == 0)
-        hiaudio_set_ai_volume(-10);
-    else
-        hiaudio_set_ai_volume(80 - (10 - volume_value) * 8);
-#else
-#endif
-    printf("wmix volume capture: %ld\r\n", volume_value);
-}
-
-#if (WMIX_MODE != 1)
-
-/*******************************************************************************
- * 名称: SNDWAV_ReadPcm
- * 功能: pcm设备读取
- * 参数: sndpcm ：SNDPCMContainer_t结构体指针
- *      frame_num ： 读取的帧数(每帧chn*sample/8字节,sample一般为16)
- * 返回: >0:帧数 -1:错误
- * 说明: 无
- ******************************************************************************/
-int SNDWAV_ReadPcm(SNDPCMContainer_t *sndpcm, size_t frame_num)
-{
-    int ret;
-    size_t result = 0;
-    size_t count = frame_num;
-    uint8_t *data = sndpcm->data_buf;
-
-    while (count > 0)
-    {
-        ret = snd_pcm_readi(sndpcm->handle, data, count);
-        //返回异常,recover处理
-        if (ret < 0)
-            ret = snd_pcm_recover(sndpcm->handle, ret, 0);
-        //其它问题处理
-        if (ret == -EAGAIN || (ret >= 0 && (size_t)ret < count))
-        {
-            snd_pcm_wait(sndpcm->handle, 1000);
-        }
-        else if (ret == -EPIPE)
-        {
-            snd_pcm_prepare(sndpcm->handle);
-            // fprintf(stderr, "R-Error: Buffer Underrun\r\n");
-        }
-        else if (ret == -ESTRPIPE)
-        {
-            fprintf(stderr, "R-Error: Need suspend\r\n");
-        }
-        else if (ret < 0)
-        {
-            fprintf(stderr, "R-Error: SNDWAV_ReadPcm: [%s]\r\n", snd_strerror(ret));
-            return -1;
-        }
-        //帧读够了
-        if (count < ret)
-            break;
-        //帧计数
-        if (ret > 0)
-        {
-            result += ret;
-            count -= ret;
-            //按实际读取的帧数移动 uint8 数据指针
-            data += ret * sndpcm->bits_per_frame / 8;
-        }
-    }
-
-    return result;
-}
-
-/*******************************************************************************
- * 名称: SNDWAV_WritePcm
- * 功能: wav文件数据写入pcm设备
- * 参数: sndpcm ：SNDPCMContainer_t结构体指针
- *       wcount ： 写入的大小
- * 返回: 0：正常 -1:错误
- * 说明: 无
- ******************************************************************************/
-int SNDWAV_WritePcm(SNDPCMContainer_t *sndpcm, size_t wcount)
-{
-    int ret;
-    int result = 0;
-    uint8_t *data = sndpcm->data_buf;
-
-    while (wcount > 0)
-    {
-        ret = snd_pcm_writei(sndpcm->handle, data, wcount);
-        //
-        if (ret < 0)
-            ret = snd_pcm_recover(sndpcm->handle, ret, 0);
-        //
-        if (ret == -EAGAIN || (ret >= 0 && (size_t)ret < wcount))
-        {
-            snd_pcm_wait(sndpcm->handle, 1000);
-        }
-        else if (ret == -EPIPE)
-        {
-            snd_pcm_prepare(sndpcm->handle);
-            // fprintf(stderr, "W-Error: Buffer Underrun\r\n");
-        }
-        else if (ret == -ESTRPIPE)
-        {
-            fprintf(stderr, "W-Error: Need suspend\r\n");
-        }
-        else if (ret < 0)
-        {
-            fprintf(stderr, "W-Error snd_pcm_writei: [%s]", snd_strerror(ret));
-            return -1;
-        }
-        //
-        if (wcount < ret)
-            break;
-        //
-        if (ret > 0)
-        {
-            result += ret;
-            wcount -= ret;
-            data += ret * sndpcm->bits_per_frame / 8;
-        }
-    }
-    return result;
-}
-
-int SNDWAV_SetParams(SNDPCMContainer_t *sndpcm, uint16_t freq, uint8_t channels, uint8_t sample)
-{
-    snd_pcm_hw_params_t *hwparams;
-    uint32_t exact_rate;
-    uint32_t buffer_time, period_time;
-
-    /* 分配snd_pcm_hw_params_t结构体  Allocate the snd_pcm_hw_params_t structure on the stack. */
-    snd_pcm_hw_params_alloca(&hwparams);
-    /* 初始化hwparams  Init hwparams with full configuration space */
-    if (snd_pcm_hw_params_any(sndpcm->handle, hwparams) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_any\r\n");
-        return -1;
-    }
-    //初始化访问权限
-    if (snd_pcm_hw_params_set_access(sndpcm->handle, hwparams, SND_PCM_ACCESS_RW_INTERLEAVED) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_set_access\r\n");
-        return -1;
-    }
-
-    /* 初始化采样格式,16位 Set sample format */
-    if (sample == 8)
-        sndpcm->format = SND_PCM_FORMAT_S8;
-    else if (sample == 16)
-        sndpcm->format = SND_PCM_FORMAT_S16_LE;
-    else if (sample == 24)
-        sndpcm->format = SND_PCM_FORMAT_S24_LE;
-    else if (sample == 32)
-        sndpcm->format = SND_PCM_FORMAT_S32_LE;
-    else
-        return -1;
-    if (snd_pcm_hw_params_set_format(sndpcm->handle, hwparams, sndpcm->format) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_set_format\r\n");
-        return -1;
-    }
-
-    /* 设置通道数量 Set number of channels */
-    if (snd_pcm_hw_params_set_channels(sndpcm->handle, hwparams, channels) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_set_channels\r\n");
-        return -1;
-    }
-    sndpcm->channels = channels;
-
-    //设置采样率，如果硬件不支持我们设置的采样率，将使用最接近的
-    /* Set sample rate. If the exact rate is not supported */
-    /* by the hardware, use nearest possible rate.         */
-    exact_rate = freq;
-    if (snd_pcm_hw_params_set_rate_near(sndpcm->handle, hwparams, &exact_rate, 0) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_set_rate_near\r\n");
-        return -1;
-    }
-    if (freq != exact_rate)
-    {
-        fprintf(stderr, "The rate %d Hz is not supported by your hardware.\n ==> Using %d Hz instead.\r\n",
-                freq, exact_rate);
-    }
-
-    if (snd_pcm_hw_params_get_buffer_time_max(hwparams, &buffer_time, 0) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_get_buffer_time_max\r\n");
-        return -1;
-    }
-
-    //ubuntu下该值会非常大,需限制
-    if (buffer_time > 500000)
-        buffer_time = 500000;
-    period_time = buffer_time / 4;
-
-    // buffer_time = 371519; //atmel 44100,22050,11025
-    // buffer_time = WMIX_INTERVAL_MS * 1000 * 2;
-    // period_time = period_time * 8;
-
-    if (snd_pcm_hw_params_set_buffer_time_near(sndpcm->handle, hwparams, &buffer_time, 0) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_set_buffer_time_near\r\n");
-        return -1;
-    }
-
-    if (snd_pcm_hw_params_set_period_time_near(sndpcm->handle, hwparams, &period_time, 0) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params_set_period_time_near\r\n");
-        return -1;
-    }
-
-    snd_pcm_hw_params_get_period_size(hwparams, &sndpcm->period_size, 0);
-    snd_pcm_hw_params_get_buffer_size(hwparams, &sndpcm->buffer_size);
-    if (sndpcm->period_size == sndpcm->buffer_size)
-    {
-        fprintf(stderr, "Can't use period equal to buffer size (%lu == %lu)\r\n", sndpcm->period_size, sndpcm->buffer_size);
-        return -1;
-    }
-
-    /* Set hw params */
-    if (snd_pcm_hw_params(sndpcm->handle, hwparams) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_hw_params(handle, params)\r\n");
-        return -1;
-    }
-
-    sndpcm->bits_per_sample = snd_pcm_format_physical_width(sndpcm->format);
-    sndpcm->bits_per_frame = sndpcm->bits_per_sample * channels;
-    sndpcm->period_bytes = sndpcm->period_size * sndpcm->bits_per_frame / 8;
-
-    printf("\n---- SNDWAV_SetParams -----\r\n"
-           "  period_size: %d\r\n"            //每次写入帧数
-           "  bits_per_frame/8: %d Bytes\r\n" //每帧字节数
-           "  period_bytes: %d Bytes\r\n"     //每次读写字节数(等于period_size * bits_per_frame / 8)
-           "  buffer_size: %d Bytes\r\n"      //缓冲区大小(一般为2~4倍period_bytes)
-           "  buffer_time: %d Bytes\r\n"      //buffer_size 对应的时间长度
-           "  period_time: %d Bytes\r\n",     //缓冲区大小
-           (int)sndpcm->period_size,
-           (int)(sndpcm->bits_per_frame / 8),
-           (int)sndpcm->period_bytes,
-           (int)sndpcm->buffer_size,
-           buffer_time,
-           period_time);
-
-    /* Allocate audio data buffer */
-#if (WMIX_CHANNELS == 1)
-    sndpcm->data_buf = (uint8_t *)malloc(sndpcm->period_bytes * 2 + 1);
-#else
-    sndpcm->data_buf = (uint8_t *)malloc(sndpcm->period_bytes + 1);
-#endif
-    if (!sndpcm->data_buf)
-    {
-        fprintf(stderr, "Error malloc: [data_buf]\r\n");
-        return -1;
-    }
-
-    return 0;
-}
-
-SNDPCMContainer_t *wmix_alsa_init(uint8_t channels, uint8_t sample, uint16_t freq, char p_or_c)
-{
-    char devicename[] = "default";
-
-    SNDPCMContainer_t *playback = (SNDPCMContainer_t *)calloc(1, sizeof(SNDPCMContainer_t));
-
-    //Creates a new output object using an existing stdio \c FILE pointer.
-    if (snd_output_stdio_attach(&playback->log, stderr, 0) < 0)
-    {
-        fprintf(stderr, "Error snd_output_stdio_attach\r\n");
-        goto Err;
-    }
-    // 打开PCM，最后一个参数为0意味着标准配置 SND_PCM_ASYNC
-    if (snd_pcm_open(
-            &playback->handle,
-            devicename,
-            p_or_c == 'c' ? SND_PCM_STREAM_CAPTURE : SND_PCM_STREAM_PLAYBACK, 0) < 0)
-    {
-        fprintf(stderr, "Error snd_pcm_open [ %s]\r\n", devicename);
-        goto Err;
-    }
-    //配置PCM参数
-    if (SNDWAV_SetParams(playback, freq, channels, sample) < 0)
-    {
-        fprintf(stderr, "Error set_snd_pcm_params\r\n");
-        goto Err;
-    }
-    snd_pcm_dump(playback->handle, playback->log);
-
-    return playback;
-
-Err:
-
-    if (playback->data_buf)
-        free(playback->data_buf);
-    if (playback->log)
-        snd_output_close(playback->log);
-    if (playback->handle)
-        snd_pcm_close(playback->handle);
-    free(playback);
-
-    return NULL;
-}
-
-void wmix_alsa_release(SNDPCMContainer_t *playback)
-{
-    if (playback)
-    {
-        snd_pcm_drain(playback->handle);
-        //
-        if (playback->data_buf)
-            free(playback->data_buf);
-        if (playback->log)
-            snd_output_close(playback->log);
-        if (playback->handle)
-            snd_pcm_close(playback->handle);
-        free(playback);
-    }
-}
-
-#endif
 
 //--------------------------------------- 混音方式播放 ---------------------------------------
 
@@ -892,14 +512,10 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     size_t frame_size = WMIX_FRAME_SIZE;
     //每包字节数
     size_t buffSize = WMIX_PKG_SIZE;
-#if (WMIX_MODE != 1)
     uint8_t *buff;
     //录音句柄已初始化
     if (wmix->recordback)
         buff = wmix->recordback->data_buf;
-#else
-    uint8_t buff[WMIX_PKG_SIZE];
-#endif
 
 #ifdef AEC_SYNC_SAVE_FILE
     static int fd = 0;
@@ -2889,7 +2505,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 if (!msg.value[0])
                     break;
                 //等待关闭
-                while(wmix->noteFd > 0)
+                while (wmix->noteFd > 0)
                     delayus(5000);
                 //开始新文件
                 wmix->noteFd = open((const char *)msg.value, O_WRONLY | O_CREAT | O_TRUNC, 0666);
@@ -2906,7 +2522,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 //通知 wmix_play_thread 开始写数据
                 strcpy(wmix->notePath, (char *)msg.value);
                 break;
-#if(WMIX_FFT_SAMPLE)
+#if (WMIX_FFT_SAMPLE)
             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
             case WMT_FFT:
                 //这是一次关闭指令
@@ -2948,7 +2564,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   shmemRun: %d\r\n"
                     "   reduceMode: %d\r\n"
                     "   note: %s\r\n"
-#if(WMIX_FFT_SAMPLE)
+#if (WMIX_FFT_SAMPLE)
                     "   fft: %s\r\n"
 #endif
                     "   debug: %d\r\n"
@@ -2971,7 +2587,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->shmemRun,
                     wmix->reduceMode,
                     wmix->notePath,
-#if(WMIX_FFT_SAMPLE)
+#if (WMIX_FFT_SAMPLE)
                     wmix->fftPath,
 #endif
                     wmix->debug ? 1 : 0,
@@ -3060,7 +2676,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     //
     if (err_exit)
     {
-        signal_callback(SIGINT);
+        wmix_signal(SIGINT);
         exit(0);
     }
     //线程计数
@@ -3330,8 +2946,7 @@ void wmix_exit(WMix_Struct *wmix)
     if (wmix)
     {
         wmix->run = false;
-        //等待线程关闭
-        //等待各指针不再有人使用
+        //等待线程关闭,等待各指针不再有人使用
         timeout = 200; //2秒超时
         do
         {
@@ -3344,13 +2959,12 @@ void wmix_exit(WMix_Struct *wmix)
 #if (WMIX_MODE == 1)
         hiaudio_exit();
 #else
-        if (wmix->playback)
-            wmix_alsa_release(wmix->playback);
-        if (wmix->recordback)
-            wmix_alsa_release(wmix->recordback);
+        if (wmix->objAo)
+            wmix_ao_exit(wmix->objAo);
+        if (wmix->objAi)
+            wmix_ai_exit(wmix->objAi);
 #endif
-        // pthread_mutex_destroy(&wmix->lock);
-#if(WMIX_FFT_SAMPLE)
+#if (WMIX_FFT_SAMPLE)
         free(wmix->fftStream);
         free(wmix->fftOutAF);
         free(wmix->fftOutPF);
@@ -3362,49 +2976,47 @@ void wmix_exit(WMix_Struct *wmix)
 WMix_Struct *wmix_init(void)
 {
     WMix_Struct *wmix = NULL;
+    void *objAo = NULL, *objAi = NULL;
 
     //路径检查 //F_OK 是否存在 R_OK 是否有读权限 W_OK 是否有写权限 X_OK 是否有执行权限
     if (access(WMIX_MSG_PATH, F_OK) != 0)
         mkdir(WMIX_MSG_PATH, 0777);
-    //播音、录音控制符初始化
-#if (WMIX_MODE == 1)
-    if (hiaudio_ao_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS))
+
+    //录播音指针始化
+    objAo = wmix_ao_init(WMIX_CHANNELS, WMIX_FREQ);
+    if (!objAo)
         return NULL;
-    if (hiaudio_ai_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, WMIX_FREQ / 1000 * WMIX_INTERVAL_MS))
-        return NULL;
-#else
-    SNDPCMContainer_t *playback = wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'p');
-    if (!playback)
-        return NULL;
-    SNDPCMContainer_t *recordback = NULL; //wmix_alsa_init(WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ, 'c');
+#if 0
+    //可以在需要时再初始化
+    objAi = wmix_ai_init(WMIX_CHANNELS, WMIX_FREQ);
 #endif
+
     //混音器内部数据初始化
     wmix = (WMix_Struct *)calloc(1, sizeof(WMix_Struct));
     wmix->buff = (uint8_t *)calloc(WMIX_BUFF_SIZE + 4, sizeof(uint8_t));
-#if (WMIX_MODE != 1)
-    wmix->playback = playback;
-    wmix->recordback = recordback;
-#endif
+
+    wmix->objAo = objAo;
+    wmix->objAi = objAi;
+
     wmix->start.U8 = wmix->head.U8 = wmix->tail.U8 = wmix->buff;
     wmix->end.U8 = wmix->buff + WMIX_BUFF_SIZE;
 
-    // pthread_mutex_init(&wmix->lock, NULL);
     wmix->run = true;
     wmix->reduceMode = 1;
-
-    //混音器主要线程初始化
-#ifndef WMIX_RECORD_PLAY_SYNC
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle);//录音及数据写共享内存线程
-#endif
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);//接收客户端消息的线程
-    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread);//从播音数据迟取数据并播放的线程
 
     //webrtc功能默认启动状态
     wmix->webrtcEnable[WR_VAD] = 0;
     wmix->webrtcEnable[WR_AEC] = 0;
     wmix->webrtcEnable[WR_NS] = 1;
-    wmix->webrtcEnable[WR_NS_PA] = 0;//正常播放用不到
+    wmix->webrtcEnable[WR_NS_PA] = 0; //正常播放用不到
     wmix->webrtcEnable[WR_AGC] = 1;
+
+    //混音器主要线程初始化
+#ifndef WMIX_RECORD_PLAY_SYNC
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle); //录音及数据写共享内存线程
+#endif
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_msg_thread);  //接收客户端消息的线程
+    wmix_throwOut_thread(wmix, 0, NULL, 0, &wmix_play_thread); //从播音数据迟取数据并播放的线程
 
 #if (WMIX_MODE == 1)
     //承受不了这个CPU占用率
@@ -3420,14 +3032,14 @@ WMix_Struct *wmix_init(void)
     wmix->volumeMic = 10;
     wmix->volumeAgc = 5;
     //设置音量
-    wmix_volume(wmix->volume);
-    wmix_volumeMic(wmix->volumeMic);
+    wmix_ao_vol_set(wmix->objAo, wmix->volume);
+    wmix_ai_vol_set(wmix->objAi, wmix->volumeMic);
 
     //接收 ctrl+c 信号,在进程关闭时做出内存释放处理
-    signal(SIGINT, signal_callback);
-    signal(SIGTERM, signal_callback);
+    signal(SIGINT, wmix_signal);
+    signal(SIGTERM, wmix_signal);
 
-#if(WMIX_FFT_SAMPLE)
+#if (WMIX_FFT_SAMPLE)
     wmix->fftStream = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
     wmix->fftOutAF = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
     wmix->fftOutPF = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
@@ -4501,6 +4113,19 @@ void wmix_load_mp3(
 
 //--------------- wmix main ---------------
 
+// 全局唯一指针
+static WMix_Struct *main_wmix = NULL;
+
+// 信号事件接收,主要是识别ctrl+c结束时完成收尾工作
+void wmix_signal(int signo)
+{
+    if (SIGINT == signo || SIGTERM == signo)
+    {
+        wmix_exit(main_wmix);
+    }
+    exit(0);
+}
+
 void help(char *argv0)
 {
     printf(
@@ -4527,7 +4152,7 @@ void help(char *argv0)
         argv0, WMIX_VERSION, argv0);
 }
 
-void show_steup(void)
+void show_setup(void)
 {
     printf("\n---- WMix info -----\r\n"
            "   chn: %d\r\n"
@@ -4575,14 +4200,14 @@ void main_loop(WMixThread_Param *wmtp)
     }
 }
 
-#if (WMIX_MERGE_MODE == 2)
-void wmix_start()
+//第三方程序调用入口
+void wmix_start(void)
 {
     main_wmix = wmix_init();
     if (main_wmix)
     {
         //开始
-        show_steup();
+        show_setup();
         wmix_volume(10);
         wmix_volumeMic(10);
         wmix_throwOut_thread(main_wmix, 0, NULL, 0, &main_loop);
@@ -4590,18 +4215,9 @@ void wmix_start()
     else
         printf("audio init failed !!\r\n");
 }
-#elif (WMIX_MERGE_MODE == 1)
-// none
-#else
-void wmix_getSignal(int id)
-{
-    printf("wmix signal: %d\r\n", id);
-    if (id == SIGINT)
-    {
-        wmix_exit(main_wmix);
-        exit(0);
-    }
-}
+
+#if 1
+//主程序入口
 int main(int argc, char **argv)
 {
     int i, volume = -1, volumeMic = -1, volumeAgc = -1;
@@ -4701,15 +4317,16 @@ int main(int argc, char **argv)
                 main_wmix->volumeAgc = volumeAgc;
             if (path)
             {
-                wmix_throwOut_thread(main_wmix,
-                                     3,
-                                     (uint8_t *)path,
-                                     WMIX_MSG_BUFF_SIZE,
-                                     &wmix_load_audio_thread);
+                wmix_throwOut_thread(
+                    main_wmix,
+                    3,
+                    (uint8_t *)path,
+                    WMIX_MSG_BUFF_SIZE,
+                    &wmix_load_audio_thread);
             }
         }
         //开始
-        show_steup();
+        show_setup();
         wmix_throwOut_thread(main_wmix, 0, NULL, 0, &main_loop);
         while (1)
             delayus(500000);

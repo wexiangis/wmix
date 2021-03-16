@@ -1,11 +1,12 @@
 #ifndef _WMIX_CONF_H_
 #define _WMIX_CONF_H_
 
+#include <stdbool.h>
 #include "wmix_plat.h"
 
 /* ---------- 需和客户端(程序)同步的信息 ---------- */
 
-#define WMIX_VERSION "V5.4 - 20201229"
+#define WMIX_VERSION "V5.5RC1 - 20210317"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -76,26 +77,6 @@ typedef struct
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 } WMix_Msg;
 
-/* ---------- 接收来自Makefile的宏定义 ---------- */
-
-#ifdef MAKE_MP3
-#define WMIX_MP3 MAKE_MP3
-#else
-#define WMIX_MP3 1
-#endif
-
-#ifdef MAKE_AAC
-#define WMIX_AAC MAKE_AAC
-#else
-#define WMIX_AAC 1
-#endif
-
-#ifdef MAKE_FFT_SAMPLE
-#define WMIX_FFT_SAMPLE MAKE_FFT_SAMPLE
-#else
-#define WMIX_FFT_SAMPLE 1024
-#endif
-
 /* ---------- 音频参数 ---------- */
 
 //1音量时的保底音量
@@ -134,20 +115,97 @@ typedef struct
  */
 // #define AEC_SYNC_SAVE_FILE "/tmp/aec.pcm"
 
-/*
- *  回声消除,时间间隔估算,必须是 WMIX_INTERVAL_MS 的倍数
- *  不同设备、结构回声时间不一样,这里测算的400ms
- */
-#if (WMIX_MODE == 1)
-#define AEC_INTERVAL_MS 760
-#else
-#define AEC_INTERVAL_MS 400
-#endif
-
 //FIFO 循环缓冲区包数量
 #define AEC_FIFO_PKG_NUM (AEC_INTERVAL_MS / WMIX_INTERVAL_MS + 2)
 
 //录、播音同步,将把"录音线程"改为"心跳函数"内嵌到"播音线程"中
 #define WMIX_RECORD_PLAY_SYNC
+
+/* ---------- 主要结构体 ---------- */
+
+//多功能指针
+typedef union {
+    int8_t *S8;
+    uint8_t *U8;
+    int16_t *S16;
+    uint16_t *U16;
+    int32_t *S32;
+    uint32_t *U32;
+} WMix_Point;
+
+//webrtc modules
+typedef enum
+{
+    WR_VAD = 0, //人声识别
+    WR_AEC,     //回声消除
+    WR_NS,      //噪音抑制(录音)
+    WR_NS_PA,   //噪音抑制(播音)
+    WR_AGC,     //自动增益
+    WR_TOTAL,
+} WEBRTC_MODULES;
+
+//先进先出队列
+typedef struct
+{
+    uint16_t head, tail;
+} WMix_Queue;
+
+typedef struct
+{
+    //平台指针
+    void *objAo, *objAi;
+
+    uint8_t *buff;         //缓冲区
+    WMix_Point start, end; //缓冲区头尾指针
+    WMix_Point head, tail; //当前缓冲区读写指针
+
+    bool run;               //全局正常运行标志
+    uint8_t loopWord;       //全局播放循环标志(每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放)
+    uint8_t loopWordRecord; //全局录音循环标志
+    uint8_t loopWordFifo;   //全局fifo循环标志
+    uint8_t loopWordRtp;    //全局rtp循环标志
+    uint32_t tick;          //播放指针启动至今走过的字节数
+
+    uint32_t thread_sys;    //线程计数 增加线程时+1 减少时-1 等于0时全部退出
+    uint32_t thread_record; //线程计数 增加线程时+1 减少时-1 等于0时全部退出
+    uint32_t thread_play;   //线程计数 增加线程时+1 减少时-1 等于0时全部退出
+
+    bool playRun;   //指导 play_thread() 运行, thread_play=0 时暂停播放
+    bool recordRun; //指导 wmix_shmem_write_circle() 运行, thread_record=0 时暂停播放
+    int shmemRun;   //共享内存录音服务标志
+
+    key_t msg_key; //接收来自客户端的消息
+    int msg_fd;    //客户端消息句柄
+
+    uint8_t reduceMode;   //背景消减倍数,平时为1(即播放音频数据/1,混音时大小不变)
+    bool debug;           //打印log?
+    WMix_Queue queue;     //排队头尾标记
+    uint32_t onPlayCount; //当前排队总数
+
+    //webrtc modules
+    int webrtcEnable[WR_TOTAL];  //webrtc各模块启用标志
+    void *webrtcPoint[WR_TOTAL]; //webrtc各模块初始化后的指针管理
+
+    //自收发测试标志
+    bool rwTest;
+
+    //终端类型,用于确认是否需要fsync: 0/dev终端 1/文件
+    char consoleType;
+
+    //音量: 播放0~10, 录音0~10, agc增益0~100
+    int volume, volumeMic, volumeAgc;
+
+#if(WMIX_FFT_SAMPLE)
+    //FFT
+    char fftPath[WMIX_MSG_BUFF_SIZE];
+    float *fftStream;//数据池
+    float *fftOutAF;//输出幅-频曲线
+    float *fftOutPF;//输出相-频曲线
+#endif
+
+    //保存混音数据池的数据流到wav文件
+    int noteFd;//写wav文件的描述符
+    char notePath[WMIX_MSG_BUFF_SIZE];//首字符是否为0来判断是否在note模式
+} WMix_Struct;
 
 #endif

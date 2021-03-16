@@ -18,4 +18,7 @@ int t31_ai_vol_get(void *objAi);
 void t31_ao_exit(void *objAo);
 void t31_ai_exit(void *objAi);
 
+uint8_t *t31_ao_buffer(void *objAo, int *retSize);
+uint8_t *t31_ai_buffer(void *objAi, int *retSize);
+
 #endif
