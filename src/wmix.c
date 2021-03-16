@@ -124,30 +124,6 @@ void wmix_volume(uint8_t value)
     else
         hiaudio_set_volume(6 - (10 - volume_value) * 5);
 #else
-    snd_mixer_t *mixer;
-    snd_mixer_elem_t *pcm_element;
-    long volume_value = value;
-    //范围限制
-    if (volume_value > 10)
-        volume_value = 10;
-    //
-    if (main_wmix)
-        main_wmix->volume = volume_value;
-    //初始化
-    snd_mixer_open(&mixer, 0);
-    snd_mixer_attach(mixer, "default");
-    snd_mixer_selem_register(mixer, NULL, NULL);
-    snd_mixer_load(mixer);
-    //找到Pcm对应的element
-    pcm_element = snd_mixer_first_elem(mixer);
-    snd_mixer_selem_set_playback_volume_range(pcm_element, 0, 10 + WMIX_VOLUME_BASE); //设置音量范围,最大：0-100
-    //设置左右声道音量
-    snd_mixer_selem_set_playback_volume_all(pcm_element, volume_value == 0 ? 0 : volume_value + WMIX_VOLUME_BASE);
-    //检查设置
-    snd_mixer_selem_get_playback_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &volume_value); //获取音量
-    //处理事件
-    snd_mixer_handle_events(mixer);
-    snd_mixer_close(mixer);
 #endif
     printf("wmix volume playback: %ld\r\n", volume_value == 0 ? 0 : volume_value - WMIX_VOLUME_BASE);
 }
@@ -175,30 +151,6 @@ void wmix_volumeMic(uint8_t value)
     else
         hiaudio_set_ai_volume(80 - (10 - volume_value) * 8);
 #else
-    snd_mixer_t *mixer;
-    snd_mixer_elem_t *pcm_element;
-    long volume_value = value;
-    //范围限制
-    if (volume_value > 10)
-        volume_value = 10;
-    //
-    if (main_wmix)
-        main_wmix->volumeMic = volume_value;
-    //初始化
-    snd_mixer_open(&mixer, 0);
-    snd_mixer_attach(mixer, "default");
-    snd_mixer_selem_register(mixer, NULL, NULL);
-    snd_mixer_load(mixer);
-    //找到Pcm对应的element
-    pcm_element = snd_mixer_first_elem(mixer);                    // 取得第一个 element，也就是 Master
-    snd_mixer_selem_set_capture_volume_range(pcm_element, 0, 10); // 设置音量范围：0-100之间
-    //设置左右声道音量
-    snd_mixer_selem_set_capture_volume_all(pcm_element, volume_value);
-    //检查设置
-    snd_mixer_selem_get_capture_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &volume_value); //获取音量
-    //处理事件
-    snd_mixer_handle_events(mixer);
-    snd_mixer_close(mixer);
 #endif
     printf("wmix volume capture: %ld\r\n", volume_value);
 }
