@@ -1,168 +1,193 @@
-# cross:=arm-linux-gnueabihf
-# cross:=arm-himix200-linux
-# cross:=arm-himix100-linux
 
-# ps. 树莓派 MAKE_WEBRTC_AEC 库要用 cross:=arm-linux-gnueabihf 来编译
+# 平台选择
+#   0: 通用平台(ubuntu,ARM,树莓派等) --> 基于alsa
+#   1: 海思hi3516平台 --> 不支持 MAKE_ALSA MAKE_AAC
+#   2: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_AAC MAKE_MP3
+MAKE_PLATFORM = 0
+
+##### 通用平台 #####
+ifeq ($(MAKE_PLATFORM),0)
+# ARM等平台需要交叉编译器时启用改行
+# cross = arm-linux-gnueabihf
+OBJ-WMIX += ./platform/alsa_plat.c
+endif
+
+##### 海思hi3516平台 #####
+ifeq ($(MAKE_PLATFORM),1)
+cross = arm-himix200-linux
+# cross = arm-himix100-linux
+MAKE_ALSA = 0
+MAKE_AAC = 0
+OBJ-WMIX += ./platform/hi3516_plat.c
+endif
+
+##### 君正T31平台 #####
+ifeq ($(MAKE_PLATFORM),2)
+cross = mips-linux-gnu
+MAKE_ALSA = 0
+MAKE_AAC = 0
+MAKE_MP3 = 0
+OBJ-WMIX += ./platform/t31_plat.c
+CFLAGS += -Wl,-gc-sections
+CFLAGS += -muclibc # 使用 uclibc 时添加该项
+endif
+
+# 说明 '?=' 是指之前没有赋过值则使用当前值
 
 # 置1时编译外部alsa库,否则使用编译器自带
-MAKE_ALSA=1
-
+MAKE_ALSA ?= 1
 # 启用mp3播放支持 0/关 1/启用
-MAKE_MP3=1
-
+MAKE_MP3 ?= 1
 # 启用aac播放/录音 0/关 1/启用
-MAKE_AAC=1
-
+MAKE_AAC ?= 1
 # 启用webrtc_vad人声识别 0/关 1/启用
-MAKE_WEBRTC_VAD=1
-
+MAKE_WEBRTC_VAD ?= 1
 # 启用webrtc_aec回声消除 0/关 1/启用
 # (需启用 MAKE_WEBRTC_VAD, 否则编译 wmix 时报错)
-MAKE_WEBRTC_AEC=1
-
+MAKE_WEBRTC_AEC ?= 1
 # 启用webrtc_ns噪音抑制 0/关 1/启用
-MAKE_WEBRTC_NS=1
-
+MAKE_WEBRTC_NS ?= 1
 # 启用webrtc_agc自动增益 0/关 1/启用
-MAKE_WEBRTC_AGC=1
-
-# speex开源音频库
-MAKE_SPEEX=0
-
-# speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用
-MAKE_SPEEX_BETA3=0
-
-# 启用FFT(快速傅立叶变换)采样点个数, 0/关闭 其它/开启
+MAKE_WEBRTC_AGC ?= 1
+# speex开源音频库 [测试中...]
+MAKE_SPEEX ?= 0
+# speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用 [测试中...]
+MAKE_SPEEX_BETA3 ?= 0
+# 启用FFT(快速傅立叶变换)采样点个数,0/关闭,其它/开启 [测试中...]
 # 必须为2的x次方,如4,8,16...513,1024
-MAKE_FFT_SAMPLE=1024
+MAKE_FFT_SAMPLE ?= 0 #1024
 
 # system
-HOST:=
-CC:=gcc
+HOST = 
+CC = gcc
 ROOT=$(shell pwd)
 ifdef cross
-	HOST=$(cross)
-	CC=$(cross)-gcc
+	HOST = $(cross)
+	CC = $(cross)-gcc
 endif
 
 # define
-DEF+= -DMAKE_MP3=$(MAKE_MP3)
-DEF+= -DMAKE_AAC=$(MAKE_AAC)
-DEF+= -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
-DEF+= -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC)
-DEF+= -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS)
-DEF+= -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
-DEF+= -DMAKE_SPEEX=$(MAKE_SPEEX)
-DEF+= -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
-DEF+= -DMAKE_FFT_SAMPLE=$(MAKE_FFT_SAMPLE)
+DEF += -DMAKE_PLATFORM=$(MAKE_PLATFORM)
+DEF += -DMAKE_MP3=$(MAKE_MP3)
+DEF += -DMAKE_AAC=$(MAKE_AAC)
+DEF += -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
+DEF += -DMAKE_WEBRTC_AEC=$(MAKE_WEBRTC_AEC)
+DEF += -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS)
+DEF += -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
+DEF += -DMAKE_SPEEX=$(MAKE_SPEEX)
+DEF += -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
+DEF += -DMAKE_FFT_SAMPLE=$(MAKE_FFT_SAMPLE)
 
 # base
-OBJ-WMIX+= ./src/wmix.c ./src/wmix.h
-OBJ-WMIX+= ./src/wav.c ./src/wav.h
-OBJ-WMIX+= ./src/rtp.c ./src/rtp.h
-OBJ-WMIX+= ./src/g711codec.c ./src/g711codec.h
-OBJ-WMIX+= ./src/webrtc.c ./src/webrtc.h
-OBJ-WMIX+= ./src/speexlib.c ./src/speexlib.h
-OBJ-WMIX+= ./src/delay.c ./src/delay.h
+OBJ-WMIX += ./src/wmix.c
+OBJ-WMIX += ./src/wmix_mem.c
+OBJ-WMIX += ./src/wmix_task.c
+OBJ-WMIX += ./src/wav.c
+OBJ-WMIX += ./src/rtp.c
+OBJ-WMIX += ./src/g711codec.c
+OBJ-WMIX += ./src/webrtc.c
+OBJ-WMIX += ./src/speexlib.c
+OBJ-WMIX += ./src/delay.c
 
-# ui
-OBJ-WMIX+= ./ui/fbmap.c ./ui/fbmap.h
-OBJ-WMIX+= ./ui/wave.c ./ui/wave.h
-OBJ-WMIX+= ./ui/bmp.c ./ui/bmp.h
+# ui [测试中...]
+OBJ-WMIX += ./ui/fbmap.c
+OBJ-WMIX += ./ui/wave.c
+OBJ-WMIX += ./ui/bmp.c
 
 # math
-OBJ-WMIX+= ./math/fft.c ./math/fft.h
+OBJ-WMIX += ./math/fft.c
 
 # wmixMsg
-OBJ-WMIXMSG+= ./test/wmixMsg.c
-OBJ-WMIXMSG+= ./test/wmix_user.c ./test/wmix_user.h
+OBJ-WMIXMSG += ./test/wmixMsg.c
+OBJ-WMIXMSG += ./test/wmix_user.c
 
 # tools
-OBJ-RTPSENDPCM+= ./test/rtpSendPCM.c
-OBJ-RTPSENDPCM+= ./src/rtp.c ./src/rtp.h
-OBJ-RTPSENDPCM+= ./src/g711codec.c ./src/g711codec.h
-OBJ-RTPSENDPCM+= ./src/wav.c ./src/wav.h
-OBJ-RTPSENDPCM+= ./src/delay.c ./src/delay.h
+OBJ-RTPSENDPCM += ./test/rtpSendPCM.c
+OBJ-RTPSENDPCM += ./src/rtp.c
+OBJ-RTPSENDPCM += ./src/g711codec.c
+OBJ-RTPSENDPCM += ./src/wav.c
+OBJ-RTPSENDPCM += ./src/delay.c
 
-OBJ-RTPRECVPCM+= ./test/rtpRecvPCM.c
-OBJ-RTPRECVPCM+= ./src/rtp.c ./src/rtp.h
-OBJ-RTPRECVPCM+= ./src/g711codec.c ./src/g711codec.h
-OBJ-RTPRECVPCM+= ./src/wav.c ./src/wav.h
+OBJ-RTPRECVPCM += ./test/rtpRecvPCM.c
+OBJ-RTPRECVPCM += ./src/rtp.c
+OBJ-RTPRECVPCM += ./src/g711codec.c
+OBJ-RTPRECVPCM += ./src/wav.c
 
-OBJ-RTPSENDACC+= ./test/rtpSendAAC.c
-OBJ-RTPSENDACC+= ./src/rtp.c ./src/rtp.h
-OBJ-RTPSENDACC+= ./src/aac.c ./src/aac.h
+OBJ-RTPSENDACC += ./test/rtpSendAAC.c
+OBJ-RTPSENDACC += ./src/rtp.c
+OBJ-RTPSENDACC += ./src/aac.c
 
-OBJ-RTPRECVACC+= ./test/rtpRecvAAC.c
-OBJ-RTPRECVACC+= ./src/rtp.c ./src/rtp.h
-OBJ-RTPRECVACC+= ./src/aac.c ./src/aac.h
+OBJ-RTPRECVACC += ./test/rtpRecvAAC.c
+OBJ-RTPRECVACC += ./src/rtp.c
+OBJ-RTPRECVACC += ./src/aac.c
 
 # -Ixxx
-CINC+= -I./src -I$(ROOT)/libs/include
+CINC += -I./src -I./math -I./platform -I$(ROOT)/libs/include
 # -Lxxx
-CLIBS+= -L$(ROOT)/libs/lib
+CLIBS += -L$(ROOT)/libs/lib
 # -lxxx
-CFLAGS+= -lm -lpthread -lasound -ldl
+CFLAGS += -lm -lpthread
 
 # 选择要编译的库列表
 TARGET-LIBS=
 
 # ALSA LIB
 ifeq ($(MAKE_ALSA),1)
-TARGET-LIBS+= libalsa
+TARGET-LIBS += libalsa
+CFLAGS += -lasound -ldl
 endif
 
 # MP3 LIB
 ifeq ($(MAKE_MP3),1)
-OBJ-WMIX+=./src/id3.c ./src/id3.h
-CFLAGS+= -lmad
-TARGET-LIBS+= libmad
+OBJ-WMIX += ./src/id3.c
+CFLAGS += -lmad
+TARGET-LIBS += libmad
 endif
 
 # AAC LIB
 ifeq ($(MAKE_AAC),1)
-OBJ-WMIX+=./src/aac.c ./src/aac.h
-CFLAGS+= -lfaac -lfaad
-TARGET-LIBS+= libfaac libfaad
+OBJ-WMIX += ./src/aac.c
+CFLAGS += -lfaac -lfaad
+TARGET-LIBS += libfaac libfaad
 endif
 
 # WEBRTC_VAD LIB
 ifeq ($(MAKE_WEBRTC_VAD),1)
-CFLAGS+= -lwebrtcvad
-TARGET-LIBS+= libwebrtcvad
+CFLAGS += -lwebrtcvad
+TARGET-LIBS += libwebrtcvad
 endif
 
 # WEBRTC_AEC LIB
 ifeq ($(MAKE_WEBRTC_AEC),1)
-TARGET-LIBS+= libwebrtcaec
-CFLAGS+= -lwebrtcaec -lwebrtcaecm
+TARGET-LIBS += libwebrtcaec
+CFLAGS += -lwebrtcaec -lwebrtcaecm
 endif
 
 # WEBRTC_NS LIB
 ifeq ($(MAKE_WEBRTC_NS),1)
-CFLAGS+= -lwebrtcns
-TARGET-LIBS+= libwebrtcns
+CFLAGS += -lwebrtcns
+TARGET-LIBS += libwebrtcns
 endif
 
 # WEBRTC_AGC LIB
 ifeq ($(MAKE_WEBRTC_AGC),1)
-CFLAGS+= -lwebrtcagc
-TARGET-LIBS+= libwebrtcagc
+CFLAGS += -lwebrtcagc
+TARGET-LIBS += libwebrtcagc
 endif
 
 # SPEEX LIB
 ifeq ($(MAKE_SPEEX),1)
-CFLAGS+= -lspeex
-TARGET-LIBS+= libspeex
+CFLAGS += -lspeex
+TARGET-LIBS += libspeex
 endif
 
 # SPEEX_BETA3 LIB
 ifeq ($(MAKE_SPEEX_BETA3),1)
-CFLAGS+= -logg -lspeex -lspeexdsp
-TARGET-LIBS+= libogg libspeexbeta3
+CFLAGS += -logg -lspeex -lspeexdsp
+TARGET-LIBS += libogg libspeexbeta3
 endif
 
-target: wmixmsg rtpTest
+target: wmixmsg
 	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ-WMIX) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
 	@echo "---------- all complete !! ----------"
 

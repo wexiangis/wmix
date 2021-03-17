@@ -1,3 +1,6 @@
+/*
+ *  平台对接文件
+ */
 #include <stdio.h>
 #include <stdint.h>
 #include <alsa/asoundlib.h>
@@ -8,11 +11,13 @@ typedef struct SNDPCMContainer
     snd_output_t *log;
     snd_pcm_format_t format;
     int chn;
-    int volume;     //录播音音量
     int frame_size; //每帧字节数(chn*2字节)
     int data_size;  //每次写入字节数
     uint8_t *data;
+    long volume;     //录播音音量
 } SNDPCMContainer_t;
+
+static long ao_vol = 10, ai_vol = 10;
 
 int SNDWAV_SetParams(SNDPCMContainer_t *obj, int freq, int chn, int sample)
 {
@@ -148,15 +153,15 @@ void alsa_ao_vol_set(void *objAo, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
-    SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAo;
-    const int alsa_ao_base = 30; //
+    //打底音量
+    const int alsa_ao_base = 5;
     //范围限制
-    if (vol > 100)
-        obj->volume = 100;
+    if (vol > 10)
+        ao_vol = 10;
     else if (vol < 0)
-        obj->volume = 0;
+        ao_vol = 0;
     else
-        obj->volume = vol;
+        ao_vol = vol;
     //初始化
     snd_mixer_open(&mixer, 0);
     snd_mixer_attach(mixer, "default");
@@ -164,15 +169,15 @@ void alsa_ao_vol_set(void *objAo, int vol)
     snd_mixer_load(mixer);
     //找到Pcm对应的element
     pcm_element = snd_mixer_first_elem(mixer);
-    //设置音量范围,最大：0-100
+    //设置音量范围,最大：0-10
     snd_mixer_selem_set_playback_volume_range(
-        pcm_element, 0, 100 + alsa_ao_base);
+        pcm_element, 0, 10 + alsa_ao_base);
     //设置左右声道音量
     snd_mixer_selem_set_playback_volume_all(
-        pcm_element, obj->volume == 0 ? 0 : obj->volume + alsa_ao_base);
+        pcm_element, ao_vol == 0 ? 0 : ao_vol + alsa_ao_base);
     //检查设置
     snd_mixer_selem_get_playback_volume(
-        pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &obj->volume);
+        pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &ao_vol);
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
@@ -182,32 +187,41 @@ void alsa_ai_vol_set(void *objAi, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
-    SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAi;
     //范围限制
-    if (vol > 100)
-        obj->volume = 100;
+    if (vol > 10)
+        ai_vol = 10;
     else if (vol < 0)
-        obj->volume = 0;
+        ai_vol = 0;
     else
-        obj->volume = vol;
+        ai_vol = vol;
     //初始化
     snd_mixer_open(&mixer, 0);
     snd_mixer_attach(mixer, "default");
     snd_mixer_selem_register(mixer, NULL, NULL);
     snd_mixer_load(mixer);
     //找到Pcm对应的element
-    pcm_element = snd_mixer_first_elem(mixer);                     // 取得第一个 element，也就是 Master
-    snd_mixer_selem_set_capture_volume_range(pcm_element, 0, 100); // 设置音量范围：0-100之间
+    pcm_element = snd_mixer_first_elem(mixer);                    // 取得第一个 element，也就是 Master
+    snd_mixer_selem_set_capture_volume_range(pcm_element, 0, 10); // 设置音量范围：0-10之间
     //设置左右声道音量
-    snd_mixer_selem_set_capture_volume_all(pcm_element, obj->volume);
+    snd_mixer_selem_set_capture_volume_all(pcm_element, ai_vol);
     //检查设置
-    snd_mixer_selem_get_capture_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &obj->volume);
+    snd_mixer_selem_get_capture_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &ai_vol);
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
 }
 
-static SNDPCMContainer_t *_alsa_init(uint8_t channels, uint8_t sample, uint16_t freq, char p_or_c)
+int alsa_ao_vol_get(void *objAo)
+{
+    return ao_vol;
+}
+
+int alsa_ai_vol_get(void *objAi)
+{
+    return ai_vol;
+}
+
+static SNDPCMContainer_t *_alsa_init(int channels, int sample, int freq, char p_or_c)
 {
     char devicename[] = "default";
     SNDPCMContainer_t *playback = (SNDPCMContainer_t *)calloc(1, sizeof(SNDPCMContainer_t));
@@ -236,9 +250,9 @@ static SNDPCMContainer_t *_alsa_init(uint8_t channels, uint8_t sample, uint16_t 
     snd_pcm_dump(playback->handle, playback->log);
     //默认音量
     if (p_or_c == 'c')
-        alsa_ai_vol_set(playback, 100);
+        alsa_ai_vol_set(playback, 10);
     else
-        alsa_ao_vol_set(playback, 100);
+        alsa_ao_vol_set(playback, 10);
     return playback;
 
 Err:
@@ -356,15 +370,6 @@ int alsa_ai_read(void *objAi, uint8_t *data, int len)
     }
     //返回实际处理字节数
     return result * obj->frame_size;
-}
-
-int alsa_ao_vol_get(void *objAo)
-{
-    return ((SNDPCMContainer_t *)objAo)->volume;
-}
-int alsa_ai_vol_get(void *objAi)
-{
-    return ((SNDPCMContainer_t *)objAi)->volume;
 }
 
 static void _alsa_exit(SNDPCMContainer_t *playback)

@@ -1,5 +1,8 @@
-#ifndef _T31_INIT_H_
-#define _T31_INIT_H_
+/*
+ *  平台对接文件
+ */
+#ifndef _T31_PLAT_H_
+#define _T31_PLAT_H_
 
 #include <stdint.h>
 

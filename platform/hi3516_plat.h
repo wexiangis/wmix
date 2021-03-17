@@ -1,5 +1,8 @@
-#ifndef _HI3516_INIT_H_
-#define _HI3516_INIT_H_
+/*
+ *  平台对接文件
+ */
+#ifndef _HI3516_PLAT_H_
+#define _HI3516_PLAT_H_
 
 #include <stdint.h>
 

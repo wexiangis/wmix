@@ -36,9 +36,9 @@
 
 # ----- 常见参数配置 -----
 
-* 修改编译器, 编辑 Makefile 第一行 cross 内容, 注释掉表示使用 gcc
+* 修改平台和启用第三方库, 修改 Makefile 中 MAKE_XXX 宏
 
-* 修改声道、频率, 在 src/wmix.h (注意: webrtc不支持过高的频率)
+* 修改声道、频率, 在 src/wmix_plat.h (注意: webrtc不支持过高的频率)
 
 ---
 

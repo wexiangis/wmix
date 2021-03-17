@@ -1,5 +1,8 @@
-#ifndef _ALSA_INIT_H_
-#define _ALSA_INIT_H_
+/*
+ *  平台对接文件
+ */
+#ifndef _ALSA_PLAT_H_
+#define _ALSA_PLAT_H_
 
 #include <stdint.h>
 

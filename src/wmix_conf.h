@@ -1,3 +1,6 @@
+/*
+ *  混音器关键宏和结构体定义
+ */
 #ifndef _WMIX_CONF_H_
 #define _WMIX_CONF_H_
 
@@ -13,6 +16,9 @@
 #define WMIX_MSG_PATH_AUTHORITY "chmod 777 /tmp/wmix -R"
 #define WMIX_MSG_ID 'w'
 #define WMIX_MSG_BUFF_SIZE 128
+
+//录音共享内存循环缓冲区大小,必须和 wmix_user.c 中的一致
+#define AI_CIRCLE_BUFF_LEN 10240
 
 //客户端 发 服务端 消息类型
 typedef enum
@@ -98,9 +104,6 @@ typedef struct
 //播放循环缓冲区大小 1秒数据量
 #define WMIX_BUFF_SIZE (WMIX_FRAME_SIZE * WMIX_FREQ * 1000 / 1000)
 
-//录音共享内存循环缓冲区大小,必须和 wmix_user.c 中的一致
-#define AI_CIRCLE_BUFF_LEN 10240
-
 /*
  * 保存AEC 左(录音) 右(播音) 声道数据,用于校正AEC时延
  * 
@@ -150,6 +153,7 @@ typedef struct
     uint16_t head, tail;
 } WMix_Queue;
 
+//主结构体
 typedef struct
 {
     //平台指针
@@ -207,5 +211,13 @@ typedef struct
     int noteFd;//写wav文件的描述符
     char notePath[WMIX_MSG_BUFF_SIZE];//首字符是否为0来判断是否在note模式
 } WMix_Struct;
+
+//抛线程参数结构
+typedef struct
+{
+    WMix_Struct *wmix;
+    long flag;
+    uint8_t *param;
+} WMixThread_Param;
 
 #endif

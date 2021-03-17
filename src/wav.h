@@ -1,7 +1,6 @@
 /**************************************************
  * 
  *  wav前44字节记录了声道、采样、频率等信息
- * 
  *  本文件用于解析wav头
  * 
  **************************************************/
@@ -9,11 +8,6 @@
 #define _WAV_H_
 
 #include <stdint.h>
-
-/****************************wav_parser************************************************************/
-// typedef unsigned char  uint8_t;
-// typedef unsigned short uint16_t;
-// typedef unsigned int  uint32_t;
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define COMPOSE_ID(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((d) << 24))
