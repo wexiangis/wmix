@@ -53,12 +53,3 @@ void t31_ai_exit(void *objAi)
 {
     ;
 }
-
-uint8_t *alsa_ao_buffer(void *objAo, int *retSize)
-{
-    return NULL;
-}
-uint8_t *alsa_ai_buffer(void *objAi, int *retSize)
-{
-    return NULL;
-}

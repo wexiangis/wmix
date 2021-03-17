@@ -394,18 +394,3 @@ void alsa_ai_exit(void *objAi)
 {
     _alsa_exit((SNDPCMContainer_t *)objAi);
 }
-
-static uint8_t *_alsa_buffer(SNDPCMContainer_t *obj, int *retSize)
-{
-    if (retSize)
-        *retSize = obj->data_size;
-    return obj->data;
-}
-uint8_t *alsa_ao_buffer(void *objAo, int *retSize)
-{
-    return _alsa_buffer((SNDPCMContainer_t *)objAo, retSize);
-}
-uint8_t *alsa_ai_buffer(void *objAi, int *retSize)
-{
-    return _alsa_buffer((SNDPCMContainer_t *)objAi, retSize);
-}

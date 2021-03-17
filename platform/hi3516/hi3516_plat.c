@@ -53,13 +53,3 @@ void hi3516_ai_exit(void *objAi)
 {
     ;
 }
-
-uint8_t *hi3516_ao_buffer(void *objAo, int *retSize)
-{
-    return NULL;
-}
-
-uint8_t *hi3516_ai_buffer(void *objAi, int *retSize)
-{
-    return NULL;
-}

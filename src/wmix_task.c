@@ -1,3 +1,6 @@
+/*
+ *  需要抛线程来实现的各种音频功能模块
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

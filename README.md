@@ -171,3 +171,15 @@
 * 在 Makefile 改用 cross:=arm-linux-gnueabihf 再编译, MAKE_WEBRTC_AEC 库用 gcc 编译不过;
 
 * ps. 树莓派自带编译器 gcc 和 arm-linux-gnueabihf-gcc 编译的应用是通用的
+
+---
+
+# ----- 新平台接入 -----
+
+* 工程中已把平台依赖接口进行了分离, 当一个新的硬件平台接入时, 只需修改下列项:
+
+* 1. platform 文件夹: 参考alsa文件夹添加自己的文件夹, 添加 xxx_plat.c/h 文件并实现其中的接口函数, 其中lib和include文件夹可以放置平台相关的库和头文件;
+
+* 2. 修改 src/wmix_plat.h: 参考通用平台配置, 对接自己的接口;
+
+* 3. 修改 Makefile: 参考通用平台配置, 配置自己的 platform 文件夹编译项.

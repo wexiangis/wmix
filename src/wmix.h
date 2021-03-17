@@ -37,7 +37,7 @@ void wmix_load_thread(
 void wmix_load_task(
     WMixThread_Param *wmtp);
 
-//可以用 wmix_load_thread() 加载的线程
+//用 wmix_load_thread() 加载的功能模块
 void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp);
 void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp);
 void wmix_thread_record_wav(WMixThread_Param *wmtp);
@@ -49,7 +49,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp);
 void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp);
 void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp);
 
-//可以用 wmix_load_task() 加载的线程
+//用 wmix_load_task() 加载的功能模块
 void wmix_task_play_wav(
     WMix_Struct *wmix,
     char *wavPath,
