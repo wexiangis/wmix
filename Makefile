@@ -5,29 +5,37 @@
 #   2: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_AAC MAKE_MP3
 MAKE_PLATFORM = 0
 
-##### 通用平台 #####
+##### 通用平台配置 #####
 ifeq ($(MAKE_PLATFORM),0)
 # ARM等平台需要交叉编译器时启用改行
 # cross = arm-linux-gnueabihf
-OBJ-WMIX += ./platform/alsa_plat.c
+OBJ += ./platform/alsa/alsa_plat.c
+CINC += -I./platform/alsa -I./platform/alsa/include
+CLIBS += -L./platform/alsa/lib
+CFLAGS +=
 endif
 
-##### 海思hi3516平台 #####
+##### 海思hi3516平台配置 #####
 ifeq ($(MAKE_PLATFORM),1)
 cross = arm-himix200-linux
 # cross = arm-himix100-linux
 MAKE_ALSA = 0
 MAKE_AAC = 0
-OBJ-WMIX += ./platform/hi3516_plat.c
+OBJ += ./platform/hi3516_plat.c
+CINC += -I./platform/hi3516 -I./platform/hi3516/include
+CLIBS += -L./platform/hi3516/lib
+CFLAGS +=
 endif
 
-##### 君正T31平台 #####
+##### 君正T31平台配置 #####
 ifeq ($(MAKE_PLATFORM),2)
 cross = mips-linux-gnu
 MAKE_ALSA = 0
 MAKE_AAC = 0
 MAKE_MP3 = 0
-OBJ-WMIX += ./platform/t31_plat.c
+OBJ += ./platform/t31_plat.c
+CINC += -I./platform/t31 -I./platform/t31/include
+CLIBS += -L./platform/t31/lib
 CFLAGS += -Wl,-gc-sections
 CFLAGS += -muclibc # 使用 uclibc 时添加该项
 endif
@@ -79,27 +87,27 @@ DEF += -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
 DEF += -DMAKE_FFT_SAMPLE=$(MAKE_FFT_SAMPLE)
 
 # base
-OBJ-WMIX += ./src/wmix.c
-OBJ-WMIX += ./src/wmix_mem.c
-OBJ-WMIX += ./src/wmix_task.c
-OBJ-WMIX += ./src/wav.c
-OBJ-WMIX += ./src/rtp.c
-OBJ-WMIX += ./src/g711codec.c
-OBJ-WMIX += ./src/webrtc.c
-OBJ-WMIX += ./src/speexlib.c
-OBJ-WMIX += ./src/delay.c
+OBJ += ./src/wmix.c
+OBJ += ./src/wmix_mem.c
+OBJ += ./src/wmix_task.c
+OBJ += ./src/wav.c
+OBJ += ./src/rtp.c
+OBJ += ./src/g711codec.c
+OBJ += ./src/webrtc.c
+OBJ += ./src/speexlib.c
+OBJ += ./src/delay.c
 
 # ui [测试中...]
-OBJ-WMIX += ./ui/fbmap.c
-OBJ-WMIX += ./ui/wave.c
-OBJ-WMIX += ./ui/bmp.c
+OBJ += ./ui/fbmap.c
+OBJ += ./ui/wave.c
+OBJ += ./ui/bmp.c
 
 # math
-OBJ-WMIX += ./math/fft.c
+OBJ += ./math/fft.c
 
 # wmixMsg
-OBJ-WMIXMSG += ./test/wmixMsg.c
-OBJ-WMIXMSG += ./test/wmix_user.c
+OBJ-MSG += ./test/wmixMsg.c
+OBJ-MSG += ./test/wmix_user.c
 
 # tools
 OBJ-RTPSENDPCM += ./test/rtpSendPCM.c
@@ -139,14 +147,14 @@ endif
 
 # MP3 LIB
 ifeq ($(MAKE_MP3),1)
-OBJ-WMIX += ./src/id3.c
+OBJ += ./src/id3.c
 CFLAGS += -lmad
 TARGET-LIBS += libmad
 endif
 
 # AAC LIB
 ifeq ($(MAKE_AAC),1)
-OBJ-WMIX += ./src/aac.c
+OBJ += ./src/aac.c
 CFLAGS += -lfaac -lfaad
 TARGET-LIBS += libfaac libfaad
 endif
@@ -188,11 +196,11 @@ TARGET-LIBS += libogg libspeexbeta3
 endif
 
 target: wmixmsg
-	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ-WMIX) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
+	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
-	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-WMIXMSG) -lpthread
+	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) -lpthread
 
 rtpTest:
 	@$(CC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I./src
