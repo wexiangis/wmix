@@ -199,7 +199,7 @@ typedef struct
     //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;
 
-#if(WMIX_FFT_SAMPLE)
+#if(WMIX_MATH)
     //FFT
     char fftPath[WMIX_MSG_BUFF_SIZE];
     float *fftStream;//数据池

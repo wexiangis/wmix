@@ -17,11 +17,13 @@ endif
 
 ##### 海思hi3516平台配置 #####
 ifeq ($(MAKE_PLATFORM),1)
-cross = arm-himix200-linux
-# cross = arm-himix100-linux
+# cross = arm-himix200-linux
+cross = arm-himix100-linux
+# 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
-OBJ += ./platform/hi3516_plat.c
+# 平台文件编译配置
+OBJ += ./platform/hi3516/hi3516_plat.c
 CINC += -I./platform/hi3516 -I./platform/hi3516/include
 CLIBS += -L./platform/hi3516/lib
 CFLAGS +=
@@ -30,14 +32,25 @@ endif
 ##### 君正T31平台配置 #####
 ifeq ($(MAKE_PLATFORM),2)
 cross = mips-linux-gnu
+# 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
 MAKE_MP3 = 0
-OBJ += ./platform/t31_plat.c
+# 平台文件编译配置
+OBJ += ./platform/t31/t31_plat.c
+OBJ += ./platform/t31/lib/libalog.a
+OBJ += ./platform/t31/lib/libimp.a
 CINC += -I./platform/t31 -I./platform/t31/include
 CLIBS += -L./platform/t31/lib
-CFLAGS += -Wl,-gc-sections
+CFLAGS += -lalog -limp
+CFLAGS += -Wl,-gc-sections -lrt -ldl
 CFLAGS += -muclibc # 使用 uclibc 时添加该项
+CFLAGS-MSG += -muclibc # 使用 uclibc 时添加该项
+# 选配
+MAKE_WEBRTC_VAD = 0
+MAKE_WEBRTC_AEC = 0
+MAKE_WEBRTC_NS = 0
+MAKE_WEBRTC_AGC = 0
 endif
 
 # 说明 '?=' 是指之前没有赋过值则使用当前值
@@ -63,7 +76,9 @@ MAKE_SPEEX ?= 0
 MAKE_SPEEX_BETA3 ?= 0
 # 启用FFT(快速傅立叶变换)采样点个数,0/关闭,其它/开启 [测试中...]
 # 必须为2的x次方,如4,8,16...513,1024
-MAKE_FFT_SAMPLE ?= 0 #1024
+MAKE_MATH ?= 0 #1024
+# UI文件编译 [测试中...]
+MAKE_UI ?= 0
 
 # system
 HOST = 
@@ -84,7 +99,7 @@ DEF += -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS)
 DEF += -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
 DEF += -DMAKE_SPEEX=$(MAKE_SPEEX)
 DEF += -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
-DEF += -DMAKE_FFT_SAMPLE=$(MAKE_FFT_SAMPLE)
+DEF += -DMAKE_MATH=$(MAKE_MATH)
 
 # base
 OBJ += ./src/wmix.c
@@ -97,17 +112,10 @@ OBJ += ./src/webrtc.c
 OBJ += ./src/speexlib.c
 OBJ += ./src/delay.c
 
-# ui [测试中...]
-OBJ += ./ui/fbmap.c
-OBJ += ./ui/wave.c
-OBJ += ./ui/bmp.c
-
-# math
-OBJ += ./math/fft.c
-
 # wmixMsg
 OBJ-MSG += ./test/wmixMsg.c
 OBJ-MSG += ./test/wmix_user.c
+CFLAGS-MSG += -lpthread
 
 # tools
 OBJ-RTPSENDPCM += ./test/rtpSendPCM.c
@@ -195,12 +203,24 @@ CFLAGS += -logg -lspeex -lspeexdsp
 TARGET-LIBS += libogg libspeexbeta3
 endif
 
+# MATH
+ifeq ($(MAKE_MATH),1)
+OBJ += ./math/fft.c
+endif
+
+# UI
+ifeq ($(MAKE_UI),1)
+OBJ += ./ui/fbmap.c
+OBJ += ./ui/wave.c
+OBJ += ./ui/bmp.c
+endif
+
 target: wmixmsg
 	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
 	@echo "---------- all complete !! ----------"
 
 wmixmsg:
-	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) -lpthread
+	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) $(CFLAGS-MSG)
 
 rtpTest:
 	@$(CC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I./src

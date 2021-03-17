@@ -7,3 +7,7 @@ rtpRecvPCM
 rtpSendAAC
 rtpRecvAAC
 fifo
+platform/t31/lib/*
+platform/t31/include/*
+platform/hi3516/lib/*
+platform/hi3516/include/*

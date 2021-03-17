@@ -537,6 +537,9 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 {
                     if (wmix->debug)
                         printf("wmix record: start\r\n");
+                    //录音量更新
+                    if (wmix->volumeMic != wmix_ai_vol_get(wmix->objAi))
+                        wmix_ai_vol_set(wmix->objAi, wmix->volumeMic);
                     //丢弃一包数据
                     wmix_ai_read(wmix->objAi, buff, WMIX_PKG_SIZE);
 #ifdef WMIX_RECORD_PLAY_SYNC
@@ -837,7 +840,9 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 break;
             //录音音量设置
             case WMT_VOLUME_MIC:
-                wmix_ai_vol_set(wmix->objAi, msg.value[0]);
+                if (wmix->objAi)
+                    wmix_ai_vol_set(wmix->objAi, msg.value[0]);
+                wmix->volumeMic = msg.value[0] < 10 ? msg.value[0] : 10;
                 break;
             //录音音量增益设置
             case WMT_VOLUME_AGC:
@@ -900,7 +905,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 //通知 wmix_play_thread 开始写数据
                 strcpy(wmix->notePath, (char *)msg.value);
                 break;
-#if (WMIX_FFT_SAMPLE)
+#if (WMIX_MATH)
             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
             case WMT_FFT:
                 //这是一次关闭指令
@@ -942,7 +947,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   shmemRun: %d\r\n"
                     "   reduceMode: %d\r\n"
                     "   note: %s\r\n"
-#if (WMIX_FFT_SAMPLE)
+#if (WMIX_MATH)
                     "   fft: %s\r\n"
 #endif
                     "   debug: %d\r\n"
@@ -965,7 +970,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->shmemRun,
                     wmix->reduceMode,
                     wmix->notePath,
-#if (WMIX_FFT_SAMPLE)
+#if (WMIX_MATH)
                     wmix->fftPath,
 #endif
                     wmix->debug ? 1 : 0,
@@ -1297,7 +1302,7 @@ void wmix_exit(WMix_Struct *wmix)
             wmix_ao_exit(wmix->objAo);
         if (wmix->objAi)
             wmix_ai_exit(wmix->objAi);
-#if (WMIX_FFT_SAMPLE)
+#if (WMIX_MATH)
         free(wmix->fftStream);
         free(wmix->fftOutAF);
         free(wmix->fftOutPF);
@@ -1318,7 +1323,10 @@ WMix_Struct *wmix_init(void)
     //录播音指针始化
     objAo = wmix_ao_init(WMIX_CHANNELS, WMIX_FREQ);
     if (!objAo)
+    {
+        fprintf(stderr, "%s: wmix_ao_init failed \r\n", __func__);
         return NULL;
+    }
     //可以在需要时再初始化
     // objAi = wmix_ai_init(WMIX_CHANNELS, WMIX_FREQ);
 
@@ -1364,16 +1372,17 @@ WMix_Struct *wmix_init(void)
     wmix->volumeAgc = 5;
     //设置音量
     wmix_ao_vol_set(wmix->objAo, wmix->volume);
-    wmix_ai_vol_set(wmix->objAi, wmix->volumeMic);
+    if (wmix->objAi)
+        wmix_ai_vol_set(wmix->objAi, wmix->volumeMic);
 
     //接收 ctrl+c 信号,在进程关闭时做出内存释放处理
     signal(SIGINT, wmix_signal);
     signal(SIGTERM, wmix_signal);
 
-#if (WMIX_FFT_SAMPLE)
-    wmix->fftStream = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
-    wmix->fftOutAF = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
-    wmix->fftOutPF = (float *)calloc(WMIX_FFT_SAMPLE, sizeof(float));
+#if (WMIX_MATH)
+    wmix->fftStream = (float *)calloc(WMIX_MATH, sizeof(float));
+    wmix->fftOutAF = (float *)calloc(WMIX_MATH, sizeof(float));
+    wmix->fftOutPF = (float *)calloc(WMIX_MATH, sizeof(float));
 #endif
 
     return wmix;
@@ -1924,7 +1933,11 @@ int main(int argc, char **argv)
             if (volume >= 0)
                 wmix_ao_vol_set(main_wmix->objAo, volume);
             if (volumeMic >= 0)
-                wmix_ai_vol_set(main_wmix->objAi, volumeMic);
+            {
+                if (main_wmix->objAi)
+                    wmix_ai_vol_set(main_wmix->objAi, volumeMic);
+                main_wmix->volumeMic = volumeMic < 10 ? volumeMic : 10;
+            }
             if (volumeAgc >= 0)
                 main_wmix->volumeAgc = volumeAgc;
             if (path)

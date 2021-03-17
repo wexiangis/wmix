@@ -17,8 +17,6 @@ typedef struct SNDPCMContainer
     long volume;     //录播音音量
 } SNDPCMContainer_t;
 
-static long ao_vol = 10, ai_vol = 10;
-
 int SNDWAV_SetParams(SNDPCMContainer_t *obj, int freq, int chn, int sample)
 {
     snd_pcm_hw_params_t *hwparams;
@@ -153,15 +151,16 @@ void alsa_ao_vol_set(void *objAo, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
+    SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAi;
     //打底音量
     const int alsa_ao_base = 5;
     //范围限制
     if (vol > 10)
-        ao_vol = 10;
+        obj->volume = 10;
     else if (vol < 0)
-        ao_vol = 0;
+        obj->volume = 0;
     else
-        ao_vol = vol;
+        obj->volume = vol;
     //初始化
     snd_mixer_open(&mixer, 0);
     snd_mixer_attach(mixer, "default");
@@ -174,10 +173,10 @@ void alsa_ao_vol_set(void *objAo, int vol)
         pcm_element, 0, 10 + alsa_ao_base);
     //设置左右声道音量
     snd_mixer_selem_set_playback_volume_all(
-        pcm_element, ao_vol == 0 ? 0 : ao_vol + alsa_ao_base);
+        pcm_element, obj->volume == 0 ? 0 : obj->volume + alsa_ao_base);
     //检查设置
     snd_mixer_selem_get_playback_volume(
-        pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &ao_vol);
+        pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &obj->volume);
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
@@ -187,13 +186,14 @@ void alsa_ai_vol_set(void *objAi, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
+    SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAi;
     //范围限制
     if (vol > 10)
-        ai_vol = 10;
+        obj->volume = 10;
     else if (vol < 0)
-        ai_vol = 0;
+        obj->volume = 0;
     else
-        ai_vol = vol;
+        obj->volume = vol;
     //初始化
     snd_mixer_open(&mixer, 0);
     snd_mixer_attach(mixer, "default");
@@ -203,9 +203,9 @@ void alsa_ai_vol_set(void *objAi, int vol)
     pcm_element = snd_mixer_first_elem(mixer);                    // 取得第一个 element，也就是 Master
     snd_mixer_selem_set_capture_volume_range(pcm_element, 0, 10); // 设置音量范围：0-10之间
     //设置左右声道音量
-    snd_mixer_selem_set_capture_volume_all(pcm_element, ai_vol);
+    snd_mixer_selem_set_capture_volume_all(pcm_element, obj->volume);
     //检查设置
-    snd_mixer_selem_get_capture_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &ai_vol);
+    snd_mixer_selem_get_capture_volume(pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &obj->volume);
     //处理事件
     snd_mixer_handle_events(mixer);
     snd_mixer_close(mixer);
@@ -213,12 +213,12 @@ void alsa_ai_vol_set(void *objAi, int vol)
 
 int alsa_ao_vol_get(void *objAo)
 {
-    return ao_vol;
+    return ((SNDPCMContainer_t *)objAo)->volume;
 }
 
 int alsa_ai_vol_get(void *objAi)
 {
-    return ai_vol;
+    return ((SNDPCMContainer_t *)objAi)->volume;
 }
 
 static SNDPCMContainer_t *_alsa_init(int channels, int sample, int freq, char p_or_c)

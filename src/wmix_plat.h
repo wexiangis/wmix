@@ -30,10 +30,10 @@
 #define WMIX_AAC 1
 #endif
 
-#ifdef MAKE_FFT_SAMPLE
-#define WMIX_FFT_SAMPLE MAKE_FFT_SAMPLE
+#ifdef MAKE_MATH
+#define WMIX_MATH MAKE_MATH
 #else
-#define WMIX_FFT_SAMPLE 1024
+#define WMIX_MATH 1024
 #endif
 
 // ========== 海思hi3516平台配置 ==========
@@ -65,7 +65,7 @@
 
 #define WMIX_CHANNELS 1 //内置aec,单声道
 #define WMIX_SAMPLE 16
-#define WMIX_FREQ 8000
+#define WMIX_FREQ 16000
 
 #define wmix_ao_init t31_ao_init //基本接口
 #define wmix_ai_init t31_ai_init
