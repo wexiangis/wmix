@@ -30,10 +30,10 @@
 #define WMIX_AAC 1
 #endif
 
-#ifdef MAKE_MATH
-#define WMIX_MATH MAKE_MATH
+#ifdef MAKE_MATH_FFT
+#define WMIX_MATH_FFT MAKE_MATH_FFT
 #else
-#define WMIX_MATH 1024
+#define WMIX_MATH_FFT 1024
 #endif
 
 // ========== 海思hi3516平台配置 ==========

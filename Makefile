@@ -42,7 +42,7 @@ OBJ += ./platform/t31/lib/libalog.a
 OBJ += ./platform/t31/lib/libimp.a
 CINC += -I./platform/t31 -I./platform/t31/include
 CLIBS += -L./platform/t31/lib
-CFLAGS += -lalog -limp
+CFLAGS += -lalog -limp -laudioProcess
 CFLAGS += -Wl,-gc-sections -lrt -ldl
 CFLAGS += -muclibc # 使用 uclibc 时添加该项
 CFLAGS-MSG += -muclibc # 使用 uclibc 时添加该项
@@ -76,7 +76,7 @@ MAKE_SPEEX ?= 0
 MAKE_SPEEX_BETA3 ?= 0
 # 启用FFT(快速傅立叶变换)采样点个数,0/关闭,其它/开启 [测试中...]
 # 必须为2的x次方,如4,8,16...513,1024
-MAKE_MATH ?= 0 #1024
+MAKE_MATH_FFT ?= 0 #1024
 # UI文件编译 [测试中...]
 MAKE_UI ?= 0
 
@@ -99,7 +99,7 @@ DEF += -DMAKE_WEBRTC_NS=$(MAKE_WEBRTC_NS)
 DEF += -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
 DEF += -DMAKE_SPEEX=$(MAKE_SPEEX)
 DEF += -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
-DEF += -DMAKE_MATH=$(MAKE_MATH)
+DEF += -DMAKE_MATH_FFT=$(MAKE_MATH_FFT)
 
 # base
 OBJ += ./src/wmix.c
@@ -203,8 +203,8 @@ CFLAGS += -logg -lspeex -lspeexdsp
 TARGET-LIBS += libogg libspeexbeta3
 endif
 
-# MATH
-ifeq ($(MAKE_MATH),1)
+# MATH_FFT
+ifeq ($(MAKE_MATH_FFT),1)
 OBJ += ./math/fft.c
 endif
 
@@ -215,12 +215,13 @@ OBJ += ./ui/wave.c
 OBJ += ./ui/bmp.c
 endif
 
-target: wmixmsg
+wmix: wmixmsg
 	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
-	@echo "---------- all complete !! ----------"
+	@echo "---------- make wmix complete ----------"
 
 wmixmsg:
 	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) $(CFLAGS-MSG)
+	@echo "---------- make wmixMsg complete ----------"
 
 rtpTest:
 	@$(CC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I./src
@@ -229,7 +230,7 @@ rtpTest:
 	@$(CC) -Wall -o $(ROOT)/tools/rtpRecvAAC $(OBJ-RTPRECVACC) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 
 libs: $(TARGET-LIBS)
-	@echo "---------- all complete !! ----------"
+	@echo "---------- make libs complete ----------"
 
 libalsa:
 	@tar -xjf $(ROOT)/pkg/alsa-lib-1.1.9.tar.bz2 -C $(ROOT)/libs && \

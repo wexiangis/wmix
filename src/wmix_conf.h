@@ -7,6 +7,10 @@
 #include <stdbool.h>
 #include "wmix_plat.h"
 
+//不带参数 和 带参数
+#define WMIX_ERR(fmt)           fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__)
+#define WMIX_ERR2(fmt, argv...) fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__, ##argv)
+
 /* ---------- 需和客户端(程序)同步的信息 ---------- */
 
 #define WMIX_VERSION "V5.5RC1 - 20210317"
@@ -199,7 +203,7 @@ typedef struct
     //音量: 播放0~10, 录音0~10, agc增益0~100
     int volume, volumeMic, volumeAgc;
 
-#if(WMIX_MATH)
+#if(WMIX_MATH_FFT)
     //FFT
     char fftPath[WMIX_MSG_BUFF_SIZE];
     float *fftStream;//数据池

@@ -65,7 +65,7 @@ void wmix_console(WMix_Struct *wmix, char *path)
     printf("%s: point to %s \r\n", __func__, path);
     //重定向
     if (!freopen(path, wmix->consoleType == 0 ? "w" : "a+", stdout))
-        fprintf(stderr, "%s: freopen %s error !!\r\n", __func__, path);
+        WMIX_ERR2("freopen %s error !!\r\n", path);
 }
 
 void wmix_load_thread(
@@ -255,7 +255,9 @@ uint8_t *recordPkgBuff_get(uint8_t *buff, int delayms)
 }
 
 // playPkgBuff FIFO
+#if (WMIX_WEBRTC_AEC || WMIX_SPEEX_BETA3)
 static uint8_t playPkgBuff[WMIX_PKG_SIZE];
+#endif
 static uint8_t _playPkgBuff[AEC_FIFO_PKG_NUM][WMIX_PKG_SIZE];
 static int _playPkgBuff_count = 0;
 // 入栈
@@ -671,7 +673,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     //再次检查
     if (access(WMIX_MSG_PATH, F_OK) != 0)
     {
-        fprintf(stderr, "%s: msg path not found\r\n", __func__);
+        WMIX_ERR("msg path not found\r\n");
         return;
     }
     //清空文件夹
@@ -681,7 +683,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     //获得管道
     if ((wmix->msg_key = ftok(WMIX_MSG_PATH, WMIX_MSG_ID)) == -1)
     {
-        fprintf(stderr, "%s: ftok err\r\n", __func__);
+        WMIX_ERR("ftok err\r\n");
         return;
     }
     //清空队列
@@ -690,7 +692,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
     //重新创建队列
     if ((wmix->msg_fd = msgget(wmix->msg_key, IPC_CREAT | 0666)) == -1)
     {
-        fprintf(stderr, "%s: msgget err\r\n", __func__);
+        WMIX_ERR("msgget err\r\n");
         return;
     }
     //线程计数
@@ -721,18 +723,18 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             //排尾播放
             case WMT_PLAY_LAST:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_load_task);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_load_task);
                 break;
             //fifo播放wav流
             case WMT_FIFO_PLAY:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_play_wav_fifo);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_play_wav_fifo);
                 break;
             //复位
             case WMT_RESET:
@@ -742,18 +744,18 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             //fifo录音wav流
             case WMT_FIFO_RECORD:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_record_wav_fifo);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_record_wav_fifo);
                 break;
             //录音wav文件
             case WMT_RECORD_WAV:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_record_wav);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_record_wav);
                 break;
             //清空播放列表
             case WMT_CLEAN_LIST:
@@ -762,27 +764,27 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             //rtp send pcma
             case WMT_RTP_SEND_PCMA:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_rtp_send_pcma);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_rtp_send_pcma);
                 break;
             //rtp recv pcma
             case WMT_RTP_RECV_PCMA:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_rtp_recv_pcma);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_rtp_recv_pcma);
                 break;
 #if (WMIX_AAC)
             //录音aac文件
             case WMT_RECORD_AAC:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_record_aac);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_record_aac);
                 break;
 #endif
             //开/关 shmem
@@ -859,18 +861,18 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             //rtp send aac
             case WMT_RTP_SEND_AAC:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_rtp_send_aac);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_rtp_send_aac);
                 break;
             //rtp recv aac
             case WMT_RTP_RECV_AAC:
                 wmix_load_thread(wmix,
-                               msg.type,
-                               msg.value,
-                               WMIX_MSG_BUFF_SIZE,
-                               &wmix_thread_rtp_recv_aac);
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_rtp_recv_aac);
                 break;
 #endif
             //关闭所有播放和录音
@@ -905,7 +907,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 //通知 wmix_play_thread 开始写数据
                 strcpy(wmix->notePath, (char *)msg.value);
                 break;
-#if (WMIX_MATH)
+#if (WMIX_MATH_FFT)
             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
             case WMT_FFT:
                 //这是一次关闭指令
@@ -947,7 +949,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   shmemRun: %d\r\n"
                     "   reduceMode: %d\r\n"
                     "   note: %s\r\n"
-#if (WMIX_MATH)
+#if (WMIX_MATH_FFT)
                     "   fft: %s\r\n"
 #endif
                     "   debug: %d\r\n"
@@ -970,7 +972,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->shmemRun,
                     wmix->reduceMode,
                     wmix->notePath,
-#if (WMIX_MATH)
+#if (WMIX_MATH_FFT)
                     wmix->fftPath,
 #endif
                     wmix->debug ? 1 : 0,
@@ -1302,7 +1304,7 @@ void wmix_exit(WMix_Struct *wmix)
             wmix_ao_exit(wmix->objAo);
         if (wmix->objAi)
             wmix_ai_exit(wmix->objAi);
-#if (WMIX_MATH)
+#if (WMIX_MATH_FFT)
         free(wmix->fftStream);
         free(wmix->fftOutAF);
         free(wmix->fftOutPF);
@@ -1324,7 +1326,7 @@ WMix_Struct *wmix_init(void)
     objAo = wmix_ao_init(WMIX_CHANNELS, WMIX_FREQ);
     if (!objAo)
     {
-        fprintf(stderr, "%s: wmix_ao_init failed \r\n", __func__);
+        WMIX_ERR("wmix_ao_init failed \r\n");
         return NULL;
     }
     //可以在需要时再初始化
@@ -1379,10 +1381,10 @@ WMix_Struct *wmix_init(void)
     signal(SIGINT, wmix_signal);
     signal(SIGTERM, wmix_signal);
 
-#if (WMIX_MATH)
-    wmix->fftStream = (float *)calloc(WMIX_MATH, sizeof(float));
-    wmix->fftOutAF = (float *)calloc(WMIX_MATH, sizeof(float));
-    wmix->fftOutPF = (float *)calloc(WMIX_MATH, sizeof(float));
+#if (WMIX_MATH_FFT)
+    wmix->fftStream = (float *)calloc(WMIX_MATH_FFT, sizeof(float));
+    wmix->fftOutAF = (float *)calloc(WMIX_MATH_FFT, sizeof(float));
+    wmix->fftOutPF = (float *)calloc(WMIX_MATH_FFT, sizeof(float));
 #endif
 
     return wmix;
@@ -1435,7 +1437,13 @@ WMix_Point wmix_load_data(
     int16_t repairBuff[64], repairBuffCount, repairTemp;
     float repairStep, repairStepSum;
     //所谓correct,就是在放置播放指针时,超前当前播放指针一定量,以保证完整播放音频
+#if (WMIX_PLATFORM == PLATFORM_HI3516)
+    uint16_t correct = 0;
+#elif (WMIX_PLATFORM == PLATFORM_T31)
+    uint16_t correct = 0;
+#else
     uint16_t correct = WMIX_CHANNELS * WMIX_FREQ * 16 / 8 / 5;
+#endif
 
     if (!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;

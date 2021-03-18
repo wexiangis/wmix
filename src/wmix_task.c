@@ -61,7 +61,7 @@ void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
     //
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
     {
-        fprintf(stderr, "%s: mkfifo err\r\n", __func__);
+        WMIX_ERR("mkfifo err\r\n");
         return;
     }
     //
@@ -173,23 +173,23 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
     //
     if (freq > WMIX_FREQ)
     {
-        fprintf(stderr, "%s: freq err, %dHz > %dHz(machine)\r\n", __func__, freq, WMIX_FREQ);
+        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
         return;
     }
     if (sample != WMIX_SAMPLE)
     {
-        fprintf(stderr, "%s: sample err, must be %dbit(machine)\r\n", __func__, WMIX_SAMPLE);
+        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
         return;
     }
     if (chn != 1 && chn != 2)
     {
-        fprintf(stderr, "%s: channels err, must be 1 or 2\r\n", __func__);
+        WMIX_ERR("channels err, must be 1 or 2\r\n");
         return;
     }
     //
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
     {
-        fprintf(stderr, "%s: mkfifo err\r\n", __func__);
+        WMIX_ERR("mkfifo err\r\n");
         return;
     }
     //
@@ -240,7 +240,7 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
         }
         else if (ret < 0)
         {
-            fprintf(stderr, "%s: read err %d\r\n", __func__, (int)ret);
+            WMIX_ERR2("read err %d\r\n", (int)ret);
             break;
         }
         else
@@ -292,24 +292,24 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
     //
     if (freq > WMIX_FREQ)
     {
-        fprintf(stderr, "%s: freq err, %dHz > %dHz(machine)\r\n", __func__, freq, WMIX_FREQ);
+        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
         return;
     }
     if (sample != WMIX_SAMPLE)
     {
-        fprintf(stderr, "%s: sample err, must be %dbit(machine)\r\n", __func__, WMIX_SAMPLE);
+        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
         return;
     }
     if (chn != 1 && chn != 2)
     {
-        fprintf(stderr, "%s: channels err, must be 1 or 2\r\n", __func__);
+        WMIX_ERR("channels err, must be 1 or 2\r\n");
         return;
     }
     //
     fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd <= 0)
     {
-        fprintf(stderr, "%s: open %s err\r\n", __func__, path);
+        WMIX_ERR2("open %s err\r\n", path);
         return;
     }
     //
@@ -317,7 +317,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
     if (WAV_WriteHeader(fd, &wav) < 0)
     {
         close(fd);
-        fprintf(stderr, "%s: WAV_WriteHeader err\r\n", __func__);
+        WMIX_ERR("WAV_WriteHeader err\r\n");
         return;
     }
     //
@@ -370,7 +370,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
             ret = write(fd, buff, buffSize2);
             if (ret < 0 && errno != EAGAIN)
             {
-                fprintf(stderr, "%s: write err %d\r\n", __func__, errno);
+                WMIX_ERR2("write err %d\r\n", errno);
                 break;
             }
             //
@@ -379,7 +379,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
         }
         else if (ret < 0)
         {
-            fprintf(stderr, "%s: read err %d\r\n", __func__, (int)ret);
+            WMIX_ERR2("read err %d\r\n", (int)ret);
             break;
         }
         else
@@ -457,24 +457,24 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
     //
     if (freq > WMIX_FREQ)
     {
-        fprintf(stderr, "%s: freq err, %dHz > %dHz(machine)\r\n", __func__, freq, WMIX_FREQ);
+        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
         return;
     }
     if (sample != WMIX_SAMPLE)
     {
-        fprintf(stderr, "%s: sample err, must be %dbit(machine)\r\n", __func__, WMIX_SAMPLE);
+        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
         return;
     }
     if (chn != 1 && chn != 2)
     {
-        fprintf(stderr, "%s: channels err, must be 1 or 2\r\n", __func__);
+        WMIX_ERR("channels err, must be 1 or 2\r\n");
         return;
     }
     //
     fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd <= 0)
     {
-        fprintf(stderr, "%s: open %s err\r\n", __func__, path);
+        WMIX_ERR2("open %s err\r\n", path);
         return;
     }
     //
@@ -536,7 +536,7 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
                     ret = write(fd, aacBuff, ret);
                     if (ret < 0 && errno != EAGAIN)
                     {
-                        fprintf(stderr, "%s: write err %d\r\n", __func__, errno);
+                        WMIX_ERR2("write err %d\r\n", errno);
                         break;
                     }
                 }
@@ -554,7 +554,7 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
         }
         else if (ret < 0)
         {
-            fprintf(stderr, "%s: read err %d\r\n", __func__, (int)ret);
+            WMIX_ERR2("read err %d\r\n", (int)ret);
             break;
         }
         else
@@ -615,24 +615,24 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     //参数检查,是否在允许的变参范围内
     // if (freq > WMIX_FREQ)
     // {
-    //     fprintf(stderr, "%s: freq err, %dHz > %dHz(machine)\r\n", __func__, freq, WMIX_FREQ);
+    //     WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
     //     return;
     // }
     if (sample != WMIX_SAMPLE)
     {
-        fprintf(stderr, "%s: sample err, must be %dbit(machine)\r\n", __func__, WMIX_SAMPLE);
+        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
         return;
     }
     if (chn != 1 && chn != 2)
     {
-        fprintf(stderr, "%s: channels err, must be 1 or 2\r\n", __func__);
+        WMIX_ERR("channels err, must be 1 or 2\r\n");
         return;
     }
     //初始化rtp
     rcs = rtpChain_get(path, port, true, bindMode);
     if (!rcs)
     {
-        fprintf(stderr, "rtpChain_get: err\r\n");
+        WMIX_ERR("rtpChain_get: err\r\n");
         return;
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_AAC, 1, 0, 0, 0x32411);
@@ -734,7 +734,7 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
                     pthread_mutex_unlock(&rcs->lock);
                     if (ret < 0)
                     {
-                        // fprintf(stderr, "%s: rtp_send err !!\r\n", __func__);
+                        // WMIX_ERR("rtp_send err !!\r\n");
                         delayus(1000000);
                         //重连
                         rtpChain_reconnect(rcs);
@@ -754,7 +754,7 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
         }
         else if (ret < 0)
         {
-            fprintf(stderr, "%s: read mem err %d\r\n", __func__, (int)ret);
+            WMIX_ERR2("read mem err %d\r\n", (int)ret);
             break;
         }
     }
@@ -821,7 +821,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
     rcs = rtpChain_get(path, port, false, bindMode);
     if (!rcs)
     {
-        fprintf(stderr, "rtpChain_get: err\r\n");
+        WMIX_ERR("rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
@@ -888,7 +888,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
                 buff, &datUse,
                 &chnInt, &freqInt);
             if (ret < 0)
-                fprintf(stderr, "%s: aac_decode err %d !!\r\n", __func__, ret);
+                WMIX_ERR2("aac_decode err %d !!\r\n", ret);
             //自动纠正参数(功能有限)
             if (chnInt != chn || freqInt != freq)
             {
@@ -917,7 +917,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
             //     ;
             else
             {
-                // fprintf(stderr, "%s: rtp_recv err !!\r\n", __func__);
+                // WMIX_ERR("rtp_recv err !!\r\n");
                 delayus(1000000);
                 //重连
                 rtpChain_reconnect(rcs);
@@ -1016,24 +1016,24 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
     //参数检查,是否在允许的变参范围内
     if (freq != 8000)
     {
-        fprintf(stderr, "%s: freq warnning, must be 8000Hz \r\n", __func__);
+        WMIX_ERR("freq warnning, must be 8000Hz \r\n");
         freq = 8000;
     }
     if (sample != WMIX_SAMPLE)
     {
-        fprintf(stderr, "%s: sample err, must be %dbit(machine)\r\n", __func__, WMIX_SAMPLE);
+        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
         return;
     }
     if (chn != 1 && chn != 2)
     {
-        fprintf(stderr, "%s: channels err, must be 1 or 2\r\n", __func__);
+        WMIX_ERR("channels err, must be 1 or 2\r\n");
         return;
     }
     //初始化rtp
     rcs = rtpChain_get(path, port, true, bindMode);
     if (!rcs)
     {
-        fprintf(stderr, "rtpChain_get: err\r\n");
+        WMIX_ERR("rtpChain_get: err\r\n");
         return;
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_PCMA, 1, 0, 0, 0);
@@ -1110,7 +1110,7 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             pthread_mutex_unlock(&rcs->lock);
             if (ret < 0)
             {
-                // fprintf(stderr, "%s: rtp_send err !!\r\n", __func__);
+                // WMIX_ERR("rtp_send err !!\r\n");
                 delayus(1000000);
                 //重连
                 rtpChain_reconnect(rcs);
@@ -1176,7 +1176,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
     rcs = rtpChain_get(path, port, false, bindMode);
     if (!rcs)
     {
-        fprintf(stderr, "rtpChain_get: err\r\n");
+        WMIX_ERR("rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
@@ -1249,7 +1249,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
             //     ;
             else
             {
-                // fprintf(stderr, "%s: rtp_recv err !!\r\n", __func__);
+                // WMIX_ERR("rtp_recv err !!\r\n");
                 delayus(1000000);
                 //重连
                 rtpChain_reconnect(rcs);
@@ -1341,12 +1341,12 @@ void wmix_task_play_wav(
 
     if ((fd = open(wavPath, O_RDONLY)) <= 0)
     {
-        fprintf(stderr, "%s: %s open err\r\n", wavPath, __func__);
+        WMIX_ERR2("%s open err\r\n", wavPath);
         return;
     }
     if (WAV_ReadHeader(fd, &wav) < 0)
     {
-        fprintf(stderr, "Error WAV_Parse [%s]\r\n", wavPath);
+        WMIX_ERR2("Error WAV_Parse [%s]\r\n", wavPath);
         close(fd);
         return;
     }
@@ -1566,14 +1566,14 @@ void wmix_task_play_aac(
     //
     if ((fd = open(aacPath, O_RDONLY)) <= 0)
     {
-        fprintf(stderr, "%s: %s open err\r\n", __func__, aacPath);
+        WMIX_ERR2("%s open err\r\n", aacPath);
         return;
     }
     //初始化解码器
     ret = aac_decode2(&aacDec, fd, out, (int *)&chn, (int *)&freq);
     if (ret < 0)
     {
-        fprintf(stderr, "%s: aac_decode2 err\r\n", __func__);
+        WMIX_ERR("aac_decode2 err\r\n");
         close(fd);
         return;
     }
@@ -1928,9 +1928,8 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
 
 enum mad_flow mad_error(void *data, struct mad_stream *stream, struct mad_frame *frame)
 {
-    fprintf(stderr, "decoding error 0x%04x (%s)\r\n",
-            stream->error,
-            mad_stream_errorstr(stream));
+    WMIX_ERR2("decoding error 0x%04x (%s)\r\n",
+            stream->error, mad_stream_errorstr(stream));
     return MAD_FLOW_CONTINUE;
 }
 
@@ -1959,12 +1958,12 @@ void wmix_task_play_mp3(
     //
     if ((fd = open(mp3Path, O_RDONLY)) <= 0)
     {
-        fprintf(stderr, "%s: open %s err\r\n", __func__, mp3Path);
+        WMIX_ERR2("open %s err\r\n", mp3Path);
         return;
     }
     if (fstat(fd, &sta) == -1 || sta.st_size == 0)
     {
-        fprintf(stderr, "%s: stat %s err\r\n", __func__, mp3Path);
+        WMIX_ERR2("stat %s err\r\n", mp3Path);
         close(fd);
         return;
     }
@@ -1977,7 +1976,7 @@ void wmix_task_play_mp3(
     wmm.fdm = mmap(0, sta.st_size, PROT_READ, MAP_SHARED, fd, 0);
     if (wmm.fdm == MAP_FAILED || !wmm.fdm)
     {
-        fprintf(stderr, "%s: mmap err\r\n", __func__);
+        WMIX_ERR("mmap err\r\n");
         close(fd);
         return;
     }

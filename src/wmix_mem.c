@@ -31,7 +31,7 @@ int wmix_mem_create(char *path, int flag, int size, void **mem)
     key_t key = ftok(path, flag);
     if (key < 0)
     {
-        fprintf(stderr, "get key error\r\n");
+        WMIX_ERR("get key error\r\n");
         return -1;
     }
     id = shmget(key, size, 0666);
@@ -39,7 +39,7 @@ int wmix_mem_create(char *path, int flag, int size, void **mem)
         id = shmget(key, size, IPC_CREAT | 0666);
     if (id < 0)
     {
-        fprintf(stderr, "get id error\r\n");
+        WMIX_ERR("get id error\r\n");
         return -1;
     }
     if (mem)
@@ -62,7 +62,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void **)&ai_circle);
         if (!ai_circle)
         {
-            fprintf(stderr, "wmix_mem_read: shm_create err !!\r\n");
+            WMIX_ERR("wmix_mem_read: shm_create err !!\r\n");
             return 0;
         }
         w = ai_circle->w;
@@ -98,7 +98,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ao_circleLocal);
         if (!ao_circleLocal)
         {
-            fprintf(stderr, "wmix_mem_read2: shm_create err !!\r\n");
+            WMIX_ERR("wmix_mem_read2: shm_create err !!\r\n");
             return 0;
         }
         //
@@ -134,7 +134,7 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
         wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void **)&ao_circle);
         if (!ao_circle)
         {
-            fprintf(stderr, "wmix_mem_write: shm_create err !!\r\n");
+            WMIX_ERR("wmix_mem_write: shm_create err !!\r\n");
             return 0;
         }
         ao_circle->w = 0;
@@ -157,7 +157,7 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
         wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ao_circleLocal);
         if (!ao_circleLocal)
         {
-            fprintf(stderr, "wmix_mem_write2: shm_create err !!\r\n");
+            WMIX_ERR("wmix_mem_write2: shm_create err !!\r\n");
             return 0;
         }
         ao_circleLocal->w = 0;

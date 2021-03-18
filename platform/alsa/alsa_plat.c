@@ -151,7 +151,7 @@ void alsa_ao_vol_set(void *objAo, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
-    SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAi;
+    SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAo;
     //打底音量
     const int alsa_ao_base = 5;
     //范围限制
