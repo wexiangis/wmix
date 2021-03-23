@@ -1,51 +1,59 @@
+# 根目录
+ROOT = $(shell pwd)
+PLATFORM = $(ROOT)/platform
+
+# 说明 ?= 表示前面没有赋过值则使用当前赋值
 
 # 平台选择
 #   0: 通用平台(ubuntu,ARM,树莓派等) --> 基于alsa
 #   1: 海思hi3516平台 --> 不支持 MAKE_ALSA MAKE_AAC
 #   2: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_AAC MAKE_MP3
-MAKE_PLATFORM = 0
+MAKE_PLATFORM ?= 0
 
 ##### 通用平台配置 #####
 ifeq ($(MAKE_PLATFORM),0)
 # ARM等平台需要交叉编译器时启用改行
-# cross = arm-linux-gnueabihf
-OBJ += ./platform/alsa/alsa_plat.c
-CINC += -I./platform/alsa -I./platform/alsa/include
-CLIBS += -L./platform/alsa/lib
+# cross ?= arm-linux-gnueabihf
+OBJ += $(PLATFORM)/alsa/alsa_plat.c
+CINC += -I$(PLATFORM)/alsa
+CINC += -I$(PLATFORM)/alsa/include
+CLIBS += -L$(PLATFORM)/alsa/lib
 CFLAGS +=
 endif
 
 ##### 海思hi3516平台配置 #####
 ifeq ($(MAKE_PLATFORM),1)
-# cross = arm-himix200-linux
-cross = arm-himix100-linux
+cross ?= arm-himix200-linux
+# cross ?= arm-himix100-linux
 # 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
 # 平台文件编译配置
-OBJ += ./platform/hi3516/hi3516_plat.c
-CINC += -I./platform/hi3516 -I./platform/hi3516/include
-CLIBS += -L./platform/hi3516/lib
+OBJ += $(PLATFORM)/hi3516/hi3516_plat.c
+CINC += -I$(PLATFORM)/hi3516
+CINC += -I$(PLATFORM)/hi3516/include
+CLIBS += -L$(PLATFORM)/hi3516/lib
 CFLAGS +=
 endif
 
 ##### 君正T31平台配置 #####
 ifeq ($(MAKE_PLATFORM),2)
-cross = mips-linux-gnu
+cross ?= mips-linux-gnu
 # 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
 MAKE_MP3 = 0
 # 平台文件编译配置
-OBJ += ./platform/t31/t31_plat.c
-OBJ += ./platform/t31/lib/libalog.a
-OBJ += ./platform/t31/lib/libimp.a
-CINC += -I./platform/t31 -I./platform/t31/include
-CLIBS += -L./platform/t31/lib
+OBJ += $(PLATFORM)/t31/t31_plat.c
+OBJ += $(PLATFORM)/t31/lib/libalog.a
+OBJ += $(PLATFORM)/t31/lib/libimp.a
+CINC += -I$(PLATFORM)/t31
+CINC += -I$(PLATFORM)/t31/include
+CLIBS += -L$(PLATFORM)/t31/lib
 CFLAGS += -lalog -limp -laudioProcess
 CFLAGS += -Wl,-gc-sections -lrt -ldl
-CFLAGS += -muclibc # 使用 uclibc 时添加该项
-CFLAGS-MSG += -muclibc # 使用 uclibc 时添加该项
+# CFLAGS += -muclibc # 使用 uclibc 时添加该项
+# CFLAGS-MSG += -muclibc # 使用 uclibc 时添加该项
 # 选配
 MAKE_WEBRTC_VAD = 0
 MAKE_WEBRTC_AEC = 0
@@ -75,18 +83,65 @@ MAKE_SPEEX ?= 0
 # speexbeta3.aec回声消除库,请和 MAKE_WEBRTC_AEC 互斥启用 [测试中...]
 MAKE_SPEEX_BETA3 ?= 0
 # 启用FFT(快速傅立叶变换)采样点个数,0/关闭,其它/开启 [测试中...]
-# 必须为2的x次方,如4,8,16...513,1024
+# 必须为2的x次方,如4,8,16...512,1024
 MAKE_MATH_FFT ?= 0 #1024
 # UI文件编译 [测试中...]
 MAKE_UI ?= 0
 
-# system
-HOST = 
-CC = gcc
-ROOT=$(shell pwd)
-ifdef cross
-	HOST = $(cross)
-	CC = $(cross)-gcc
+# ALSA LIB
+ifeq ($(MAKE_ALSA),1)
+TARGET-LIBS += libalsa
+CFLAGS += -lasound -ldl
+endif
+# MP3 LIB
+ifeq ($(MAKE_MP3),1)
+OBJ += $(ROOT)/src/id3.c
+CFLAGS += -lmad
+TARGET-LIBS += libmad
+endif
+# AAC LIB
+ifeq ($(MAKE_AAC),1)
+OBJ += $(ROOT)/src/aac.c
+CFLAGS += -lfaac -lfaad
+TARGET-LIBS += libfaac libfaad
+endif
+# WEBRTC_VAD LIB
+ifeq ($(MAKE_WEBRTC_VAD),1)
+CFLAGS += -lwebrtcvad
+TARGET-LIBS += libwebrtcvad
+endif
+# WEBRTC_AEC LIB
+ifeq ($(MAKE_WEBRTC_AEC),1)
+TARGET-LIBS += libwebrtcaec
+CFLAGS += -lwebrtcaec -lwebrtcaecm
+endif
+# WEBRTC_NS LIB
+ifeq ($(MAKE_WEBRTC_NS),1)
+CFLAGS += -lwebrtcns
+TARGET-LIBS += libwebrtcns
+endif
+# WEBRTC_AGC LIB
+ifeq ($(MAKE_WEBRTC_AGC),1)
+CFLAGS += -lwebrtcagc
+TARGET-LIBS += libwebrtcagc
+endif
+# SPEEX LIB
+ifeq ($(MAKE_SPEEX),1)
+CFLAGS += -lspeex
+TARGET-LIBS += libspeex
+endif
+# SPEEX_BETA3 LIB
+ifeq ($(MAKE_SPEEX_BETA3),1)
+CFLAGS += -logg -lspeex -lspeexdsp
+TARGET-LIBS += libogg libspeexbeta3
+endif
+# MATH_FFT
+ifeq ($(MAKE_MATH_FFT),1)
+OBJ += ${wildcard $(ROOT)/math/*.c}
+endif
+# UI
+ifeq ($(MAKE_UI),1)
+OBJ += ${wildcard $(ROOT)/ui/*.c}
 endif
 
 # define
@@ -100,137 +155,80 @@ DEF += -DMAKE_WEBRTC_AGC=$(MAKE_WEBRTC_AGC)
 DEF += -DMAKE_SPEEX=$(MAKE_SPEEX)
 DEF += -DMAKE_SPEEX_BETA3=$(MAKE_SPEEX_BETA3)
 DEF += -DMAKE_MATH_FFT=$(MAKE_MATH_FFT)
+DEF += -DMAKE_MATH_UI=$(MAKE_MATH_UI)
+
+# system
+GCC ?= gcc
+GPP ?= g++
+HOST =
+ifdef cross
+	HOST = $(cross)
+	GCC = $(cross)-gcc
+	GPP = $(cross)-g++
+endif
 
 # base
-OBJ += ./src/wmix.c
-OBJ += ./src/wmix_mem.c
-OBJ += ./src/wmix_task.c
-OBJ += ./src/wav.c
-OBJ += ./src/rtp.c
-OBJ += ./src/g711codec.c
-OBJ += ./src/webrtc.c
-OBJ += ./src/speexlib.c
-OBJ += ./src/delay.c
+OBJ += $(ROOT)/src/wmix.c
+OBJ += $(ROOT)/src/wmix_mem.c
+OBJ += $(ROOT)/src/wmix_task.c
+OBJ += $(ROOT)/src/wav.c
+OBJ += $(ROOT)/src/rtp.c
+OBJ += $(ROOT)/src/g711codec.c
+OBJ += $(ROOT)/src/webrtc.c
+OBJ += $(ROOT)/src/speexlib.c
+OBJ += $(ROOT)/src/delay.c
 
 # wmixMsg
-OBJ-MSG += ./test/wmixMsg.c
-OBJ-MSG += ./test/wmix_user.c
+OBJ-MSG += $(ROOT)/test/wmixMsg.c
+OBJ-MSG += $(ROOT)/test/wmix_user.c
 CFLAGS-MSG += -lpthread
 
 # tools
-OBJ-RTPSENDPCM += ./test/rtpSendPCM.c
-OBJ-RTPSENDPCM += ./src/rtp.c
-OBJ-RTPSENDPCM += ./src/g711codec.c
-OBJ-RTPSENDPCM += ./src/wav.c
-OBJ-RTPSENDPCM += ./src/delay.c
+OBJ-RTPSENDPCM += $(ROOT)/test/rtpSendPCM.c
+OBJ-RTPSENDPCM += $(ROOT)/src/rtp.c
+OBJ-RTPSENDPCM += $(ROOT)/src/g711codec.c
+OBJ-RTPSENDPCM += $(ROOT)/src/wav.c
+OBJ-RTPSENDPCM += $(ROOT)/src/delay.c
 
-OBJ-RTPRECVPCM += ./test/rtpRecvPCM.c
-OBJ-RTPRECVPCM += ./src/rtp.c
-OBJ-RTPRECVPCM += ./src/g711codec.c
-OBJ-RTPRECVPCM += ./src/wav.c
+OBJ-RTPRECVPCM += $(ROOT)/test/rtpRecvPCM.c
+OBJ-RTPRECVPCM += $(ROOT)/src/rtp.c
+OBJ-RTPRECVPCM += $(ROOT)/src/g711codec.c
+OBJ-RTPRECVPCM += $(ROOT)/src/wav.c
 
-OBJ-RTPSENDACC += ./test/rtpSendAAC.c
-OBJ-RTPSENDACC += ./src/rtp.c
-OBJ-RTPSENDACC += ./src/aac.c
+OBJ-RTPSENDACC += $(ROOT)/test/rtpSendAAC.c
+OBJ-RTPSENDACC += $(ROOT)/src/rtp.c
+OBJ-RTPSENDACC += $(ROOT)/src/aac.c
 
-OBJ-RTPRECVACC += ./test/rtpRecvAAC.c
-OBJ-RTPRECVACC += ./src/rtp.c
-OBJ-RTPRECVACC += ./src/aac.c
+OBJ-RTPRECVACC += $(ROOT)/test/rtpRecvAAC.c
+OBJ-RTPRECVACC += $(ROOT)/src/rtp.c
+OBJ-RTPRECVACC += $(ROOT)/src/aac.c
 
 # -Ixxx
-CINC += -I./src -I./math -I./platform -I$(ROOT)/libs/include
+CINC += -I$(ROOT)/src -I$(ROOT)/math -I$(ROOT)/libs/include
 # -Lxxx
 CLIBS += -L$(ROOT)/libs/lib
 # -lxxx
 CFLAGS += -lm -lpthread
-
-# 选择要编译的库列表
-TARGET-LIBS=
-
-# ALSA LIB
-ifeq ($(MAKE_ALSA),1)
-TARGET-LIBS += libalsa
-CFLAGS += -lasound -ldl
-endif
-
-# MP3 LIB
-ifeq ($(MAKE_MP3),1)
-OBJ += ./src/id3.c
-CFLAGS += -lmad
-TARGET-LIBS += libmad
-endif
-
-# AAC LIB
-ifeq ($(MAKE_AAC),1)
-OBJ += ./src/aac.c
-CFLAGS += -lfaac -lfaad
-TARGET-LIBS += libfaac libfaad
-endif
-
-# WEBRTC_VAD LIB
-ifeq ($(MAKE_WEBRTC_VAD),1)
-CFLAGS += -lwebrtcvad
-TARGET-LIBS += libwebrtcvad
-endif
-
-# WEBRTC_AEC LIB
-ifeq ($(MAKE_WEBRTC_AEC),1)
-TARGET-LIBS += libwebrtcaec
-CFLAGS += -lwebrtcaec -lwebrtcaecm
-endif
-
-# WEBRTC_NS LIB
-ifeq ($(MAKE_WEBRTC_NS),1)
-CFLAGS += -lwebrtcns
-TARGET-LIBS += libwebrtcns
-endif
-
-# WEBRTC_AGC LIB
-ifeq ($(MAKE_WEBRTC_AGC),1)
-CFLAGS += -lwebrtcagc
-TARGET-LIBS += libwebrtcagc
-endif
-
-# SPEEX LIB
-ifeq ($(MAKE_SPEEX),1)
-CFLAGS += -lspeex
-TARGET-LIBS += libspeex
-endif
-
-# SPEEX_BETA3 LIB
-ifeq ($(MAKE_SPEEX_BETA3),1)
-CFLAGS += -logg -lspeex -lspeexdsp
-TARGET-LIBS += libogg libspeexbeta3
-endif
-
-# MATH_FFT
-ifeq ($(MAKE_MATH_FFT),1)
-OBJ += ./math/fft.c
-endif
-
-# UI
-ifeq ($(MAKE_UI),1)
-OBJ += ./ui/fbmap.c
-OBJ += ./ui/wave.c
-OBJ += ./ui/bmp.c
-endif
+# 要编译的库列表
+TARGET-LIBS +=
 
 wmix: wmixmsg
-	@$(CC) -Wall -o $(ROOT)/wmix $(OBJ) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
+	@$(GCC) -Wall -o $(ROOT)/wmix $(OBJ) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
 	@echo "---------- make wmix complete ----------"
 
 wmixmsg:
-	@$(CC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) $(CFLAGS-MSG)
+	@$(GCC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) $(CFLAGS-MSG)
 	@echo "---------- make wmixMsg complete ----------"
 
 rtpTest:
-	@$(CC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I./src
-	@$(CC) -Wall -o $(ROOT)/tools/rtpRecvPCM $(OBJ-RTPRECVPCM) -I./src
-	@$(CC) -Wall -o $(ROOT)/tools/rtpSendAAC $(OBJ-RTPSENDACC) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
-	@$(CC) -Wall -o $(ROOT)/tools/rtpRecvAAC $(OBJ-RTPRECVACC) -I./src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(GCC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I$(ROOT)/src
+	@$(GCC) -Wall -o $(ROOT)/tools/rtpRecvPCM $(OBJ-RTPRECVPCM) -I$(ROOT)/src
+	@$(GCC) -Wall -o $(ROOT)/tools/rtpSendAAC $(OBJ-RTPSENDACC) -I$(ROOT)/src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(GCC) -Wall -o $(ROOT)/tools/rtpRecvAAC $(OBJ-RTPRECVACC) -I$(ROOT)/src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
 
 libs: $(TARGET-LIBS)
-	@echo "---------- make libs complete ----------"
+	@rm -rf $(ROOT)/libs/lib/*.la && \
+	echo "---------- make libs complete ----------"
 
 libalsa:
 	@tar -xjf $(ROOT)/pkg/alsa-lib-1.1.9.tar.bz2 -C $(ROOT)/libs && \
@@ -269,7 +267,7 @@ libfaad:
 libwebrtcvad:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_vad_so.sh $(CC) && \
+	bash ./build_vad_so.sh $(GCC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -277,8 +275,8 @@ libwebrtcvad:
 libwebrtcaec:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_aec_so.sh $(CC) && \
-	bash ./build_aecm_so.sh $(CC) && \
+	bash ./build_aec_so.sh $(GCC) && \
+	bash ./build_aecm_so.sh $(GCC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -286,7 +284,7 @@ libwebrtcaec:
 libwebrtcns:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_ns_so.sh $(CC) && \
+	bash ./build_ns_so.sh $(GCC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf
@@ -294,7 +292,7 @@ libwebrtcns:
 libwebrtcagc:
 	@tar -xzf $(ROOT)/pkg/webrtc_cut.tar.gz -C $(ROOT)/libs && \
 	cd $(ROOT)/libs/webrtc_cut && \
-	bash ./build_agc_so.sh $(CC) && \
+	bash ./build_agc_so.sh $(GCC) && \
 	cp ./install/* ../ -rf && \
 	cd - && \
 	rm $(ROOT)/libs/webrtc_cut -rf

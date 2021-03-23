@@ -167,7 +167,7 @@ void wmix_load_task(WMixThread_Param *wmtp)
             (name[len - 3] == 'a' || name[len - 3] == 'A') &&
             (name[len - 2] == 'a' || name[len - 2] == 'A') &&
             (name[len - 1] == 'c' || name[len - 1] == 'C'))
-#if (WMIX_AAC)
+#if (MAKE_AAC)
             wmix_task_play_aac(
                 wmtp->wmix, name, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
 #else
@@ -177,7 +177,7 @@ void wmix_load_task(WMixThread_Param *wmtp)
                  (name[len - 3] == 'm' || name[len - 3] == 'M') &&
                  (name[len - 2] == 'p' || name[len - 2] == 'P') &&
                  name[len - 1] == '3')
-#if (WMIX_MP3)
+#if (MAKE_MP3)
             wmix_task_play_mp3(
                 wmtp->wmix, name, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
 #else
@@ -777,7 +777,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  WMIX_MSG_BUFF_SIZE,
                                  &wmix_thread_rtp_recv_pcma);
                 break;
-#if (WMIX_AAC)
+#if (MAKE_AAC)
             //录音aac文件
             case WMT_RECORD_AAC:
                 wmix_load_thread(wmix,
@@ -857,7 +857,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 }
 #endif
                 break;
-#if (WMIX_AAC)
+#if (MAKE_AAC)
             //rtp send aac
             case WMT_RTP_SEND_AAC:
                 wmix_load_thread(wmix,
@@ -907,7 +907,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 //通知 wmix_play_thread 开始写数据
                 strcpy(wmix->notePath, (char *)msg.value);
                 break;
-#if (WMIX_MATH_FFT)
+#if (MAKE_MATH_FFT)
             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
             case WMT_FFT:
                 //这是一次关闭指令
@@ -949,7 +949,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   shmemRun: %d\r\n"
                     "   reduceMode: %d\r\n"
                     "   note: %s\r\n"
-#if (WMIX_MATH_FFT)
+#if (MAKE_MATH_FFT)
                     "   fft: %s\r\n"
 #endif
                     "   debug: %d\r\n"
@@ -972,7 +972,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     wmix->shmemRun,
                     wmix->reduceMode,
                     wmix->notePath,
-#if (WMIX_MATH_FFT)
+#if (MAKE_MATH_FFT)
                     wmix->fftPath,
 #endif
                     wmix->debug ? 1 : 0,
@@ -1304,7 +1304,7 @@ void wmix_exit(WMix_Struct *wmix)
             wmix_ao_exit(wmix->objAo);
         if (wmix->objAi)
             wmix_ai_exit(wmix->objAi);
-#if (WMIX_MATH_FFT)
+#if (MAKE_MATH_FFT)
         free(wmix->fftStream);
         free(wmix->fftOutAF);
         free(wmix->fftOutPF);
@@ -1359,7 +1359,7 @@ WMix_Struct *wmix_init(void)
     wmix_load_thread(wmix, 0, NULL, 0, &wmix_msg_thread);  //接收客户端消息的线程
     wmix_load_thread(wmix, 0, NULL, 0, &wmix_play_thread); //从播音数据迟取数据并播放的线程
 
-#if (WMIX_PLATFORM == PLATFORM_HI3516)
+#if (MAKE_PLATFORM == PLATFORM_HI3516)
     //承受不了这个CPU占用率
     wmix->webrtcEnable[WR_AEC] = 0;
     //关闭vad
@@ -1381,10 +1381,10 @@ WMix_Struct *wmix_init(void)
     signal(SIGINT, wmix_signal);
     signal(SIGTERM, wmix_signal);
 
-#if (WMIX_MATH_FFT)
-    wmix->fftStream = (float *)calloc(WMIX_MATH_FFT, sizeof(float));
-    wmix->fftOutAF = (float *)calloc(WMIX_MATH_FFT, sizeof(float));
-    wmix->fftOutPF = (float *)calloc(WMIX_MATH_FFT, sizeof(float));
+#if (MAKE_MATH_FFT)
+    wmix->fftStream = (float *)calloc(MAKE_MATH_FFT, sizeof(float));
+    wmix->fftOutAF = (float *)calloc(MAKE_MATH_FFT, sizeof(float));
+    wmix->fftOutPF = (float *)calloc(MAKE_MATH_FFT, sizeof(float));
 #endif
 
     return wmix;
@@ -1437,9 +1437,9 @@ WMix_Point wmix_load_data(
     int16_t repairBuff[64], repairBuffCount, repairTemp;
     float repairStep, repairStepSum;
     //所谓correct,就是在放置播放指针时,超前当前播放指针一定量,以保证完整播放音频
-#if (WMIX_PLATFORM == PLATFORM_HI3516)
+#if (MAKE_PLATFORM == PLATFORM_HI3516)
     uint16_t correct = 0;
-#elif (WMIX_PLATFORM == PLATFORM_T31)
+#elif (MAKE_PLATFORM == PLATFORM_T31)
     uint16_t correct = 0;
 #else
     uint16_t correct = WMIX_CHANNELS * WMIX_FREQ * 16 / 8 / 5;

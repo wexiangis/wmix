@@ -28,12 +28,12 @@
 //speex接口二次封装
 #include "speexlib.h"
 //mp3编码
-#if (WMIX_MP3)
+#if (MAKE_MP3)
 #include "mad.h"
 #include "id3.h"
 #endif
 //aac编码
-#if (WMIX_AAC)
+#if (MAKE_AAC)
 #include "aac.h"
 #endif
 
@@ -428,7 +428,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
         }                                                    \
     }
 
-#if (WMIX_AAC)
+#if (MAKE_AAC)
 void wmix_thread_record_aac(WMixThread_Param *wmtp)
 {
     char *path = (char *)&wmtp->param[6];
@@ -979,7 +979,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
         wmtp->wmix->reduceMode = 1;
     free(wmtp);
 }
-#endif //if(WMIX_AAC)
+#endif //if(MAKE_AAC)
 
 void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
 {
@@ -1528,7 +1528,7 @@ void wmix_task_play_wav(
         wmix->reduceMode = 1;
 }
 
-#if (WMIX_AAC)
+#if (MAKE_AAC)
 void wmix_task_play_aac(
     WMix_Struct *wmix,
     char *aacPath,
@@ -1731,7 +1731,7 @@ void wmix_task_play_aac(
 }
 #endif
 
-#if (WMIX_MP3)
+#if (MAKE_MP3)
 typedef struct
 {
     // char *msgPath;//消息队列挂靠路径

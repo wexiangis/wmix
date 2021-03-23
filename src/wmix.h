@@ -41,7 +41,7 @@ void wmix_load_task(
 void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp);
 void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp);
 void wmix_thread_record_wav(WMixThread_Param *wmtp);
-#if (WMIX_AAC)
+#if (MAKE_AAC)
 void wmix_thread_record_aac(WMixThread_Param *wmtp);
 void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp);
 void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp);
@@ -56,7 +56,7 @@ void wmix_task_play_wav(
     int msg_fd,
     uint8_t reduce,
     uint8_t repeatInterval);
-#if (WMIX_AAC)
+#if (MAKE_AAC)
 void wmix_task_play_aac(
     WMix_Struct *wmix,
     char *aacPath,
@@ -64,7 +64,7 @@ void wmix_task_play_aac(
     uint8_t reduce,
     uint8_t repeatInterval);
 #endif
-#if (WMIX_MP3)
+#if (MAKE_MP3)
 void wmix_task_play_mp3(
     WMix_Struct *wmix,
     char *mp3Path,

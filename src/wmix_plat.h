@@ -12,32 +12,24 @@
 #define PLATFORM_T31    2 // 君正T31平台
 
 //接收来自Makefile传递的宏
-#ifdef MAKE_PLATFORM
-#define WMIX_PLATFORM MAKE_PLATFORM
-#else
-#define WMIX_PLATFORM PLATFORM_ALSA
+#ifndef MAKE_PLATFORM
+#define MAKE_PLATFORM PLATFORM_ALSA // 默认通用平台
 #endif
 
-#ifdef MAKE_MP3
-#define WMIX_MP3 MAKE_MP3
-#else
-#define WMIX_MP3 1
+#ifndef MAKE_MP3
+#define MAKE_MP3 1
 #endif
 
-#ifdef MAKE_AAC
-#define WMIX_AAC MAKE_AAC
-#else
-#define WMIX_AAC 1
+#ifndef MAKE_AAC
+#define MAKE_AAC 1
 #endif
 
-#ifdef MAKE_MATH_FFT
-#define WMIX_MATH_FFT MAKE_MATH_FFT
-#else
-#define WMIX_MATH_FFT 1024
+#ifndef MAKE_MATH_FFT
+#define MAKE_MATH_FFT 1024
 #endif
 
 // ========== 海思hi3516平台配置 ==========
-#if (WMIX_PLATFORM == PLATFORM_HI3516)
+#if (MAKE_PLATFORM == PLATFORM_HI3516)
 
 #include "hi3516_plat.h"
 
@@ -59,7 +51,7 @@
 #define AEC_INTERVAL_MS 760 //回声时延
 
 // ========== 君正T31平台配置 ==========
-#elif (WMIX_PLATFORM == PLATFORM_T31)
+#elif (MAKE_PLATFORM == PLATFORM_T31)
 
 #include "t31_plat.h"
 
