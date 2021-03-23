@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "rtp.h"
-#include "aac.h"
+#include "aacType.h"
 
 #define RTP_IP "127.0.0.1"
 #define RTP_PORT 9832

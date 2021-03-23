@@ -10,7 +10,7 @@
 #include <imp/imp_log.h>
 
 //获取 WMIX_FRAME_NUM 以制定最小缓存数据量
-#include "wmix_conf.h"
+#include "wmixConf.h"
 
 //不带参数 和 带参数
 #define T31_ERR(fmt) fprintf(stderr, "%s(%d): " fmt, __func__, __LINE__)
@@ -68,7 +68,7 @@ typedef struct
     IMPAudioIChnParam param;
 } T31_AI_Struct;
 
-void t31_ao_vol_set(void *objAo, int vol)
+void plat_ao_vol_set(void *objAo, int vol)
 {
     T31_AO_Struct *tas = (T31_AO_Struct *)objAo;
 
@@ -91,7 +91,7 @@ void t31_ao_vol_set(void *objAo, int vol)
     }
 }
 
-void t31_ai_vol_set(void *objAi, int vol)
+void plat_ai_vol_set(void *objAi, int vol)
 {
     T31_AI_Struct *tas = (T31_AI_Struct *)objAi;
 
@@ -114,7 +114,7 @@ void t31_ai_vol_set(void *objAi, int vol)
     }
 }
 
-int t31_ao_vol_get(void *objAo)
+int plat_ao_vol_get(void *objAo)
 {
     T31_AO_Struct *tas = (T31_AO_Struct *)objAo;
     if (tas->aoVol < T31_AO_VOL_MIN)
@@ -123,7 +123,7 @@ int t31_ao_vol_get(void *objAo)
         return (tas->aoVol - T31_AO_VOL_MIN) / T31_AO_VOL_DIV;
 }
 
-int t31_ai_vol_get(void *objAi)
+int plat_ai_vol_get(void *objAi)
 {
     T31_AI_Struct *tas = (T31_AI_Struct *)objAi;
     if (tas->aiVol < T31_AI_VOL_MIN)
@@ -132,7 +132,7 @@ int t31_ai_vol_get(void *objAi)
         return (tas->aiVol - T31_AI_VOL_MIN) / T31_AI_VOL_DIV;
 }
 
-void *t31_ao_init(int chn, int freq)
+void *plat_ao_init(int chn, int freq)
 {
     T31_AO_Struct *tas = (T31_AO_Struct *)calloc(1, sizeof(T31_AO_Struct));
 
@@ -210,7 +210,7 @@ err:
     return NULL;
 }
 
-void *t31_ai_init(int chn, int freq)
+void *plat_ai_init(int chn, int freq)
 {
     T31_AI_Struct *tas = (T31_AI_Struct *)calloc(1, sizeof(T31_AI_Struct));
 
@@ -314,7 +314,7 @@ err:
     return NULL;
 }
 
-int t31_ao_write(void *objAo, uint8_t *data, int len)
+int plat_ao_write(void *objAo, uint8_t *data, int len)
 {
     T31_AO_Struct *tas = (T31_AO_Struct *)objAo;
 
@@ -331,7 +331,7 @@ int t31_ao_write(void *objAo, uint8_t *data, int len)
     return len;
 }
 
-int t31_ai_read(void *objAi, uint8_t *data, int len)
+int plat_ai_read(void *objAi, uint8_t *data, int len)
 {
     T31_AI_Struct *tas = (T31_AI_Struct *)objAi;
 
@@ -363,7 +363,7 @@ int t31_ai_read(void *objAi, uint8_t *data, int len)
     return len;
 }
 
-void t31_ao_exit(void *objAo)
+void plat_ao_exit(void *objAo)
 {
     T31_AO_Struct *tas = (T31_AO_Struct *)objAo;
 
@@ -383,7 +383,7 @@ void t31_ao_exit(void *objAo)
     free(tas);
 }
 
-void t31_ai_exit(void *objAi)
+void plat_ai_exit(void *objAi)
 {
     T31_AI_Struct *tas = (T31_AI_Struct *)objAi;
 

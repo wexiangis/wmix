@@ -1,67 +1,53 @@
-# 根目录
-ROOT = $(shell pwd)
-PLATFORM = $(ROOT)/platform
+
+# 平台选择(即 platform 内的子文件夹名称)
+#   alsa: 通用平台(ubuntu,ARM,树莓派等) --> 基于alsa
+#   hi3516: 海思hi3516平台 --> 不支持 MAKE_ALSA MAKE_AAC
+#   t31: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_AAC MAKE_MP3
+MAKE_PLATFORM ?= alsa
 
 # 说明 ?= 表示前面没有赋过值则使用当前赋值
 
-# 平台选择
-#   0: 通用平台(ubuntu,ARM,树莓派等) --> 基于alsa
-#   1: 海思hi3516平台 --> 不支持 MAKE_ALSA MAKE_AAC
-#   2: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_AAC MAKE_MP3
-MAKE_PLATFORM ?= 0
-
-##### 通用平台配置 #####
-ifeq ($(MAKE_PLATFORM),0)
-# ARM等平台需要交叉编译器时启用改行
+##### 通用平台alsa配置 #####
+ifeq ("$(MAKE_PLATFORM)","alsa")
+# 传递平台类型给代码
+DEF += -DMAKE_PLATFORM=0
+# 平台交叉编译器选择
 # cross ?= arm-linux-gnueabihf
-OBJ += $(PLATFORM)/alsa/alsa_plat.c
-CINC += -I$(PLATFORM)/alsa
-CINC += -I$(PLATFORM)/alsa/include
-CLIBS += -L$(PLATFORM)/alsa/lib
-CFLAGS +=
 endif
 
 ##### 海思hi3516平台配置 #####
-ifeq ($(MAKE_PLATFORM),1)
+ifeq ("$(MAKE_PLATFORM)","hi3516")
+# 传递平台类型给代码
+DEF += -DMAKE_PLATFORM=1
+# 平台交叉编译器选择
 cross ?= arm-himix200-linux
 # cross ?= arm-himix100-linux
+# 平台依赖库配置 -l
+CFLAGS +=
 # 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
-# 平台文件编译配置
-OBJ += $(PLATFORM)/hi3516/hi3516_plat.c
-CINC += -I$(PLATFORM)/hi3516
-CINC += -I$(PLATFORM)/hi3516/include
-CLIBS += -L$(PLATFORM)/hi3516/lib
-CFLAGS +=
 endif
 
 ##### 君正T31平台配置 #####
-ifeq ($(MAKE_PLATFORM),2)
+ifeq ("$(MAKE_PLATFORM)","t31")
+# 传递平台类型给代码
+DEF += -DMAKE_PLATFORM=2
+# 平台交叉编译器选择
 cross ?= mips-linux-gnu
+# 平台依赖库配置 -l
+CFLAGS += -laudioProcess -limp -lalog # 这里要注意顺序
+CFLAGS += -Wl,-gc-sections -lrt -ldl
 # 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
 MAKE_MP3 = 0
-# 平台文件编译配置
-OBJ += $(PLATFORM)/t31/t31_plat.c
-OBJ += $(PLATFORM)/t31/lib/libalog.a
-OBJ += $(PLATFORM)/t31/lib/libimp.a
-CINC += -I$(PLATFORM)/t31
-CINC += -I$(PLATFORM)/t31/include
-CLIBS += -L$(PLATFORM)/t31/lib
-CFLAGS += -lalog -limp -laudioProcess
-CFLAGS += -Wl,-gc-sections -lrt -ldl
-# CFLAGS += -muclibc # 使用 uclibc 时添加该项
-# CFLAGS-MSG += -muclibc # 使用 uclibc 时添加该项
 # 选配
 MAKE_WEBRTC_VAD = 0
 MAKE_WEBRTC_AEC = 0
 MAKE_WEBRTC_NS = 0
 MAKE_WEBRTC_AGC = 0
 endif
-
-# 说明 '?=' 是指之前没有赋过值则使用当前值
 
 # 置1时编译外部alsa库,否则使用编译器自带
 MAKE_ALSA ?= 1
@@ -88,6 +74,10 @@ MAKE_MATH_FFT ?= 0 #1024
 # UI文件编译 [测试中...]
 MAKE_UI ?= 0
 
+# 根目录
+ROOT = $(shell pwd)
+PLATFORM = $(ROOT)/platform
+
 # ALSA LIB
 ifeq ($(MAKE_ALSA),1)
 TARGET-LIBS += libalsa
@@ -95,13 +85,11 @@ CFLAGS += -lasound -ldl
 endif
 # MP3 LIB
 ifeq ($(MAKE_MP3),1)
-OBJ += $(ROOT)/src/id3.c
 CFLAGS += -lmad
 TARGET-LIBS += libmad
 endif
 # AAC LIB
 ifeq ($(MAKE_AAC),1)
-OBJ += $(ROOT)/src/aac.c
 CFLAGS += -lfaac -lfaad
 TARGET-LIBS += libfaac libfaad
 endif
@@ -137,15 +125,14 @@ TARGET-LIBS += libogg libspeexbeta3
 endif
 # MATH_FFT
 ifeq ($(MAKE_MATH_FFT),1)
-OBJ += ${wildcard $(ROOT)/math/*.c}
+SRC += ${wildcard $(ROOT)/math/*.c}
 endif
 # UI
 ifeq ($(MAKE_UI),1)
-OBJ += ${wildcard $(ROOT)/ui/*.c}
+SRC += ${wildcard $(ROOT)/ui/*.c}
 endif
 
-# define
-DEF += -DMAKE_PLATFORM=$(MAKE_PLATFORM)
+# 传递宏给代码
 DEF += -DMAKE_MP3=$(MAKE_MP3)
 DEF += -DMAKE_AAC=$(MAKE_AAC)
 DEF += -DMAKE_WEBRTC_VAD=$(MAKE_WEBRTC_VAD)
@@ -167,68 +154,69 @@ ifdef cross
 	GPP = $(cross)-g++
 endif
 
-# base
-OBJ += $(ROOT)/src/wmix.c
-OBJ += $(ROOT)/src/wmix_mem.c
-OBJ += $(ROOT)/src/wmix_task.c
-OBJ += $(ROOT)/src/wav.c
-OBJ += $(ROOT)/src/rtp.c
-OBJ += $(ROOT)/src/g711codec.c
-OBJ += $(ROOT)/src/webrtc.c
-OBJ += $(ROOT)/src/speexlib.c
-OBJ += $(ROOT)/src/delay.c
-
+# wmix
+SRC += ${wildcard $(ROOT)/src/*c}
 # wmixMsg
-OBJ-MSG += $(ROOT)/test/wmixMsg.c
-OBJ-MSG += $(ROOT)/test/wmix_user.c
-CFLAGS-MSG += -lpthread
-
-# tools
-OBJ-RTPSENDPCM += $(ROOT)/test/rtpSendPCM.c
-OBJ-RTPSENDPCM += $(ROOT)/src/rtp.c
-OBJ-RTPSENDPCM += $(ROOT)/src/g711codec.c
-OBJ-RTPSENDPCM += $(ROOT)/src/wav.c
-OBJ-RTPSENDPCM += $(ROOT)/src/delay.c
-
-OBJ-RTPRECVPCM += $(ROOT)/test/rtpRecvPCM.c
-OBJ-RTPRECVPCM += $(ROOT)/src/rtp.c
-OBJ-RTPRECVPCM += $(ROOT)/src/g711codec.c
-OBJ-RTPRECVPCM += $(ROOT)/src/wav.c
-
-OBJ-RTPSENDACC += $(ROOT)/test/rtpSendAAC.c
-OBJ-RTPSENDACC += $(ROOT)/src/rtp.c
-OBJ-RTPSENDACC += $(ROOT)/src/aac.c
-
-OBJ-RTPRECVACC += $(ROOT)/test/rtpRecvAAC.c
-OBJ-RTPRECVACC += $(ROOT)/src/rtp.c
-OBJ-RTPRECVACC += $(ROOT)/src/aac.c
+SRC-MSG += ${wildcard $(ROOT)/srcMsg/*}
+# 平台文件夹三件套
+SRC += ${wildcard $(PLATFORM)/$(MAKE_PLATFORM)/*.c}
+CINC += -I$(PLATFORM)/$(MAKE_PLATFORM)
+CINC += -I$(PLATFORM)/$(MAKE_PLATFORM)/include
+CLIBS += -L$(PLATFORM)/$(MAKE_PLATFORM)/lib
 
 # -Ixxx
-CINC += -I$(ROOT)/src -I$(ROOT)/math -I$(ROOT)/libs/include
+CINC += -I$(ROOT)/src
+CINC += -I$(ROOT)/ui
+CINC += -I$(ROOT)/math
+CINC += -I$(ROOT)/libs/include
 # -Lxxx
 CLIBS += -L$(ROOT)/libs/lib
 # -lxxx
 CFLAGS += -lm -lpthread
-# 要编译的库列表
-TARGET-LIBS +=
 
-wmix: wmixmsg
-	@$(GCC) -Wall -o $(ROOT)/wmix $(OBJ) $(CINC) $(CLIBS) $(CFLAGS) $(DEF)
-	@echo "---------- make wmix complete ----------"
+# tools
+SRC-RTPSENDPCM += $(ROOT)/tools/rtpSendPCM.c
+SRC-RTPSENDPCM += $(ROOT)/src/rtp.c
+SRC-RTPSENDPCM += $(ROOT)/src/g711codec.c
+SRC-RTPSENDPCM += $(ROOT)/src/wav.c
+SRC-RTPSENDPCM += $(ROOT)/src/delay.c
 
-wmixmsg:
-	@$(GCC) -Wall -o $(ROOT)/wmixMsg $(OBJ-MSG) $(CFLAGS-MSG)
-	@echo "---------- make wmixMsg complete ----------"
+SRC-RTPRECVPCM += $(ROOT)/tools/rtpRecvPCM.c
+SRC-RTPRECVPCM += $(ROOT)/src/rtp.c
+SRC-RTPRECVPCM += $(ROOT)/src/g711codec.c
+SRC-RTPRECVPCM += $(ROOT)/src/wav.c
+
+SRC-RTPSENDACC += $(ROOT)/tools/rtpSendAAC.c
+SRC-RTPSENDACC += $(ROOT)/src/rtp.c
+SRC-RTPSENDACC += $(ROOT)/src/aacType.c
+
+SRC-RTPRECVACC += $(ROOT)/tools/rtpRecvAAC.c
+SRC-RTPRECVACC += $(ROOT)/src/rtp.c
+SRC-RTPRECVACC += $(ROOT)/src/aacType.c
+
+all: msg
+	@$(GCC) -Wall -o $(ROOT)/wmix $(SRC) $(CINC) $(CLIBS) $(CFLAGS) $(DEF) && \
+	echo "make wmix success"
+
+msg:
+	@$(GCC) -Wall -o $(ROOT)/wmixMsg $(SRC-MSG) -lpthread && \
+	echo "make wmixMsg success"
 
 rtpTest:
-	@$(GCC) -Wall -o $(ROOT)/tools/rtpSendPCM $(OBJ-RTPSENDPCM) -I$(ROOT)/src
-	@$(GCC) -Wall -o $(ROOT)/tools/rtpRecvPCM $(OBJ-RTPRECVPCM) -I$(ROOT)/src
-	@$(GCC) -Wall -o $(ROOT)/tools/rtpSendAAC $(OBJ-RTPSENDACC) -I$(ROOT)/src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
-	@$(GCC) -Wall -o $(ROOT)/tools/rtpRecvAAC $(OBJ-RTPRECVACC) -I$(ROOT)/src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(GCC) -Wall -o $(ROOT)/rtpSendPCM $(SRC-RTPSENDPCM) -I$(ROOT)/src
+	@$(GCC) -Wall -o $(ROOT)/rtpRecvPCM $(SRC-RTPRECVPCM) -I$(ROOT)/src
+	@$(GCC) -Wall -o $(ROOT)/rtpSendAAC $(SRC-RTPSENDACC) -I$(ROOT)/src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+	@$(GCC) -Wall -o $(ROOT)/rtpRecvAAC $(SRC-RTPRECVACC) -I$(ROOT)/src -L$(ROOT)/libs/lib -I$(ROOT)/libs/include -lfaac -lfaad
+
+clean:
+	@rm -rf $(ROOT)/wmix* $(ROOT)/rtp*
+
+cleanall: clean
+	@rm -rf $(ROOT)/libs/*
 
 libs: $(TARGET-LIBS)
 	@rm -rf $(ROOT)/libs/lib/*.la && \
-	echo "---------- make libs complete ----------"
+	echo "make libs success"
 
 libalsa:
 	@tar -xjf $(ROOT)/pkg/alsa-lib-1.1.9.tar.bz2 -C $(ROOT)/libs && \
@@ -320,9 +308,3 @@ libogg:
 	make -j4 && make install && \
 	cd - && \
 	rm $(ROOT)/libs/libogg-1.3.4 -rf
-
-cleanall: clean
-	@rm $(ROOT)/libs/* -rf
-
-clean:
-	@rm $(ROOT)/wmix $(ROOT)/wmixMsg $(ROOT)/tools/* -rf

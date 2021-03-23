@@ -9,36 +9,26 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* ---------- 接收来自Makefile的宏定义 ---------- */
-/* ----------   若要强制使能,手动置1   ---------- */
-
-#ifdef MAKE_WEBRTC_VAD
-#define WMIX_WEBRTC_VAD MAKE_WEBRTC_VAD
-#else
-#define WMIX_WEBRTC_VAD 1
+//接收来自Makefile的传参,没有定义则自己定义
+#ifndef MAKE_WEBRTC_VAD
+#define MAKE_WEBRTC_VAD 1
 #endif
 
-#ifdef MAKE_WEBRTC_AEC
-#define WMIX_WEBRTC_AEC MAKE_WEBRTC_AEC
-#else
-#define WMIX_WEBRTC_AEC 1
+#ifndef MAKE_WEBRTC_AEC
+#define MAKE_WEBRTC_AEC 1
 #endif
 
-#ifdef MAKE_WEBRTC_NS
-#define WMIX_WEBRTC_NS MAKE_WEBRTC_NS
-#else
-#define WMIX_WEBRTC_NS 1
+#ifndef MAKE_WEBRTC_NS
+#define MAKE_WEBRTC_NS 1
 #endif
 
-#ifdef MAKE_WEBRTC_AGC
-#define WMIX_WEBRTC_AGC MAKE_WEBRTC_AGC
-#else
-#define WMIX_WEBRTC_AGC 1
+#ifndef MAKE_WEBRTC_AGC
+#define MAKE_WEBRTC_AGC 1
 #endif
 
 /* ==================== VAD 人声识别模块 ==================== */
 
-#if (WMIX_WEBRTC_VAD)
+#if (MAKE_WEBRTC_VAD)
 void *vad_init(int chn, int freq, int intervalMs, bool *debug);
 void vad_process(void *fp, int16_t *frame, int frameNum);
 void vad_release(void *fp);
@@ -46,7 +36,7 @@ void vad_release(void *fp);
 
 /* ==================== AEC 回声消除 ==================== */
 
-#if (WMIX_WEBRTC_AEC)
+#if (MAKE_WEBRTC_AEC)
 void *aec_init(int chn, int freq, int intervalMs, bool *debug);
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameNum);
 int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms);
@@ -56,7 +46,7 @@ void aec_release(void *fp);
 
 /* ==================== NS 噪音抑制 ==================== */
 
-#if (WMIX_WEBRTC_NS)
+#if (MAKE_WEBRTC_NS)
 void *ns_init(int chn, int freq, bool *debug);
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum);
 void ns_release(void *fp);
@@ -64,7 +54,7 @@ void ns_release(void *fp);
 
 /* ==================== AGC 自动增益 ==================== */
 
-#if (WMIX_WEBRTC_AGC)
+#if (MAKE_WEBRTC_AGC)
 void *agc_init(int chn, int freq, int intervalMs, int value, bool *debug);
 int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum);
 void agc_addition(void *fp, uint8_t value);

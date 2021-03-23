@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "aac.h"
+#include "aacType.h"
 
 int aac_freqList[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
 
@@ -124,11 +124,11 @@ int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show)
 
 //------------------ faac, faad ------------------
 
-#if (FAAX_ENABLE)
+#if (MAKE_AAC)
 
-#include "unistd.h"
-#include "fcntl.h"
-#include "sys/types.h"
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
 
 #include "faad.h"
 #include "faac.h"
@@ -179,7 +179,6 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
         hDecoder = NeAACDecOpen();
         //初始化解码器
         NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, (unsigned long *)freq, (unsigned char *)chn);
-        //
         *aacDec = hDecoder;
     }
     //解码
@@ -196,7 +195,7 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     *bytesConsumed = hInfo.bytesconsumed + count;
     *chn = hInfo.channels;
     *freq = hInfo.samplerate;
-    //
+
     return hInfo.samples * hInfo.channels;
 }
 
@@ -209,7 +208,7 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
 {
     if (!aacDec)
         return -1;
-    //
+
     AacHeader aacHead;
     uint8_t in[2048];
     //找到aac头
@@ -225,7 +224,7 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
                 break;
         }
     } while (1);
-    //
+
     if (read(aacFile_fd, &in[7], aacHead.aacFrameLength - 7) != aacHead.aacFrameLength - 7)
         return -1;
     //第一次初始化解码器句柄
@@ -235,7 +234,6 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
         hDecoder = NeAACDecOpen();
         //初始化解码器
         NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, (unsigned long *)freq, (unsigned char *)chn);
-        //
         *aacDec = hDecoder;
     }
     //解码
@@ -255,7 +253,7 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
     //参数返回
     *chn = hInfo.channels;
     *freq = hInfo.samplerate;
-    //
+
     return ret;
 }
 
@@ -265,12 +263,12 @@ void aac_decodeToFile(char *aacFile, char *pcmFile)
     uint8_t *out = NULL;
     int ret = 0, chn = 0, freq = 0;
     size_t totalBytes = 0;
-    //
+
     remove(pcmFile);
     int fw = open(pcmFile, O_WRONLY | O_CREAT, 0666);
     if (fw < 1)
         return;
-    //
+
     int fr = open(aacFile, O_RDONLY);
     if (fr < 1)
         return;
@@ -286,17 +284,17 @@ void aac_decodeToFile(char *aacFile, char *pcmFile)
         }
     } while (ret >= 0);
     free(out);
-    //
+
     if (totalBytes < 0x100000)
         printf("aac_decodeToFile: final %.1fKb chn/%d freq/%d\n",
                (float)totalBytes / 1024, chn, freq);
     else
         printf("aac_decodeToFile: final %.1fMb chn/%d freq/%d\n",
                (float)totalBytes / 1024 / 1024, chn, freq);
-    //
+
     if (aacDec)
         aac_decodeRelease(&aacDec);
-    //
+
     close(fr);
     close(fw);
 }
@@ -322,7 +320,7 @@ int aac_encode(void **aacEnc, uint8_t *in, int inLen, uint8_t *out, uint32_t out
     uint32_t nInputSamples = 0;
     uint32_t nMaxOutputBytes = 0;
     faacEncHandle hEncoder;
-    //
+
     if (!aacEnc)
         return -1;
     //第一次初始化编码器
@@ -335,14 +333,14 @@ int aac_encode(void **aacEnc, uint8_t *in, int inLen, uint8_t *out, uint32_t out
             fprintf(stderr, "aac_encode: faacEncOpen err chn/%d, freq/%d\n", chn, freq);
             return -1;
         }
-        //
+
         faacEncConfigurationPtr pConfiguration = faacEncGetCurrentConfiguration(hEncoder);
         pConfiguration->inputFormat = FAAC_INPUT_16BIT;
         faacEncSetConfiguration(hEncoder, pConfiguration);
-        //
+
         *aacEnc = hEncoder;
     }
-    //
+
     return faacEncEncode(hEncoder, (int32_t *)in, inLen / 2, out, outSize);
 }
 
@@ -353,15 +351,15 @@ void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq)
     uint8_t *in, *out;
     int ret, rLen = 2048 * chn;
     size_t totalBytes = 0;
-    //
+
     int fw = aacFile_fd;
     if (fw < 1)
         return;
-    //
+
     int fr = pcmFile_fd;
     if (fr < 1)
         return;
-    //
+
     in = (uint8_t *)malloc(4096);
     out = (uint8_t *)malloc(4096);
     do
@@ -369,7 +367,7 @@ void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq)
         ret = read(fr, in, rLen);
         if (ret < rLen)
             break;
-        //
+
         ret = aac_encode(&aacEnc, in, rLen, out, 4096, chn, freq);
         if (ret > 0)
         {
@@ -377,17 +375,17 @@ void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq)
             write(fw, out, ret);
         }
     } while (ret >= 0);
-    //
+
     free(in);
     free(out);
-    //
+
     if (totalBytes < 0x100000)
         printf("aac_encodeToFile: final %.1fKb chn/%d freq/%d\n",
                (float)totalBytes / 1024, chn, freq);
     else
         printf("aac_encodeToFile: final %.1fMb chn/%d freq/%d\n",
                (float)totalBytes / 1024 / 1024, chn, freq);
-    //
+
     if (aacEnc)
         aac_encodeRelease(&aacEnc);
 }
@@ -398,16 +396,16 @@ void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq)
     int fw = open(aacFile, O_WRONLY | O_CREAT, 0666);
     if (fw < 1)
         return;
-    //
+
     int fr = open(pcmFile, O_RDONLY);
     if (fr < 1)
     {
         close(fw);
         return;
     }
-    //
+
     aac_encodeToFile2(fr, fw, chn, freq);
-    //
+
     close(fw);
     close(fr);
 }
@@ -421,4 +419,4 @@ void aac_encodeRelease(void **aacEnc)
     *aacEnc = NULL;
 }
 
-#endif
+#endif // #if (MAKE_AAC)

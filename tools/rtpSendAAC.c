@@ -8,7 +8,7 @@
 #include <string.h>
 
 #include "rtp.h"
-#include "aac.h"
+#include "aacType.h"
 
 //网络参数,有些端口vlc是不支持的
 #define RTP_IP "127.0.0.1"

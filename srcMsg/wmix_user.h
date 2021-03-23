@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.5RC1 - 20210317"
+#define WMIX_VERSION "V5.5RC1 - 20210323"
 
 /* ----- 设置音量 -----
  * value: 音量 0~10

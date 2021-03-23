@@ -17,26 +17,6 @@
 #include "wmix.h"
 #include "delay.h"
 
-//wav编码
-#include "wav.h"
-//g711和pcm互转编码
-#include "g711codec.h"
-//rtp协议和数据发收
-#include "rtp.h"
-//webrtc接口二次封装
-#include "webrtc.h"
-//speex接口二次封装
-#include "speexlib.h"
-//mp3编码
-#if (MAKE_MP3)
-#include "mad.h"
-#include "id3.h"
-#endif
-//aac编码
-#if (MAKE_AAC)
-#include "aac.h"
-#endif
-
 void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
 {
     char *path = (char *)&wmtp->param[4];

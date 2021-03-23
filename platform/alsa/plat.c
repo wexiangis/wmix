@@ -147,13 +147,13 @@ int SNDWAV_SetParams(SNDPCMContainer_t *obj, int freq, int chn, int sample)
     return 0;
 }
 
-void alsa_ao_vol_set(void *objAo, int vol)
+void plat_ao_vol_set(void *objAo, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
     SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAo;
     //打底音量
-    const int alsa_ao_base = 5;
+    const int plat_ao_base = 5;
     //范围限制
     if (vol > 10)
         obj->volume = 10;
@@ -170,10 +170,10 @@ void alsa_ao_vol_set(void *objAo, int vol)
     pcm_element = snd_mixer_first_elem(mixer);
     //设置音量范围,最大：0-10
     snd_mixer_selem_set_playback_volume_range(
-        pcm_element, 0, 10 + alsa_ao_base);
+        pcm_element, 0, 10 + plat_ao_base);
     //设置左右声道音量
     snd_mixer_selem_set_playback_volume_all(
-        pcm_element, obj->volume == 0 ? 0 : obj->volume + alsa_ao_base);
+        pcm_element, obj->volume == 0 ? 0 : obj->volume + plat_ao_base);
     //检查设置
     snd_mixer_selem_get_playback_volume(
         pcm_element, SND_MIXER_SCHN_FRONT_LEFT, &obj->volume);
@@ -182,7 +182,7 @@ void alsa_ao_vol_set(void *objAo, int vol)
     snd_mixer_close(mixer);
 }
 
-void alsa_ai_vol_set(void *objAi, int vol)
+void plat_ai_vol_set(void *objAi, int vol)
 {
     snd_mixer_t *mixer;
     snd_mixer_elem_t *pcm_element;
@@ -211,17 +211,17 @@ void alsa_ai_vol_set(void *objAi, int vol)
     snd_mixer_close(mixer);
 }
 
-int alsa_ao_vol_get(void *objAo)
+int plat_ao_vol_get(void *objAo)
 {
     return ((SNDPCMContainer_t *)objAo)->volume;
 }
 
-int alsa_ai_vol_get(void *objAi)
+int plat_ai_vol_get(void *objAi)
 {
     return ((SNDPCMContainer_t *)objAi)->volume;
 }
 
-static SNDPCMContainer_t *_alsa_init(int channels, int sample, int freq, char p_or_c)
+static SNDPCMContainer_t *_plat_init(int channels, int sample, int freq, char p_or_c)
 {
     char devicename[] = "default";
     SNDPCMContainer_t *playback = (SNDPCMContainer_t *)calloc(1, sizeof(SNDPCMContainer_t));
@@ -250,9 +250,9 @@ static SNDPCMContainer_t *_alsa_init(int channels, int sample, int freq, char p_
     snd_pcm_dump(playback->handle, playback->log);
     //默认音量
     if (p_or_c == 'c')
-        alsa_ai_vol_set(playback, 10);
+        plat_ai_vol_set(playback, 10);
     else
-        alsa_ao_vol_set(playback, 10);
+        plat_ao_vol_set(playback, 10);
     return playback;
 
 Err:
@@ -268,16 +268,16 @@ Err:
     return NULL;
 }
 
-void *alsa_ao_init(int chn, int freq)
+void *plat_ao_init(int chn, int freq)
 {
-    return _alsa_init(chn, 16, freq, 'p');
+    return _plat_init(chn, 16, freq, 'p');
 }
-void *alsa_ai_init(int chn, int freq)
+void *plat_ai_init(int chn, int freq)
 {
-    return _alsa_init(chn, 16, freq, 'c');
+    return _plat_init(chn, 16, freq, 'c');
 }
 
-int alsa_ao_write(void *objAo, uint8_t *data, int len)
+int plat_ao_write(void *objAo, uint8_t *data, int len)
 {
     SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAo;
     int ret;
@@ -324,7 +324,7 @@ int alsa_ao_write(void *objAo, uint8_t *data, int len)
     return result * obj->frame_size;
 }
 
-int alsa_ai_read(void *objAi, uint8_t *data, int len)
+int plat_ai_read(void *objAi, uint8_t *data, int len)
 {
     SNDPCMContainer_t *obj = (SNDPCMContainer_t *)objAi;
     int ret;
@@ -372,7 +372,7 @@ int alsa_ai_read(void *objAi, uint8_t *data, int len)
     return result * obj->frame_size;
 }
 
-static void _alsa_exit(SNDPCMContainer_t *playback)
+static void _plat_exit(SNDPCMContainer_t *playback)
 {
     if (playback)
     {
@@ -386,11 +386,11 @@ static void _alsa_exit(SNDPCMContainer_t *playback)
         free(playback);
     }
 }
-void alsa_ao_exit(void *objAo)
+void plat_ao_exit(void *objAo)
 {
-    _alsa_exit((SNDPCMContainer_t *)objAo);
+    _plat_exit((SNDPCMContainer_t *)objAo);
 }
-void alsa_ai_exit(void *objAi)
+void plat_ai_exit(void *objAi)
 {
-    _alsa_exit((SNDPCMContainer_t *)objAi);
+    _plat_exit((SNDPCMContainer_t *)objAi);
 }

@@ -6,8 +6,17 @@
  *  本文件用于解析mp3头,过滤掉ID3标签,为mp3解码开路。
  * 
  **************************************************/
-#ifndef _ID3_H_
-#define _ID3_H_
+#ifndef _MP3TYPE_H_
+#define _MP3TYPE_H_
+
+//接收来自Makefile的传参,没有定义则自己定义
+#ifndef MAKE_MP3
+#define MAKE_MP3 1
+#endif
+
+#if (MAKE_MP3)
+#include "mad.h" // mp3解码库libmad
+#endif
 
 /***************************
 4.20 AENC [[＃sec4.20 |音频加密]]

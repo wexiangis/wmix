@@ -10,7 +10,7 @@
 #include "webrtc.h"
 
 /* ==================== VAD 人声识别模块 ==================== */
-#if (WMIX_WEBRTC_VAD)
+#if (MAKE_WEBRTC_VAD)
 #include "webrtc_vad.h"
 
 #define VAD_AGGRESSIVE 3 // 效果激进程度 0~3
@@ -164,15 +164,15 @@ void vad_release(void *fp)
 
 #endif
 /* ==================== AEC 回声消除 ==================== */
-#if (WMIX_WEBRTC_AEC)
+#if (MAKE_WEBRTC_AEC)
 
 #include "echo_cancellation.h"
 #include "echo_control_mobile.h"
 
 // 切换 aec 和 aecm
-// #undef WMIX_WEBRTC_AEC // do this switch to AECM
+// #undef MAKE_WEBRTC_AEC // do this switch to AECM
 
-#ifdef WMIX_WEBRTC_AEC
+#ifdef MAKE_WEBRTC_AEC
 #define AEC_FRAME_TYPE float
 #define WebRtcAecX_Create(x) WebRtcAec_Create(x)
 #define WebRtcAecX_Init(a, b, c) WebRtcAec_Init(a, b, c)
@@ -361,7 +361,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, i
                 frameNear++;
         }
         //开始处理
-#ifdef WMIX_WEBRTC_AEC
+#ifdef MAKE_WEBRTC_AEC
         ret = WebRtcAecX_Process(
             as->aecInst,
             (const AEC_FRAME_TYPE *const *)as->in, //注意这里in和下面out是 AEC_FRAME_TYPE *in[2] 指针(即左右声道数据)
@@ -449,7 +449,7 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
             return ret;
         }
         //开始处理
-#ifdef WMIX_WEBRTC_AEC
+#ifdef MAKE_WEBRTC_AEC
         ret = WebRtcAecX_Process(
             as->aecInst,
             (const AEC_FRAME_TYPE *const *)as->in, //注意这里in和下面out是 AEC_FRAME_TYPE *in[2] 指针(即左右声道数据)
@@ -504,14 +504,14 @@ void aec_release(void *fp)
 
 #endif
 /* ==================== NS 噪音抑制 ==================== */
-#if (WMIX_WEBRTC_NS)
+#if (MAKE_WEBRTC_NS)
 #include "noise_suppression.h"
 #include "noise_suppression_x.h"
 
 // 切换 ns 和 nsx
-// #define WMIX_WEBRTC_NSX // define this switch to NSX
+// #define MAKE_WEBRTC_NSX // define this switch to NSX
 
-#ifdef WMIX_WEBRTC_NSX
+#ifdef MAKE_WEBRTC_NSX
 #define NSX_FRAME_TYPE short
 #define WebRtcNsX_Create(x) WebRtcNsx_Create(x)
 #define WebRtcNsX_Free(x) WebRtcNsx_Free(x)
@@ -533,7 +533,7 @@ void aec_release(void *fp)
 
 typedef struct
 {
-#ifdef WMIX_WEBRTC_NSX
+#ifdef MAKE_WEBRTC_NSX
     NsxHandle *nsxInst;
 #else
     NsHandle *nsxInst;
@@ -664,7 +664,7 @@ void ns_release(void *fp)
 
 #endif
 /* ==================== AGC 自动增益 ==================== */
-#if (WMIX_WEBRTC_AGC)
+#if (MAKE_WEBRTC_AGC)
 #include "gain_control.h"
 
 typedef struct

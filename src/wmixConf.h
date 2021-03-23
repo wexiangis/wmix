@@ -1,11 +1,14 @@
 /*
  *  混音器关键宏和结构体定义
  */
-#ifndef _WMIX_CONF_H_
-#define _WMIX_CONF_H_
+#ifndef _WMIXCONF_H_
+#define _WMIXCONF_H_
 
+#include <stdint.h>
 #include <stdbool.h>
-#include "wmix_plat.h"
+#include <sys/ipc.h>
+
+#include "wmixPlat.h"
 
 //不带参数 和 带参数
 #define WMIX_ERR(fmt)           fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__)
@@ -13,7 +16,7 @@
 
 /* ---------- 需和客户端(程序)同步的信息 ---------- */
 
-#define WMIX_VERSION "V5.5RC1 - 20210317"
+#define WMIX_VERSION "V5.5RC1 - 20210323"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -88,10 +91,6 @@ typedef struct
 } WMix_Msg;
 
 /* ---------- 音频参数 ---------- */
-
-//1音量时的保底音量
-//配置音量为[1~10]时,实际[WMIX_VOLUME_BASE+1~WMIX_VOLUME_BASE+10],0还是0
-#define WMIX_VOLUME_BASE 5
 
 //录播音包间隔ms,必须10的倍数且>=10
 #define WMIX_INTERVAL_MS 20

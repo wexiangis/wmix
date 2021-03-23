@@ -3,10 +3,15 @@
  *  基于libaac、libaad库的接口二次封装。
  * 
  **************************************************/
-#ifndef _AAC_H_
-#define _AAC_H_
+#ifndef _AACTYPE_H_
+#define _AACTYPE_H_
 
 #include <stdint.h>
+
+//接收来自Makefile的传参,没有定义则自己定义
+#ifndef MAKE_AAC
+#define MAKE_AAC 1
+#endif
 
 //aac的头字段,共7字节
 typedef struct
@@ -47,9 +52,7 @@ int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate,
 
 //------------------ faac, faad ------------------
 
-#define FAAX_ENABLE 1
-
-#if (FAAX_ENABLE)
+#if (MAKE_AAC)
 
 //aac解码为pcm
 //aacDec: 解码器句柄,值为NULL时自动初始化
@@ -86,6 +89,6 @@ void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq);
 //销毁编码器句柄
 void aac_encodeRelease(void **aacEnc);
 
-#endif
+#endif // #if (MAKE_AAC)
 
-#endif
+#endif // end of file

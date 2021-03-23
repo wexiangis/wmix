@@ -13,7 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "id3.h"
+#include "mp3Type.h"
 
 typedef union {
     uint32_t value;

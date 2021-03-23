@@ -7,9 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "speexlib.h"
+#include "speexType.h"
 
-#if (WMIX_SPEEX_BETA3)
+#if (MAKE_SPEEX_BETA3)
+
 #include "speex/speex_echo.h"
 
 /* ==================== AEC 回声消除 ==================== */
@@ -155,4 +156,4 @@ void spx_aec_release(void *fp)
     free(sas);
 }
 
-#endif
+#endif // #if (MAKE_SPEEX_BETA3)

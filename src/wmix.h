@@ -2,7 +2,22 @@
 #ifndef _WMIX_H_
 #define _WMIX_H_
 
-#include "wmix_conf.h"
+#include "wmixConf.h"
+
+//wav编码
+#include "wav.h"
+//g711和pcm互转编码
+#include "g711codec.h"
+//rtp协议和数据发收
+#include "rtp.h"
+//webrtc接口二次封装
+#include "webrtc.h"
+//speex接口二次封装
+#include "speexType.h"
+//mp3编码
+#include "mp3Type.h"
+//aac编码
+#include "aacType.h"
 
 //第三方程序调用入口
 void wmix_start(void);
