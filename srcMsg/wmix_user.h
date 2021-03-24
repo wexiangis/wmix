@@ -177,10 +177,10 @@ typedef enum
 
 /* 给目标id的线程发控制状态
  * id: 上面产生的id
- * ctrl_type: 控制类型
+ * ctrl_type: 控制类型,参考 WMIX_CTRL_TYPE
  * 返回: 0/正常 -1/发送失败,id线程不存在
  */
-int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type);
+int wmix_ctrl(int id, int ctrl_type);
 
 //打印所有任务信息
 void wmix_list(void);

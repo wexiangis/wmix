@@ -2,7 +2,7 @@
 # 平台选择(即 platform 内的子文件夹名称)
 #   alsa: 通用平台(ubuntu,ARM,树莓派等) --> 基于alsa
 #   hi3516: 海思hi3516平台 --> 不支持 MAKE_ALSA MAKE_AAC
-#   t31: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_AAC MAKE_MP3
+#   t31: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_MP3
 MAKE_PLATFORM ?= alsa
 
 # 说明 ?= 表示前面没有赋过值则使用当前赋值
@@ -40,9 +40,9 @@ CFLAGS += -laudioProcess -limp -lalog # 这里要注意顺序
 CFLAGS += -Wl,-gc-sections -lrt -ldl
 # 不支持
 MAKE_ALSA = 0
-MAKE_AAC = 0
 MAKE_MP3 = 0
 # 选配
+MAKE_AAC = 0 # uclib不支持
 MAKE_WEBRTC_VAD = 0
 MAKE_WEBRTC_AEC = 0
 MAKE_WEBRTC_NS = 0

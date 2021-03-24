@@ -154,16 +154,16 @@ int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, 
     WMix_Msg msg;
     char msgPath[128] = {0};
     int redId;
-    //
+
     if (!wavOrMp3)
     {
         if (order < 0)
             wmix_play_kill(0);
         return 0;
     }
-    //
+
     redId = wmix_auto_path(msgPath, 0);
-    //
+
     if (strlen(msgPath) + strlen(wavOrMp3) + 2 > WMIX_MSG_BUFF_SIZE)
     {
         fprintf(stderr, "wmix_play: %s > max len (%ld)\n",
@@ -176,18 +176,18 @@ int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, 
     memset(&msg, 0, sizeof(WMix_Msg));
     msg.type = backgroundReduce * 0x100 + repeatInterval * 0x10000;
     if (order < 0)
-        msg.type += WMT_PLYAY_MUTEX;
+        msg.type += (int)WMT_PLYAY_MUTEX;
     else if (order == 0)
-        msg.type += WMT_PLAY_LAST;
+        msg.type += (int)WMT_PLAY_LAST;
     else if (order == 1)
-        msg.type += WMT_PLAY_FIRST;
+        msg.type += (int)WMT_PLAY_FIRST;
     else
-        msg.type += WMT_PLAY_MIX;
+        msg.type += (int)WMT_PLAY_MIX;
     strcpy((char *)msg.value, wavOrMp3);
     strcpy((char *)&msg.value[strlen(wavOrMp3) + 1], msgPath);
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
-    //
+
     return redId;
 }
 
@@ -199,7 +199,7 @@ int wmix_play_kill(int id)
         //msg初始化
         MSG_INIT();
         //装填 message
-        msg.type = WMT_CLEAN_LIST;
+        msg.type = (int)WMT_CLEAN_LIST;
         //发出
         msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
     }
@@ -211,7 +211,7 @@ int wmix_play_kill(int id)
         char msgPath[128] = {0};
         //关闭旧的播放线程
         wmix_auto_path(msgPath, id);
-        if (access(msgPath, F_OK) == 0)
+        if (access((const char *)msgPath, F_OK) == 0)
         {
             if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) == -1)
             {
@@ -233,7 +233,7 @@ int wmix_play_kill(int id)
                 if (timeout-- == 0)
                     break;
                 usleep(10000);
-            } while (access(msgPath, F_OK) == 0);
+            } while (access((const char *)msgPath, F_OK) == 0);
             //
             remove(msgPath);
         }
@@ -247,7 +247,7 @@ void wmix_kill_all()
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = WMT_CLEAN_ALL;
+    msg.type = (int)WMT_CLEAN_ALL;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }
@@ -267,7 +267,7 @@ void *_tmp_callback(void *path)
                 fprintf(stderr, "wmix_user: _tmp_callback read err\n");
                 break;
             }
-            if (access(path, F_OK) != 0)
+            if (access((const char *)path, F_OK) != 0)
             {
                 fprintf(stderr, "wmix_user: _tmp_callback path err\n");
                 while (read(fd, buff, 64) >= 0)
@@ -289,11 +289,12 @@ int wmix_stream_open(
 {
     if (!freq || !channels || !sample)
         return 0;
-    //
+
     int fd = 0;
     int timeout;
     char *_path;
     WMix_Msg msg;
+
     //msg初始化
     MSG_INIT();
     //路径创建
@@ -302,7 +303,7 @@ int wmix_stream_open(
     wmix_auto_path(_path, 0);
     // remove(_path);
     //装填 message
-    msg.type = WMT_FIFO_PLAY + backgroundReduce * 0x100;
+    msg.type = (int)WMT_FIFO_PLAY + backgroundReduce * 0x100;
     msg.value[0] = channels;
     msg.value[1] = sample;
     msg.value[2] = (freq >> 8) & 0xFF;
@@ -316,14 +317,14 @@ int wmix_stream_open(
         if (timeout-- == 0)
             break;
         usleep(10000);
-    } while (access(_path, F_OK) != 0);
-    //
-    if (access(_path, F_OK) != 0)
+    } while (access((const char *)_path, F_OK) != 0);
+
+    if (access((const char *)_path, F_OK) != 0)
     {
         fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
         return 0;
     }
-    //
+
 #if 1 //用线程代替fork
     pthread_t th;
     pthread_attr_t attr;
@@ -340,12 +341,12 @@ int wmix_stream_open(
     else
 #endif
     fd = open(_path, O_WRONLY | O_NONBLOCK);
-    //
+
     signal(SIGPIPE, signal_get_SIGPIPE);
-    //
+
     if (path)
         strcpy(path, _path);
-    //
+
     return fd;
 }
 
@@ -357,11 +358,12 @@ int wmix_record_stream_open(
 {
     if (!freq || !channels || !sample)
         return 0;
-    //
+
     int fd = 0;
     int timeout;
     char *_path;
     WMix_Msg msg;
+
     //msg初始化
     MSG_INIT();
     //路径创建
@@ -370,7 +372,7 @@ int wmix_record_stream_open(
     wmix_auto_path(_path, 0);
     // remove(_path);
     //装填 message
-    msg.type = WMT_FIFO_RECORD;
+    msg.type = (int)WMT_FIFO_RECORD;
     msg.value[0] = channels;
     msg.value[1] = sample;
     msg.value[2] = (freq >> 8) & 0xFF;
@@ -384,19 +386,18 @@ int wmix_record_stream_open(
         if (timeout-- == 0)
             break;
         usleep(10000);
-    } while (access(_path, F_OK) != 0);
-    //
-    if (access(_path, F_OK) != 0)
+    } while (access((const char *)_path, F_OK) != 0);
+
+    if (access((const char *)_path, F_OK) != 0)
     {
         fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
         return 0;
     }
-    //
+
     fd = open(_path, O_RDONLY);
-    //
     if (path)
         strcpy(path, _path);
-    //
+
     return fd;
 }
 
@@ -422,7 +423,7 @@ int wmix_record(
     msg.value[3] = freq & 0xFF;
     msg.value[4] = (second >> 8) & 0xFF;
     msg.value[5] = second & 0xFF;
-    //
+
     if (strlen(wavPath) > WMIX_MSG_BUFF_SIZE - 7)
     {
         fprintf(stderr, "wmix_record: %s > max len (%d)\n", wavPath, WMIX_MSG_BUFF_SIZE - 7);
@@ -440,7 +441,7 @@ int wmix_reset(void)
     //msg初始化
     MSG_INIT();
     //装填 message
-    msg.type = WMT_RESET;
+    msg.type = (int)WMT_RESET;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
     return 0;
@@ -451,12 +452,12 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     WMix_Msg msg;
     char msgPath[128] = {0};
     int redId;
-    //
+
     if (!ip)
         return 0;
-    //
+
     redId = wmix_auto_path(msgPath, 0);
-    //
+
     if (strlen(msgPath) + strlen(ip) + 6 + 3 > WMIX_MSG_BUFF_SIZE)
     {
         fprintf(stderr, "_wmix_rtp: %s > max len (%ld)\n",
@@ -494,14 +495,14 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
         if (timeout-- == 0)
             break;
         usleep(10000);
-    } while (access(msgPath, F_OK) != 0);
-    //
-    if (access(msgPath, F_OK) != 0)
+    } while (access((const char *)msgPath, F_OK) != 0);
+
+    if (access((const char *)msgPath, F_OK) != 0)
     {
         fprintf(stderr, "_wmix_rtp: create %s timeout\n", msgPath);
         return 0;
     }
-    //
+
     return redId;
 }
 
@@ -520,7 +521,7 @@ bool wmix_check_id(int id)
     char msgPath[128] = {0};
     //关闭旧的播放线程
     wmix_auto_path(msgPath, id);
-    if (access(msgPath, F_OK) == 0)
+    if (access((const char *)msgPath, F_OK) == 0)
         return true;
     return false;
 }
@@ -589,7 +590,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     int16_t i = 0;
     int16_t w = *addr;
     int timeout = 0;
-    //
+
     if (!ai_circle)
     {
         wmix_mem_open();
@@ -599,10 +600,9 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
             fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
             return 0;
         }
-        //
         w = ai_circle->w;
     }
-    //
+
     if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
         w = ai_circle->w;
     for (i = 0; i < len; i++)
@@ -622,13 +622,11 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
             }
             break;
         }
-        //
         *dat++ = ai_circle->buff[w++];
         if (w >= AI_CIRCLE_BUFF_LEN)
             w = 0;
     }
     *addr = w;
-    //
     return i;
 }
 
@@ -636,7 +634,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 int16_t wmix_mem_write(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
-    //
+
     if (!ao_circle)
     {
         wmix_mem_open();
@@ -646,17 +644,16 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
             fprintf(stderr, "wmix_mem_write: shm_create err !!\n");
             return 0;
         }
-        //
         ao_circle->w = 0;
     }
-    //
+
     for (i = 0; i < len; i++)
     {
         ao_circle->buff[ao_circle->w++] = *dat++;
         if (ao_circle->w >= AI_CIRCLE_BUFF_LEN)
             ao_circle->w = 0;
     }
-    //
+
     return i;
 }
 
@@ -676,7 +673,7 @@ void wmix_get_path(int id, char *path)
 
 bool wmix_check_path(char *path)
 {
-    if (access(path, F_OK) == 0)
+    if (access((const char *)path, F_OK) == 0)
         return true;
     else
         return false;
@@ -716,7 +713,7 @@ void wmix_info(void)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = WMT_INFO;
+    msg.type = (int)WMT_INFO;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }
@@ -727,7 +724,7 @@ void wmix_console(char *path)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = WMT_CONSOLE;
+    msg.type = (int)WMT_CONSOLE;
     if (path)
         strcpy((char *)msg.value, path);
     else
@@ -736,7 +733,7 @@ void wmix_console(char *path)
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }
 
-int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type)
+int wmix_ctrl(int id, int ctrl_type)
 {
     key_t msg_key;
     int msg_fd;
@@ -744,7 +741,7 @@ int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type)
     WMix_Msg msg;
     //检查id线程存在
     wmix_auto_path(msgPath, id);
-    if (access(msgPath, F_OK) != 0)
+    if (access((const char *)msgPath, F_OK) != 0)
     {
         fprintf(stderr, "wmix: ctrl thread id %d not exist\n", id);
         return -1;
@@ -823,7 +820,7 @@ void wmix_note(char *wavPath)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = WMT_NOTE;
+    msg.type = (int)WMT_NOTE;
     if (wavPath)
         strcpy((char *)msg.value, wavPath);
     else
@@ -839,7 +836,7 @@ void wmix_fft(char *path)
     //msg初始化
     MSG_INIT_VOID();
     //装填 message
-    msg.type = WMT_FFT;
+    msg.type = (int)WMT_FFT;
     if (path)
         strcpy((char *)msg.value, path);
     else
