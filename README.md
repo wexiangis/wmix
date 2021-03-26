@@ -1,4 +1,4 @@
-# ----- 简单介绍 -----
+# 简单介绍
 
 * 基于alsa库开发的音频混音器、音频托管程序, 由主程序+客户端程序组成, 支持客户端自行开发;
 
@@ -6,43 +6,39 @@
 
 ---
 
-# ----- 编译和使用说明 -----
+# 编译和使用说明
 
-1. 编译第三方依赖库
+* make libs # 编译第三方依赖库
 
-* make libs
+* make # 生成主程序 wmix 和客户端程序 wmixMsg
 
-2. 编译, 生成主程序 wmix 和客户端程序 wmixMsg, --help可以查看使用说明
+* sudo cp ./libs/lib/*.so* /usr/lib/ # 部署运行环境,拷贝依赖库到系统
 
-* make
+* wmix -? # 查看主程序传参说明
 
-3. 主程序抛后台 (先拷贝 ./libs/lib/lib* 到 /usr/lib/ ), -d 表示打印debug信息
+* wmixMsg -? # 查看客户端程序传参说明
 
-* wmix -d &
+* wmix -d & # 主程序后台运行,其中 -d 表示打印调试信息
 
-4. 播放音频文件, -v 10 表示用最大音量(0~10)
+* wmixMsg ./audio/1x8000.wav -v 10 # 以最大音量10播放音频文件
 
-* wmixMsg ./audio/1x8000.wav -v 10
+* wmixMsg ./audio/2x16000.wav -d 2 # 2倍削减背景音量混音播放当前音频
 
-5. 录音10秒到wav文件 (设备要具备录音条件)
+* wmixMsg -k 0 # 清空当前播放列表
 
-* wmixMsg -r ./xxx.wav -rt 10
-
-6. 清空播放列表
-
-* wmixMsg -k 0
+* wmixMsg -r ./xxx.wav -rt 10 # 录音10秒到wav文件(系统需具备录音条件)
 
 ---
 
-# ----- 常见参数配置 -----
+# 常见参数配置
 
-* 修改平台和启用第三方库, 修改 Makefile 中 MAKE_XXX 宏
+* 平台选择: 修改 Makefile 中 PLATFORM 的定义
 
-* 修改声道、频率, 在 src/wmix_plat.h (注意: webrtc不支持过高的频率)
+* 声道和频率: 定义在 platform 文件夹下对应平台的 plat.h 中(注意: webrtc不支持过高的频率)
 
 ---
 
-# ----- rtp对讲测试(先把主程序抛后台) -----
+# rtp对讲测试(先把主程序抛后台)
 
 ## 工具推pcm文件流,wmix播放：
 
@@ -102,9 +98,9 @@
 
 ---
 
-# ----- 选择目标库的启用 -----
+# 选择目标库的启用
 
-* 编辑 Makefile 选择启用 MAKE_XXX, 0 关闭, 1 启用
+* 编辑 Makefile 选择启用各种 MAKE_XXX, 0关闭, 1启用
 
 ---
 
@@ -166,7 +162,7 @@
 
 ---
 
-# ----- 树莓派 -----
+# 树莓派
 
 * 在 Makefile 改用 cross:=arm-linux-gnueabihf 再编译, MAKE_WEBRTC_AEC 库用 gcc 编译不过;
 
@@ -174,12 +170,10 @@
 
 ---
 
-# ----- 新平台接入 -----
+# 新平台接入
 
 * 工程中已把平台依赖接口进行了分离, 当一个新的硬件平台接入时, 只需修改下列项:
 
-* 1. platform 文件夹: 参考alsa文件夹添加自己的文件夹, 添加 plat.c/h 文件并实现其中的接口函数, 其中lib和include文件夹可以放置平台相关的库和头文件;
+* 1. 添加 platform 文件: 在 platform 文件夹中,参考 alsa 添加自己的文件夹并实现 plat.c/h;
 
-* 2. 修改 src/wmixPlat.h: 参考通用平台配置, 对新平台进行区别参数配置;
-
-* 3. 修改 Makefile: 参考通用平台alsa配置, 配置自己的 platform 文件夹编译项.
+* 2. 修改 Makefile: 参考alsa配置, 配置自己的 platform 文件夹编译项,并指定 PLATFORM 为自己平台名称.

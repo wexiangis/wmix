@@ -105,9 +105,9 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len);
 
 /*
  *  把长度为ret的buff根据divPow放大/缩小为buffSize2长度的数据,
- *  数据所在地址仍为buff,其中chn为输出通道数,WMIX_CHANNELS为源通道数
+ *  数据所在地址仍为buff,其中chn为输出通道数,WMIX_CHN为源通道数
  */
-#if (WMIX_CHANNELS == 1)
+#if (WMIX_CHN == 1)
 #define RECORD_DATA_TRANSFER()                               \
     if (chn == 1)                                            \
     {                                                        \

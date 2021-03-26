@@ -398,7 +398,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_NS] == NULL)
-                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHANNELS, WMIX_FREQ, &wmix->debug);
+                            wmix->webrtcPoint[WR_NS] = ns_init(WMIX_CHN, WMIX_FREQ, &wmix->debug);
                         if (wmix->webrtcPoint[WR_NS])
                         {
                             //开始转换
@@ -416,12 +416,12 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHN, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
 
 #ifdef AEC_SYNC_SAVE_FILE
-                            playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS);
+                            playPkgBuff_get(playPkgBuff, AEC_INTERVALMS);
                             pL = (int16_t *)buff;
                             pR = (int16_t *)playPkgBuff;
                             for (aec_sync_c = 0; aec_sync_c < WMIX_FRAME_NUM; aec_sync_c++)
@@ -433,7 +433,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             //开始转换
                             aec_process2(
                                 wmix->webrtcPoint[WR_AEC],
-                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVALMS), //要消除的数据,即 播音数据
                                 (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
                                 (int16_t *)buff,                                          //输出的数据,得 人说话声音
                                 WMIX_FRAME_NUM,
@@ -445,13 +445,13 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 16000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = spx_aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, 0, &wmix->debug);
+                            wmix->webrtcPoint[WR_AEC] = spx_aec_init(WMIX_CHN, WMIX_FREQ, WMIX_INTERVAL_MS, 0, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
                             //开始转换
                             spx_aec_process(
                                 wmix->webrtcPoint[WR_AEC],
-                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVAL_MS), //要消除的数据,即 播音数据
+                                (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVALMS), //要消除的数据,即 播音数据
                                 (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
                                 (int16_t *)buff,                                          //输出的数据,得 人说话声音
                                 WMIX_FRAME_NUM);
@@ -464,7 +464,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AGC] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AGC] == NULL)
-                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, wmix->volumeAgc, &wmix->debug);
+                            wmix->webrtcPoint[WR_AGC] = agc_init(WMIX_CHN, WMIX_FREQ, WMIX_INTERVAL_MS, wmix->volumeAgc, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AGC])
                         {
                             //开始转换
@@ -483,7 +483,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     {
                         // 人声识别,初始化
                         if (wmix->webrtcPoint[WR_VAD] == NULL)
-                            wmix->webrtcPoint[WR_VAD] = vad_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
+                            wmix->webrtcPoint[WR_VAD] = vad_init(WMIX_CHN, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
                         if (wmix->webrtcPoint[WR_VAD])
                             vad_process(
                                 wmix->webrtcPoint[WR_VAD],
@@ -503,7 +503,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             rwTestSrc,
                             ret,
                             WMIX_FREQ,
-                            WMIX_CHANNELS,
+                            WMIX_CHN,
                             WMIX_SAMPLE,
                             rwTestHead,
                             1,
@@ -532,7 +532,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                 memset(recordPkgBuff, 0, WMIX_PKG_SIZE);
                 recordPkgBuff_add(recordPkgBuff);
 
-                if ((wmix->objAi = wmix_ai_init(WMIX_CHANNELS, WMIX_FREQ)))
+                if ((wmix->objAi = wmix_ai_init(WMIX_CHN, WMIX_FREQ)))
                 {
                     if (wmix->debug)
                         printf("wmix record: start\r\n");
@@ -898,7 +898,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     break;
                 }
                 //创建wav头
-                WAV_Params(&wav, 10, WMIX_CHANNELS, WMIX_SAMPLE, WMIX_FREQ);
+                WAV_Params(&wav, 10, WMIX_CHN, WMIX_SAMPLE, WMIX_FREQ);
                 WAV_WriteHeader(wmix->noteFd, &wav);
                 fsync(wmix->noteFd);
                 //通知 wmix_play_thread 开始写数据
@@ -954,7 +954,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                     "   version: %s\r\n"
                     "\r\n"
                     "\r\n",
-                    WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE,
+                    WMIX_CHN, WMIX_FREQ, WMIX_SAMPLE,
                     wmix->volume, wmix->volumeMic, wmix->volumeAgc,
                     wmix->webrtcEnable[WR_VAD],
                     wmix->webrtcEnable[WR_AEC],
@@ -1077,7 +1077,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
     //tick严格延时间隔
     __time_t tick1 = 0, tick2 = 0, tickT = 0;
     //数据量转换为用时us
-    double dataToTime = 1000000 / (WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ);
+    double dataToTime = 1000000 / (WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ);
     //一包数据量
     uint8_t playBuff[WMIX_PKG_SIZE];
 #ifdef AEC_FILE_STREAM_TEST
@@ -1112,7 +1112,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
             tick1 = getTickUs();
             for (count = countTotal = 0, dist.U8 = playBuff; countTotal < WMIX_PKG_SIZE * 4;) //每次最多传x4包
             {
-#if (WMIX_CHANNELS == 1)
+#if (WMIX_CHN == 1)
                 //每次拷贝 2字节
                 *dist.U16++ = *wmix->head.U16; //从循环缓冲区取数据
                 *wmix->head.U16++ = 0;         //缓冲区数据清0
@@ -1138,7 +1138,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_NS_PA] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_NS_PA] == NULL)
-                            wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHANNELS, WMIX_FREQ, &wmix->debug);
+                            wmix->webrtcPoint[WR_NS_PA] = ns_init(WMIX_CHN, WMIX_FREQ, &wmix->debug);
                         if (wmix->webrtcPoint[WR_NS_PA])
                         {
                             //开始转换
@@ -1157,7 +1157,7 @@ void wmix_play_thread(WMixThread_Param *wmtp)
                     if (wmix->webrtcEnable[WR_AEC] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
                     {
                         if (wmix->webrtcPoint[WR_AEC] == NULL)
-                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHANNELS, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
+                            wmix->webrtcPoint[WR_AEC] = aec_init(WMIX_CHN, WMIX_FREQ, WMIX_INTERVAL_MS, &wmix->debug);
                         if (wmix->webrtcPoint[WR_AEC])
                         {
                             memset(fileBuff, 0, sizeof(fileBuff));
@@ -1320,14 +1320,14 @@ WMix_Struct *wmix_init(void)
         mkdir(WMIX_MSG_PATH, 0777);
 
     //录播音指针始化
-    objAo = wmix_ao_init(WMIX_CHANNELS, WMIX_FREQ);
+    objAo = wmix_ao_init(WMIX_CHN, WMIX_FREQ);
     if (!objAo)
     {
         WMIX_ERR("wmix_ao_init failed \r\n");
         return NULL;
     }
     //可以在需要时再初始化
-    // objAi = wmix_ai_init(WMIX_CHANNELS, WMIX_FREQ);
+    // objAi = wmix_ai_init(WMIX_CHN, WMIX_FREQ);
 
     //混音器内部数据初始化
     wmix = (WMix_Struct *)calloc(1, sizeof(WMix_Struct));
@@ -1355,15 +1355,6 @@ WMix_Struct *wmix_init(void)
 #endif
     wmix_load_thread(wmix, 0, NULL, 0, &wmix_msg_thread);  //接收客户端消息的线程
     wmix_load_thread(wmix, 0, NULL, 0, &wmix_play_thread); //从播音数据迟取数据并播放的线程
-
-#if (MAKE_PLATFORM == PLATFORM_HI3516)
-    //承受不了这个CPU占用率
-    wmix->webrtcEnable[WR_AEC] = 0;
-    //关闭vad
-    // wmix->webrtcEnable[WR_VAD] = 0;
-    //关闭agc
-    // wmix->webrtcEnable[WR_AGC] = 0;
-#endif
 
     //默认音量
     wmix->volume = 10;
@@ -1433,22 +1424,14 @@ WMix_Point wmix_load_data(
     //陪衬的数据也要作均值滤波
     int16_t repairBuff[64], repairBuffCount, repairTemp;
     float repairStep, repairStepSum;
-    //所谓correct,就是在放置播放指针时,超前当前播放指针一定量,以保证完整播放音频
-#if (MAKE_PLATFORM == PLATFORM_HI3516)
-    uint16_t correct = 0;
-#elif (MAKE_PLATFORM == PLATFORM_T31)
-    uint16_t correct = 0;
-#else
-    uint16_t correct = WMIX_CHANNELS * WMIX_FREQ * 16 / 8 / 5;
-#endif
 
     if (!wmix || !wmix->run || !pSrc.U8 || srcU8Len < 1)
         return pHead;
 
     if (!pHead.U8 || (*tick) < wmix->tick)
     {
-        pHead.U8 = wmix->head.U8 + correct;
-        (*tick) = wmix->tick + correct;
+        pHead.U8 = wmix->head.U8 + VIEW_PLAY_CORRECT;
+        (*tick) = wmix->tick + VIEW_PLAY_CORRECT;
         //循环处理
         if (pHead.U8 >= wmix->end.U8)
             pHead.U8 = wmix->start.U8;
@@ -1458,7 +1441,7 @@ WMix_Point wmix_load_data(
         rdce = &rdce1;
     //---------- 参数一致 直接拷贝 ----------
     if (freq == WMIX_FREQ &&
-        channels == WMIX_CHANNELS &&
+        channels == WMIX_CHN &&
         sample == WMIX_SAMPLE)
     {
         for (count = 0; count < srcU8Len;)
@@ -1470,7 +1453,7 @@ WMix_Point wmix_load_data(
             count += 2;
             tickAdd += 2;
 
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
             *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16 / (*rdce));
             pHead.S16++;
             pSrc.S16++;
@@ -1519,7 +1502,7 @@ WMix_Point wmix_load_data(
                             pHead.S16++;
                             pSrc.S16++;
                             tickAdd += 2;
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
                             *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16 / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
@@ -1553,7 +1536,7 @@ WMix_Point wmix_load_data(
                             pHead.S16++;
                             // pSrc.S16++;
                             tickAdd += 2;
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
                             *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16 / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
@@ -1605,7 +1588,7 @@ WMix_Point wmix_load_data(
                             *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount] / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
                             // *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
                             *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount] / (*rdce));
                             pHead.S16++;
@@ -1622,7 +1605,7 @@ WMix_Point wmix_load_data(
                             pHead.S16++;
                             pSrc.S16++;
                             tickAdd += 2;
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
                             *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16 / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
@@ -1663,7 +1646,7 @@ WMix_Point wmix_load_data(
                             *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount] / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
                             // *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16/(*rdce));
                             *pHead.S16 = volumeAdd(*pHead.S16, repairBuff[repairBuffCount] / (*rdce));
                             pHead.S16++;
@@ -1679,7 +1662,7 @@ WMix_Point wmix_load_data(
                             *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16 / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
-#if (WMIX_CHANNELS != 1)
+#if (WMIX_CHN != 1)
                             *pHead.S16 = volumeAdd(*pHead.S16, *pSrc.S16 / (*rdce));
                             pHead.S16++;
                             tickAdd += 2;
@@ -1724,7 +1707,6 @@ WMix_Point wmix_load_data(
     //当前播放指针已慢于播放指针,更新为播放指针
     if ((*tick) < wmix->tick)
     {
-        // tickAdd += correct;
         pHead.U8 = wmix->head.U8 + tickAdd;
         tickAdd += wmix->tick;
 
@@ -1787,7 +1769,7 @@ void show_setup(void)
            "   freq: %d Hz\r\n"
            "   sample: %d bit\r\n"
            "   webrtc: vad/%d, aec/%d, ns/%d, ns_pa/%d agc/%d\r\n",
-           WMIX_CHANNELS, WMIX_FREQ, WMIX_SAMPLE,
+           WMIX_CHN, WMIX_FREQ, WMIX_SAMPLE,
            main_wmix->webrtcEnable[WR_VAD],
            main_wmix->webrtcEnable[WR_AEC],
            main_wmix->webrtcEnable[WR_NS],

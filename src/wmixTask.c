@@ -142,7 +142,7 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
     //
     int fd_write;
     int16_t record_addr = -1;
-#if (WMIX_CHANNELS == 1)
+#if (WMIX_CHN == 1)
     uint8_t buff[1024];
 #else
     uint8_t buff[512];
@@ -175,10 +175,10 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
     //
     fd_write = open(path, O_WRONLY);
     //
-    bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
     frame_size = WMIX_FRAME_SIZE;
-#if (WMIX_CHANNELS == 1)
+#if (WMIX_CHN == 1)
     buffSize = sizeof(buff) / 2;
 #else
     buffSize = sizeof(buff);
@@ -261,7 +261,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
     int fd;
     WAVContainer_t wav;
     int16_t record_addr = -1;
-#if (WMIX_CHANNELS == 1)
+#if (WMIX_CHN == 1)
     uint8_t buff[1024];
 #else
     uint8_t buff[512];
@@ -301,10 +301,10 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
         return;
     }
     //
-    bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
     frame_size = WMIX_FRAME_SIZE;
-#if (WMIX_CHANNELS == 1)
+#if (WMIX_CHN == 1)
     buffSize = sizeof(buff) / 2;
 #else
     buffSize = sizeof(buff);
@@ -458,11 +458,11 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
         return;
     }
     //
-    bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
     frame_size = WMIX_FRAME_SIZE;
     //
-    buffSize = WMIX_CHANNELS * WMIX_SAMPLE / 8 * 1024;
+    buffSize = WMIX_CHN * WMIX_SAMPLE / 8 * 1024;
     buffSizeR = chn * sample / 8 * 1024;
     //
     buff = malloc(2 * WMIX_SAMPLE / 8 * 1024);
@@ -641,11 +641,11 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
         path, port, chn, freq,
         RTP_PAYLOAD_TYPE_AAC);
     //
-    bytes_p_second = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     bytes_p_second2 = chn * sample / 8 * freq;
     frame_size = WMIX_FRAME_SIZE;
     //每次从ai读取字节数
-    buffSize = WMIX_CHANNELS * WMIX_SAMPLE / 8 * 1024;
+    buffSize = WMIX_CHN * WMIX_SAMPLE / 8 * 1024;
     buffSizeR = chn * sample / 8 * 1024;
     //
     buff = malloc(2 * WMIX_SAMPLE / 8 * 1024);
@@ -1359,7 +1359,7 @@ void wmix_task_play_wav(
         rdce = 1;
     //默认缓冲区大小设为1秒字播放字节数
     buffSize = wav.format.bytes_p_second;
-    buffSize2 = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    buffSize2 = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     totalWait = buffSize2 / 2;
     //把每秒数据包拆得越细, 打断速度越快
     //以下拆包的倍数必须能同时被 wav.format.sample_rate 和 WMIX_FREQ 整除 !!
@@ -1583,7 +1583,7 @@ void wmix_task_play_aac(
     else
         rdce = 1;
     //
-    totalWait = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ / 2;
+    totalWait = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ / 2;
     //
     src.U8 = out;
     head.U8 = 0;
@@ -1762,7 +1762,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     if (wmm->head.U8 == 0)
     {
         wmm->bps = pcm->channels * 16 / 8 * header->samplerate;
-        wmm->totalWait = WMIX_CHANNELS * WMIX_SAMPLE / 8 * WMIX_FREQ / 2; //等半秒
+        wmm->totalWait = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ / 2; //等半秒
         //
         if (wmm->wmix->debug)
             printf(

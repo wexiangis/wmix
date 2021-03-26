@@ -96,7 +96,7 @@ typedef struct
 #define WMIX_INTERVAL_MS 20
 
 //每帧字节数
-#define WMIX_FRAME_SIZE (WMIX_CHANNELS * WMIX_SAMPLE / 8)
+#define WMIX_FRAME_SIZE (WMIX_CHN * WMIX_SAMPLE / 8)
 
 //按 WMIX_INTERVAL_MS 采样,每次采样帧数
 #define WMIX_FRAME_NUM (WMIX_FREQ * WMIX_INTERVAL_MS / 1000)
@@ -122,7 +122,7 @@ typedef struct
 // #define AEC_SYNC_SAVE_FILE "/tmp/aec.pcm"
 
 //FIFO 循环缓冲区包数量
-#define AEC_FIFO_PKG_NUM (AEC_INTERVAL_MS / WMIX_INTERVAL_MS + 2)
+#define AEC_FIFO_PKG_NUM (AEC_INTERVALMS / WMIX_INTERVAL_MS + 2)
 
 //录、播音同步,将把"录音线程"改为"心跳函数"内嵌到"播音线程"中
 #define WMIX_RECORD_PLAY_SYNC

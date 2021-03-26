@@ -3,22 +3,18 @@
 #   alsa: 通用平台(ubuntu,ARM,树莓派等) --> 基于alsa
 #   hi3516: 海思hi3516平台 --> 不支持 MAKE_ALSA MAKE_AAC
 #   t31: 君正T31平台 --> 不支持 MAKE_ALSA MAKE_MP3
-MAKE_PLATFORM ?= alsa
+PLATFORM ?= alsa
 
 # 说明 ?= 表示前面没有赋过值则使用当前赋值
 
 ##### 通用平台alsa配置 #####
-ifeq ("$(MAKE_PLATFORM)","alsa")
-# 传递平台类型给代码
-DEF += -DMAKE_PLATFORM=0
+ifeq ("$(PLATFORM)","alsa")
 # 平台交叉编译器选择
 # cross ?= arm-linux-gnueabihf
 endif
 
 ##### 海思hi3516平台配置 #####
-ifeq ("$(MAKE_PLATFORM)","hi3516")
-# 传递平台类型给代码
-DEF += -DMAKE_PLATFORM=1
+ifeq ("$(PLATFORM)","hi3516")
 # 平台交叉编译器选择
 cross ?= arm-himix200-linux
 # cross ?= arm-himix100-linux
@@ -27,12 +23,12 @@ CFLAGS +=
 # 不支持
 MAKE_ALSA = 0
 MAKE_AAC = 0
+# 选配
+MAKE_WEBRTC_AEC = 0
 endif
 
 ##### 君正T31平台配置 #####
-ifeq ("$(MAKE_PLATFORM)","t31")
-# 传递平台类型给代码
-DEF += -DMAKE_PLATFORM=2
+ifeq ("$(PLATFORM)","t31")
 # 平台交叉编译器选择
 cross ?= mips-linux-gnu
 # 平台依赖库配置 -l
@@ -76,7 +72,6 @@ MAKE_UI ?= 0
 
 # 根目录
 ROOT = $(shell pwd)
-PLATFORM = $(ROOT)/platform
 
 # ALSA LIB
 ifeq ($(MAKE_ALSA),1)
@@ -159,10 +154,10 @@ SRC += ${wildcard $(ROOT)/src/*c}
 # wmixMsg
 SRC-MSG += ${wildcard $(ROOT)/srcMsg/*}
 # 平台文件夹三件套
-SRC += ${wildcard $(PLATFORM)/$(MAKE_PLATFORM)/*.c}
-CINC += -I$(PLATFORM)/$(MAKE_PLATFORM)
-CINC += -I$(PLATFORM)/$(MAKE_PLATFORM)/include
-CLIBS += -L$(PLATFORM)/$(MAKE_PLATFORM)/lib
+SRC += ${wildcard $(ROOT)/platform/$(PLATFORM)/*.c}
+CINC += -I$(ROOT)/platform/$(PLATFORM)
+CINC += -I$(ROOT)/platform/$(PLATFORM)/include
+CLIBS += -L$(ROOT)/platform/$(PLATFORM)/lib
 
 # -Ixxx
 CINC += -I$(ROOT)/src
