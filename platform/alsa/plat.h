@@ -14,7 +14,7 @@
  */
 #define PLAT_CHN 1
 #define PLAT_SAMPLE 16
-#define PLAT_FREQ 8000
+#define PLAT_FREQ 16000
 //回声时延ms
 #define PLAT_AEC_INTERVALMS 400
 //所谓correct,就是在放置播放指针时,超前当前播放指针一定量,以保证完整播放音频

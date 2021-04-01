@@ -16,7 +16,7 @@
 
 /* ---------- 需和客户端(程序)同步的信息 ---------- */
 
-#define WMIX_VERSION "V5.5RC1 - 20210323"
+#define WMIX_VERSION "V5.5RC1 - 20210401"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"

@@ -74,6 +74,22 @@ typedef struct
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 } WMix_Msg;
 
+//时间工具
+#include <sys/time.h>
+void wmix_delayus(uint32_t us)
+{
+    struct timeval delay;
+    delay.tv_sec = us / 1000000;
+    delay.tv_usec = us % 1000000;
+    select(0, NULL, NULL, NULL, &delay);
+}
+uint32_t wmix_tickUs(void)
+{
+    struct timeval tv = {0};
+    gettimeofday(&tv, NULL);
+    return (uint32_t)(tv.tv_sec * 1000000u + tv.tv_usec);
+}
+
 #define MSG_INIT()                                          \
     key_t msg_key;                                          \
     int msg_fd;                                             \
@@ -288,7 +304,7 @@ int wmix_stream_open(
     char *path)
 {
     if (!freq || !channels || !sample)
-        return 0;
+        return -1;
 
     int fd = 0;
     int timeout;
@@ -322,7 +338,7 @@ int wmix_stream_open(
     if (access((const char *)_path, F_OK) != 0)
     {
         fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
-        return 0;
+        return -1;
     }
 
 #if 1 //用线程代替fork
@@ -357,7 +373,7 @@ int wmix_record_stream_open(
     char *path)
 {
     if (!freq || !channels || !sample)
-        return 0;
+        return -1;
 
     int fd = 0;
     int timeout;
@@ -391,13 +407,12 @@ int wmix_record_stream_open(
     if (access((const char *)_path, F_OK) != 0)
     {
         fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
-        return 0;
+        return -1;
     }
 
     fd = open(_path, O_RDONLY);
     if (path)
         strcpy(path, _path);
-
     return fd;
 }
 
@@ -454,7 +469,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     int redId;
 
     if (!ip)
-        return 0;
+        return -1;
 
     redId = wmix_auto_path(msgPath, 0);
 
@@ -462,7 +477,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     {
         fprintf(stderr, "_wmix_rtp: %s > max len (%ld)\n",
                 ip, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 6 - 3));
-        return 0;
+        return -1;
     }
     //msg初始化
     MSG_INIT();
@@ -500,7 +515,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     if (access((const char *)msgPath, F_OK) != 0)
     {
         fprintf(stderr, "_wmix_rtp: create %s timeout\n", msgPath);
-        return 0;
+        return -1;
     }
 
     return redId;
@@ -537,7 +552,7 @@ typedef struct
     int16_t buff[AI_CIRCLE_BUFF_LEN + 4];
 } ShmemAi_Circle;
 
-static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL;
+static ShmemAi_Circle *ai_circle = NULL, *ai_circle2 = NULL;
 static int wmix_shmemRun = 0;
 
 int wmix_mem_create(char *path, int flag, int size, void **mem)
@@ -630,30 +645,47 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     return i;
 }
 
-//len和返回长度都按int16计算长度
-int16_t wmix_mem_write(int16_t *dat, int16_t len)
+//原始录音共享内存数据, len和返回长度都按int16计算长度
+int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
+    int16_t w = *addr;
+    int timeout = 0;
 
-    if (!ao_circle)
+    if (!ai_circle2)
     {
-        wmix_mem_open();
-        wmix_mem_create("/tmp/wmix", 'O', sizeof(ShmemAi_Circle), (void **)&ao_circle);
-        if (!ao_circle)
+        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ai_circle2);
+        if (!ai_circle2)
         {
-            fprintf(stderr, "wmix_mem_write: shm_create err !!\n");
+            fprintf(stderr, "wmix_mem_read2: shm_create err !!\n");
             return 0;
         }
-        ao_circle->w = 0;
+        w = ai_circle2->w;
     }
-
+    if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
+        w = ai_circle2->w;
     for (i = 0; i < len; i++)
     {
-        ao_circle->buff[ao_circle->w++] = *dat++;
-        if (ao_circle->w >= AI_CIRCLE_BUFF_LEN)
-            ao_circle->w = 0;
+        if (w == ai_circle2->w)
+        {
+            if (wait && ai_circle2)
+            {
+                timeout += 5;
+                if (timeout > 2000) //2秒超时
+                {
+                    wmix_mem_open();
+                    break;
+                }
+                usleep(5000);
+                continue;
+            }
+            break;
+        }
+        *dat++ = ai_circle2->buff[w++];
+        if (w >= AI_CIRCLE_BUFF_LEN)
+            w = 0;
     }
-
+    *addr = w;
     return i;
 }
 

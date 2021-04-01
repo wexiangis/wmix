@@ -14,40 +14,43 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.5RC1 - 20210323"
+#define WMIX_VERSION "V5.5RC1 - 20210401"
 
-/* ----- 设置音量 -----
- * value: 音量 0~10
- * 正常返回0
+//时间工具
+void wmix_delayus(uint32_t us);
+uint32_t wmix_tickUs(void);
+
+/* 
+ *  设置音量
+ *  value: 音量 0~10
+ *  正常返回0
  */
 void wmix_set_volume(uint8_t value);
 
-/* ----- 设置录音音量 -----
- * value: 音量 0~10
+/*
+ *  设置录音音量
+ *  value: 音量 0~10
  */
 void wmix_set_volumeMic(uint8_t value);
 
-/* ----- 设置录音音量增益 -----
- * value: 音量 0~100
+/*
+ *  设置录音音量增益
+ *  value: 音量 0~100
  */
 void wmix_set_volumeAgc(uint8_t value);
 
-/* ----- 播放 wav 和 mp3 文件 -----
- *    wavOrMp3: 音频文件
- *          支持格式: wav, aac, mp3
+/*
+ *  播放 wav 和 mp3 文件
+ *  参数:
+ *    wavOrMp3: 音频文件,支持格式: wav, aac, mp3
  *    backgroundReduce: 播放当前音频时,降低背景音量
- *          0: 不启用
- *          >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
+ *          0: 不启用  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
  *          (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
  *    repeatInterval: 音频重复播放间隔,单位 sec
- *          0: 不启用
- *          >0: 播放结束后间隔 repeatInterval sec 后重播
+ *          0: 不启用  >0: 播放结束后间隔 repeatInterval sec 后重播
  *    order: 播放顺序(backgroundReduce>0或repeatInterval>0时不参与排队)
- *          -1: 打断所有
- *          0:排尾
- *          1:排头
- *          2:混音
- *    返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
+ *          -1: 打断所有 0:排尾 1:排头 2:混音
+ *  返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
 int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, int order);
 
@@ -57,14 +60,15 @@ int wmix_play_kill(int id);
 // 关闭所有播放、录音、fifo、rtp
 void wmix_kill_all();
 
-/* ----- 播放音频流,用于播放录音 -----
- * 成功返回fd(fifo的写入端)  失败返回0
- * backgroundReduce: 同上面
- * channels: 声道数(取值1,2)
- * sample: 采样位数bit(取值16)
- * freq: 频率(取值44100,32000,22050,16000,11025,8000)
- * path: fifo路径
- * 正常返回>0的fd
+/*
+ *  音频流播放
+ *  参数:
+ *      backgroundReduce: 同上面
+ *      channels: 声道数(取值1,2)
+ *      sample: 采样位数bit(取值16)
+ *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ *      path: fifo路径
+ *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
  */
 int wmix_stream_open(
     uint8_t channels,
@@ -73,13 +77,14 @@ int wmix_stream_open(
     uint8_t backgroundReduce,
     char *path);
 
-/* ----- 录音 -----
- * 成功返回fd(fifo的读取端)  失败返回0
- * channels: 声道数(取值1,2)
- * sample: 采样位数bit(取值16)
- * freq: 频率(取值44100,32000,22050,16000,11025,8000)
- * path: fifo路径
- * 正常返回>0的fd
+/*
+ *  音频流录音
+ *  参数:
+ *      channels: 声道数(取值1,2)
+ *      sample: 采样位数bit(取值16)
+ *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ *      path: fifo路径
+ *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
  */
 int wmix_record_stream_open(
     uint8_t channels,
@@ -87,13 +92,15 @@ int wmix_record_stream_open(
     uint16_t freq,
     char *path);
 
-/* ----- 录音到文件 -----
- * channels: 声道数(取值1,2)
- * sample: 采样位数bit(取值16)
- * freq: 频率(取值44100,32000,22050,16000,11025,8000)
- * second: 录音时长秒
- * useAAC: 录制aac文件,否则wav
- * 正常返回0
+/*
+ *  录音到文件
+ *  参数:
+ *      channels: 声道数(取值1,2)
+ *      sample: 采样位数bit(取值16)
+ *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ *      second: 录音时长秒
+ *      useAAC: 录制aac文件,否则wav
+ * 返回: 正常0
  */
 int wmix_record(
     char *wavPath,
@@ -103,22 +110,26 @@ int wmix_record(
     uint16_t second,
     bool useAAC);
 
-/* ----- rtp -----
- * type: 0/pcma 1/aac
- * chn: pcma只支持1通道
- * freq: pcma只支持8000Hz
- * bindMode: 以服务器形式连接(bind),这个设置很重要
- * backgroundReduce: 同上面
- * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
+/*
+ *  创建rtp接收任务
+ *  参数:
+ *      type: 0/pcma 1/aac
+ *      chn: pcma只支持1通道
+ *      freq: pcma只支持8000Hz
+ *      bindMode: 以服务器形式连接(bind),这个设置很重要
+ *      backgroundReduce: 同上面
+ *  返回: 正常返回>0特定id,可用于"wmix_play_kill(id)"  失败返回-1
  */
 int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode, uint8_t backgroundReduce);
 
-/* ----- rtp -----
- * type: 0/pcma 1/aac
- * chn: pcma只支持1通道
- * freq: pcma只支持8000Hz
- * bindMode: 以服务器形式连接(bind),这个设置很重要
- * 返回: >0 正常返回特定id,可用于"wmix_play_kill(id)"
+/*
+ *  创建rtp发送任务
+ *  参数:
+ *      type: 0/pcma 1/aac
+ *      chn: pcma只支持1通道
+ *      freq: pcma只支持8000Hz
+ *      bindMode: 以服务器形式连接(bind),这个设置很重要
+ *  返回: 正常返回>0特定id,可用于"wmix_play_kill(id)"  失败返回-1
  */
 int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool bindMode);
 
@@ -131,16 +142,20 @@ bool wmix_check_id(int id);
 // 开关log
 void wmix_log(bool on);
 
-/* ----- mem -----
- * 从共享内存读取录音数据
- * dat: 传入数据保存地址
- * len: 按int16_t计算的数据长度
- * addr: 返回当前在循环缓冲区中读数据的位置
- * wait: 阻塞
- * 返回: 按int16_t计算的数据长度
+/*
+ *  从共享内存读取录音数据
+ *  参数:
+ *      dat: 传入数据保存地址
+ *      len: 按int16_t计算的数据长度
+ *      addr: 返回当前在循环缓冲区中读数据的位置
+ *      wait: 阻塞
+ *  返回: 按int16_t计算的数据长度
+ *  说明:
+ *      wmix_mem_read 读取最小的8000Hz单声道数据
+ *      wmix_mem_read2 读取原始数据
  */
 int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
-int16_t wmix_mem_write(int16_t *dat, int16_t len);
+int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 void wmix_mem_open(void);
 void wmix_mem_close(void);
 
@@ -175,10 +190,12 @@ typedef enum
     WCT_TOTAL,
 } WMIX_CTRL_TYPE;
 
-/* 给目标id的线程发控制状态
- * id: 上面产生的id
- * ctrl_type: 控制类型,参考 WMIX_CTRL_TYPE
- * 返回: 0/正常 -1/发送失败,id线程不存在
+/*
+ *  给目标id的线程发控制状态
+ *  参数:
+ *      id: 上面产生的id
+ *      ctrl_type: 控制类型,参考 WMIX_CTRL_TYPE
+ *  返回: 0/正常 -1/发送失败,id线程不存在
  */
 int wmix_ctrl(int id, int ctrl_type);
 

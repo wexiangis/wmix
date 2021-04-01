@@ -69,6 +69,10 @@ void help(char *argv0)
         "  -console path : 重定向打印信息输出路径,path示例: /dev/console /dev/ttyAMA0 或者文件\n"
         "  -? --help : 显示帮助\n"
         "\n"
+        "Test:\n"
+        "  -rm : 测试 wmix_mem_read 接口,录制5秒的8000Hz单声道的.pcm文件\n"
+        "  -rm2 : 测试 wmix_mem_read2 接口,录制5秒的原始参数的.pcm文件\n"
+        "\n"
         "Return:\n"
         "  0/OK <0/ERROR >0/id use to \"-k id\"\n"
         "\n"
@@ -87,6 +91,47 @@ void help(char *argv0)
         "  %s -r ./record.wav\n"
         "\n",
         argv0, WMIX_VERSION, argv0, argv0, argv0, argv0);
+}
+
+/*
+ *  测试 wmix_mem_read 接口
+ *  参数:
+ *      file: 保存录音文件(建议.pcm后缀)
+ *      rt: 录音时长,单位秒
+ *      mode: 1/wmix_mem_read 2/wmix_mem_read2
+ */
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+void wmix_mem_test(char *file, int rt, int mode)
+{
+    int fd, ret;
+    int16_t addr = -1, buff[512];
+    uint32_t tick;
+
+    if (!file || rt < 1 || (mode != 1 && mode != 2))
+        return;
+
+    if ((fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666)) < 1)
+        return;
+    //开启共享内存
+    wmix_mem_open();
+    tick = wmix_tickUs();
+    //录音写文件
+    do {
+        if (mode == 1)
+            ret = wmix_mem_read(buff, 512, &addr, true);
+        else
+            ret = wmix_mem_read2(buff, 512, &addr, true);
+        if (ret > 0)
+        {
+            printf("wmix_mem_test(%d): read %d frame\r\n", mode, ret);
+            write(fd, buff, ret * 2);
+        }
+    } while(wmix_tickUs() < tick + rt * 1000000);
+    //关闭共享内存
+    wmix_mem_close();
+    close(fd);
 }
 
 void warn(char *param, int value_num)
@@ -108,59 +153,69 @@ int main(int argc, char **argv)
 
     bool record = false; //播音模式
 
-    int interval = 0;
-    int reduce = 0;
+    int interval = 0; //重读播音标志和间隔(秒) -t
+    int reduce = 0; //背景削减量 -d
 
-    int volume = -1, volumeMic = -1, volumeAgc = -1;
+    int volume = -1, volumeMic = -1, volumeAgc = -1; //播音-v,录音-vr,增益音量-va 0~10
 
-    bool kill_all = false;
-    int kill_id = -1, ctrl_id = -1, ret_id = 0;
-    int order = 0;
+    bool kill_all = false; //关闭所有人物 -ka
+    int kill_id = -1; //指定关闭任务 -k id
+    int order = 0; //排序方式 0/-l 1/-i 2/-m -1/-b
 
-    int rt = 5, rc = 1, rr = 8000;
-    bool rAcc = false;
+    int rt = 5, rc = 1, rr = 8000; //指定录音的 时长(秒)、通道、频率
+    bool rAac = false; //以aac格式录音
 
-    char *rtp_ip;
+    char *rtp_ip; //rtp(g711格式) 全双工配置
     int rtp_port = 9999;
     bool rtps = false;
     bool rtpr = false;
 
-    char *rtp_aac_ip;
+    char *rtp_aac_ip; //rtp(aac格式) 全双工配置
     int rtp_aac_port = 9999;
     bool rtps_aac = false;
     bool rtpr_aac = false;
 
-    bool rtp_bind = false;
+    bool rtp_bind = false; //服务端使用
 
-    char *rtp_local_ip;
+    char *rtp_local_ip; //rtp(g711格式) 半双工配置
     char *rtp_remote_ip;
     int rtp_remote_port;
     bool rtpsr = false;
 
-    char *rtp_aac_local_ip;
+    char *rtp_aac_local_ip; //rtp(aac格式) 半双工配置
     char *rtp_aac_remote_ip;
     int rtp_aac_remote_port;
     bool rtpsr_aac = false;
 
-    char *notePath = NULL;
+    char *notePath = NULL; //保留混音器播音数据 -note path
 
-    int log = -1;
-    bool reset = false;
-    bool list = false;
+    int log = -1; //是否使能log -log
+    bool reset = false; //复位标志 -reset
+    bool list = false; //列出当前所有任务 -list
 
-    int ctrl = -1;
+    int ctrl_id = -1; //指定控制任务 -ctl id type
+    int ctrl_type = -1; //控制类型 -ctl id type
 
-    bool info = false;
+    bool info = false; //显示混音器当前状态信息 -info
 
-    char *consolePath = NULL;
+    char *consolePath = NULL; //重定向混音器log输出路径 -console path
 
-    char *fft = NULL;
+    char *fft = NULL; //暂未使用
 
+    //
     int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
+    //目标播放、录音文件
     char *filePath = NULL;
+
     char tmpPath[128] = {0};
     char tmpPath2[128] = {0};
+
+    int ret_id = 0; //返回播放、录音任务id
+
+    //测试 wmix_mem_read/wmix_mem_read2 接口录音文件 -rm/-rm2 path
+    //可用 -rt 配置录音时长
+    int rm_test_mode = 0;
 
     int argvLen;
     if (argc < 2)
@@ -176,7 +231,7 @@ int main(int argc, char **argv)
         if (argvLen == 2 && strstr(argv[i], "-r"))
         {
             record = true;
-            rAcc = false;
+            rAac = false;
         }
         else if (argvLen == 4 && strstr(argv[i], "-log"))
         {
@@ -188,7 +243,7 @@ int main(int argc, char **argv)
         else if (argvLen == 5 && strstr(argv[i], "-raac"))
         {
             record = true;
-            rAcc = true;
+            rAac = true;
         }
         else if (argvLen == 3 && strstr(argv[i], "-rt"))
         {
@@ -392,7 +447,7 @@ int main(int argc, char **argv)
             if (i + 2 < argc)
             {
                 sscanf(argv[++i], "%d", &ctrl_id);
-                sscanf(argv[++i], "%d", &ctrl);
+                sscanf(argv[++i], "%d", &ctrl_type);
             }
             else
                 warn("-ctl", 2);
@@ -422,6 +477,14 @@ int main(int argc, char **argv)
         else if (argvLen == 5 && strstr(argv[i], "-info"))
         {
             info = true;
+        }
+        else if (argvLen == 3 && strstr(argv[i], "-rm"))
+        {
+            rm_test_mode = 1;
+        }
+        else if (argvLen == 4 && strstr(argv[i], "-rm2"))
+        {
+            rm_test_mode = 2;
         }
         else if (argvLen == 8 && strstr(argv[i], "-console"))
         {
@@ -536,9 +599,9 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
-    if (ctrl_id > 0 && ctrl > 0)
+    if (ctrl_id > 0 && ctrl_type > 0)
     {
-        wmix_ctrl(ctrl_id, ctrl);
+        wmix_ctrl(ctrl_id, ctrl_type);
         helpFalg = false;
     }
 
@@ -598,6 +661,12 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
+    if (rm_test_mode > 0)
+    {
+        wmix_mem_test(filePath, rt, rm_test_mode);
+        helpFalg = false;
+    }
+
     if (filePath && filePath[0] == '.')
     {
         if (getcwd(tmpPath, sizeof(tmpPath)))
@@ -610,7 +679,7 @@ int main(int argc, char **argv)
     if (filePath && filePath[0])
     {
         if (record)
-            wmix_record(filePath, rc, 16, rr, rt, rAcc);
+            wmix_record(filePath, rc, 16, rr, rt, rAac);
         else
             ret_id = wmix_play(filePath, reduce, interval, order);
         helpFalg = false;
