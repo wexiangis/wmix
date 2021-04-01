@@ -133,13 +133,16 @@ int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show)
 #include "faad.h"
 #include "faac.h"
 
-//aac解码为pcm
-//aacDec: 解码器句柄,值为NULL时自动初始化
-//in: aac数据,建议读入数据长度2048
-//inLen: aac数据长度
-//out: 输出pcm数据长度,建议长度8192
-//bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
-//返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
+/*
+ *  aac解码为pcm
+ *  参数:
+ *      aacDec: 解码器句柄,值为NULL时自动初始化
+ *      in: aac数据,建议读入数据长度2048
+ *      inLen: aac数据长度
+ *      out: 输出pcm数据长度,建议长度8192
+ *      bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
+ *  返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
+ */
 int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq)
 {
     int count = 0;
@@ -199,11 +202,14 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     return hInfo.samples * hInfo.channels;
 }
 
-//aac解码为pcm
-//aacDec: 解码器句柄,值为NULL时自动初始化
-//aacFile_fd: 已打开的aac文件句柄
-//out: 返回数据缓冲区,要求大于等于8192
-//返回: pcm数据长度, -1失败
+/*
+ *  aac解码为pcm
+ *  参数:
+ *      aacDec: 解码器句柄,值为NULL时自动初始化
+ *      aacFile_fd: 已打开的aac文件句柄
+ *      out: 返回数据缓冲区,要求大于等于8192
+ *  返回: pcm数据长度, -1失败
+ */
 int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq)
 {
     if (!aacDec)
@@ -308,39 +314,50 @@ void aac_decodeRelease(void **aacDec)
     *aacDec = NULL;
 }
 
-//pcm编码为aac
-//aacEnc: 解码器句柄,值为NULL时自动初始化
-//in: 长度必须为2048*chn
-//inLen: 2048*chn
-//out: 长度大于等于4096
-//outSize: 4096
+/*
+ *  pcm编码为aac
+ *  参数:
+ *      aacEnc: 解码器句柄,值为NULL时自动初始化
+ *      in: 长度必须为2048*chn
+ *      inLen: 2048*chn
+ *      out: 长度大于等于4096
+ *      outSize: 4096
+ *  返回: 实际写入ouy的数据量
+ */
 int aac_encode(void **aacEnc, uint8_t *in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq)
 {
     // uint32_t nPCMBitSize = 16;
     uint32_t nInputSamples = 0;
     uint32_t nMaxOutputBytes = 0;
     faacEncHandle hEncoder;
+    faacEncConfigurationPtr pConfiguration;
 
     if (!aacEnc)
         return -1;
+
     //第一次初始化编码器
     hEncoder = *((faacEncHandle *)aacEnc);
     if (hEncoder == NULL)
     {
-        hEncoder = faacEncOpen((unsigned long)freq, (unsigned int)chn, (unsigned long *)&nInputSamples, (unsigned long *)&nMaxOutputBytes);
+        hEncoder = faacEncOpen(
+            (unsigned long)freq,
+            (unsigned int)chn,
+            (unsigned long *)&nInputSamples,
+            (unsigned long *)&nMaxOutputBytes);
         if (!hEncoder)
         {
             fprintf(stderr, "aac_encode: faacEncOpen err chn/%d, freq/%d\n", chn, freq);
             return -1;
         }
 
-        faacEncConfigurationPtr pConfiguration = faacEncGetCurrentConfiguration(hEncoder);
+        pConfiguration = faacEncGetCurrentConfiguration(hEncoder);
         pConfiguration->inputFormat = FAAC_INPUT_16BIT;
         faacEncSetConfiguration(hEncoder, pConfiguration);
 
+        // printf("nInputSamples %d, bitrate %d, bandWidth %d\r\n",
+        //     nInputSamples, pConfiguration->bitRate, pConfiguration->bandWidth);
         *aacEnc = hEncoder;
     }
-
     return faacEncEncode(hEncoder, (int32_t *)in, inLen / 2, out, outSize);
 }
 

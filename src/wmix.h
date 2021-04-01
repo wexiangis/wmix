@@ -55,6 +55,7 @@ void wmix_load_task(
 //用 wmix_load_thread() 加载的功能模块
 void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp);
 void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp);
+void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp);
 void wmix_thread_record_wav(WMixThread_Param *wmtp);
 #if (MAKE_AAC)
 void wmix_thread_record_aac(WMixThread_Param *wmtp);

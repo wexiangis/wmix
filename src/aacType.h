@@ -54,20 +54,26 @@ int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate,
 
 #if (MAKE_AAC)
 
-//aac解码为pcm
-//aacDec: 解码器句柄,值为NULL时自动初始化
-//in: aac数据,建议读入数据长度2048
-//inLen: aac数据长度
-//out: 输出pcm数据长度,建议长度8192
-//bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
-//返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
+/*
+ *  aac解码为pcm
+ *  参数:
+ *      aacDec: 解码器句柄,值为NULL时自动初始化
+ *      in: aac数据,建议读入数据长度2048
+ *      inLen: aac数据长度
+ *      out: 输出pcm数据长度,建议长度8192
+ *      bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
+ *  返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
+ */
 int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq);
 
-//aac解码为pcm
-//aacDec: 解码器句柄,值为NULL时自动初始化
-//aacFile_fd: 已打开的aac文件句柄
-//out: 返回数据缓冲区,要求大于等于8192
-//返回: pcm数据长度, -1失败
+/*
+ *  aac解码为pcm
+ *  参数:
+ *      aacDec: 解码器句柄,值为NULL时自动初始化
+ *      aacFile_fd: 已打开的aac文件句柄
+ *      out: 返回数据缓冲区,要求大于等于8192
+ *  返回: pcm数据长度, -1失败
+ */
 int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq);
 
 //文件
@@ -76,12 +82,16 @@ void aac_decodeToFile(char *aacFile, char *pcmFile);
 //销毁解码器句柄
 void aac_decodeRelease(void **aacDec);
 
-//pcm编码为aac
-//aacEnc: 解码器句柄,值为NULL时自动初始化
-//in: 长度必须为2048*chn
-//inLen: 2048*chn
-//out: 长度大于等于4096
-//outSize: 4096
+/*
+ *  pcm编码为aac
+ *  参数:
+ *      aacEnc: 解码器句柄,值为NULL时自动初始化
+ *      in: 长度必须为2048*chn
+ *      inLen: 2048*chn
+ *      out: 长度大于等于4096
+ *      outSize: 4096
+ *  返回: 实际写入ouy的数据量
+ */
 int aac_encode(void **aacEnc, uint8_t *in, int inLen, uint8_t *out, uint32_t outSize, int chn, int freq);
 //文件
 void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq);

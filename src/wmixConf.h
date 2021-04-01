@@ -57,6 +57,7 @@ typedef enum
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
     WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件,写0关闭
     WMT_FFT = 27,             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
+    WMT_FIFO_AAC = 28,        //fifo录音aac流 (value格式见wmix_user.c)
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息

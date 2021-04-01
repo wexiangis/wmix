@@ -70,8 +70,10 @@ void help(char *argv0)
         "  -? --help : 显示帮助\n"
         "\n"
         "Test:\n"
-        "  -rm : 测试 wmix_mem_read 接口,录制5秒的8000Hz单声道的.pcm文件\n"
-        "  -rm2 : 测试 wmix_mem_read2 接口,录制5秒的原始参数的.pcm文件\n"
+        "  -tm : 测试 wmix_mem_read 接口,录制5秒的8000Hz单声道的.pcm文件\n"
+        "  -tm2 : 测试 wmix_mem_read2 接口,录制5秒的原始参数的.pcm文件\n"
+        "  -tfi : 测试 wmix_fifo_record 接口,录制5秒的8000Hz单声道的.pcm文件\n"
+        "  -tfi2 : 测试 wmix_fifo_record 接口aac模式,录制5秒的原始参数的.aac文件\n"
         "\n"
         "Return:\n"
         "  0/OK <0/ERROR >0/id use to \"-k id\"\n"
@@ -131,6 +133,38 @@ void wmix_mem_test(char *file, int rt, int mode)
     } while(wmix_tickUs() < tick + rt * 1000000);
     //关闭共享内存
     wmix_mem_close();
+    close(fd);
+}
+void wmix_fifo_test(char *file, int rc, int rr, int rt, int mode)
+{
+    int fd, fd_read, ret;
+    int16_t buff[1024];
+    uint32_t tick;
+
+    if (!file || rt < 1 || (mode != 1 && mode != 2))
+        return;
+
+    if ((fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666)) < 1)
+        return;
+    //开启fifo流
+    fd_read = wmix_fifo_record(rc, rr, mode == 2 ? true : false);
+    if (fd_read < 1)
+    {
+        close(fd);
+        return;
+    }
+    tick = wmix_tickUs();
+    //录音写文件
+    do {
+        ret = read(fd_read, buff, sizeof(buff));
+        if (ret > 0)
+        {
+            printf("wmix_fifo_test(%d.%d.%d): read %d frame\r\n", rc, rr, mode, ret);
+            write(fd, buff, ret);
+        }
+    } while(wmix_tickUs() < tick + rt * 1000000);
+    //关闭流
+    close(fd_read);
     close(fd);
 }
 
@@ -202,7 +236,6 @@ int main(int argc, char **argv)
 
     char *fft = NULL; //暂未使用
 
-    //
     int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
     //目标播放、录音文件
@@ -213,9 +246,13 @@ int main(int argc, char **argv)
 
     int ret_id = 0; //返回播放、录音任务id
 
-    //测试 wmix_mem_read/wmix_mem_read2 接口录音文件 -rm/-rm2 path
+    //测试 wmix_mem_read/wmix_mem_read2 接口录音文件 -tm/-tm2 path
     //可用 -rt 配置录音时长
-    int rm_test_mode = 0;
+    int tm_test_mode = 0;
+
+    //测试 wmix_fifo_record 接口录音文件 -tfi/-tfi2 path
+    //可用 -rt 配置录音时长
+    int tfi_test_mode = 0;
 
     int argvLen;
     if (argc < 2)
@@ -478,13 +515,21 @@ int main(int argc, char **argv)
         {
             info = true;
         }
-        else if (argvLen == 3 && strstr(argv[i], "-rm"))
+        else if (argvLen == 3 && strstr(argv[i], "-tm"))
         {
-            rm_test_mode = 1;
+            tm_test_mode = 1;
         }
-        else if (argvLen == 4 && strstr(argv[i], "-rm2"))
+        else if (argvLen == 4 && strstr(argv[i], "-tm2"))
         {
-            rm_test_mode = 2;
+            tm_test_mode = 2;
+        }
+        else if (argvLen == 4 && strstr(argv[i], "-tfi"))
+        {
+            tfi_test_mode = 1;
+        }
+        else if (argvLen == 5 && strstr(argv[i], "-tfi2"))
+        {
+            tfi_test_mode = 2;
         }
         else if (argvLen == 8 && strstr(argv[i], "-console"))
         {
@@ -661,12 +706,6 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
-    if (rm_test_mode > 0)
-    {
-        wmix_mem_test(filePath, rt, rm_test_mode);
-        helpFalg = false;
-    }
-
     if (filePath && filePath[0] == '.')
     {
         if (getcwd(tmpPath, sizeof(tmpPath)))
@@ -678,7 +717,11 @@ int main(int argc, char **argv)
 
     if (filePath && filePath[0])
     {
-        if (record)
+        if (tm_test_mode > 0)
+            wmix_mem_test(filePath, rt, tm_test_mode);
+        else if (tfi_test_mode > 0)
+            wmix_fifo_test(filePath, rc, rr, rt, tfi_test_mode);
+        else if (record)
             wmix_record(filePath, rc, 16, rr, rt, rAac);
         else
             ret_id = wmix_play(filePath, reduce, interval, order);

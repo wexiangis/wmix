@@ -38,7 +38,7 @@ CFLAGS += -Wl,-gc-sections -lrt -ldl
 MAKE_ALSA = 0
 MAKE_MP3 = 0
 # 选配
-MAKE_AAC = 0 # uclib不支持
+MAKE_AAC = 1 # uclib不支持
 MAKE_WEBRTC_VAD = 0
 MAKE_WEBRTC_AEC = 0
 MAKE_WEBRTC_NS = 0
@@ -147,6 +147,12 @@ ifdef cross
 	HOST = $(cross)
 	GCC = $(cross)-gcc
 	GPP = $(cross)-g++
+endif
+
+# 其它库路径
+ifdef LIBSPATH
+CINC += -I$(LIBSPATH)/include
+CLIBS += -L$(LIBSPATH)/lib
 endif
 
 # wmix

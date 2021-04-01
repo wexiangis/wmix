@@ -52,6 +52,7 @@ typedef enum
     WMT_CLEAN_ALL = 25,       //关闭所有播放、录音、fifo、rtp
     WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件,写0关闭
     WMT_FFT = 27,             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
+    WMT_FIFO_AAC = 28,        //fifo录音aac流 (value格式见wmix_user.c)
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息
@@ -296,32 +297,30 @@ void *_tmp_callback(void *path)
     return NULL;
 }
 
-int wmix_stream_open(
+int wmix_fifo_play(
     uint8_t channels,
-    uint8_t sample,
     uint16_t freq,
-    uint8_t backgroundReduce,
-    char *path)
+    uint8_t backgroundReduce)
 {
-    if (!freq || !channels || !sample)
+    if (!freq || !channels)
         return -1;
 
     int fd = 0;
     int timeout;
-    char *_path;
+    char *path;
     WMix_Msg msg;
 
     //msg初始化
     MSG_INIT();
     //路径创建
     memset(&msg, 0, sizeof(WMix_Msg));
-    _path = (char *)&msg.value[4];
-    wmix_auto_path(_path, 0);
-    // remove(_path);
+    path = (char *)&msg.value[4];
+    wmix_auto_path(path, 0);
+    // remove(path);
     //装填 message
     msg.type = (int)WMT_FIFO_PLAY + backgroundReduce * 0x100;
     msg.value[0] = channels;
-    msg.value[1] = sample;
+    msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
     msg.value[3] = freq & 0xFF;
     //发出
@@ -333,11 +332,11 @@ int wmix_stream_open(
         if (timeout-- == 0)
             break;
         usleep(10000);
-    } while (access((const char *)_path, F_OK) != 0);
+    } while (access((const char *)path, F_OK) != 0);
 
-    if (access((const char *)_path, F_OK) != 0)
+    if (access((const char *)path, F_OK) != 0)
     {
-        fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
+        fprintf(stderr, "wmix_stream_init: %s timeout\n", path);
         return -1;
     }
 
@@ -348,49 +347,44 @@ int wmix_stream_open(
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); //禁用线程同步, 线程运行结束后自动释放
     //抛出线程
-    pthread_create(&th, &attr, _tmp_callback, (void *)_path);
+    pthread_create(&th, &attr, _tmp_callback, (void *)path);
     //attr destroy
     pthread_attr_destroy(&attr);
 #else
     if (fork() == 0)
-        open(_path, O_RDONLY | O_NONBLOCK); //防止下面的写阻塞打不开
+        open(path, O_RDONLY | O_NONBLOCK); //防止下面的写阻塞打不开
     else
 #endif
-    fd = open(_path, O_WRONLY | O_NONBLOCK);
+    fd = open(path, O_WRONLY | O_NONBLOCK);
 
     signal(SIGPIPE, signal_get_SIGPIPE);
-
-    if (path)
-        strcpy(path, _path);
-
     return fd;
 }
 
-int wmix_record_stream_open(
+int wmix_fifo_record(
     uint8_t channels,
-    uint8_t sample,
     uint16_t freq,
-    char *path)
+    bool useAAC)
 {
-    if (!freq || !channels || !sample)
+    if (!freq || !channels)
         return -1;
 
     int fd = 0;
     int timeout;
-    char *_path;
+    char *path;
     WMix_Msg msg;
 
     //msg初始化
     MSG_INIT();
     //路径创建
     memset(&msg, 0, sizeof(WMix_Msg));
-    _path = (char *)&msg.value[4];
-    wmix_auto_path(_path, 0);
-    // remove(_path);
+    path = (char *)&msg.value[4];
+    wmix_auto_path(path, 0);
+    // remove(path);
     //装填 message
-    msg.type = (int)WMT_FIFO_RECORD;
+    msg.type = (int)(useAAC ? WMT_FIFO_AAC : WMT_FIFO_RECORD);
     msg.value[0] = channels;
-    msg.value[1] = sample;
+    msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
     msg.value[3] = freq & 0xFF;
     //发出
@@ -402,17 +396,14 @@ int wmix_record_stream_open(
         if (timeout-- == 0)
             break;
         usleep(10000);
-    } while (access((const char *)_path, F_OK) != 0);
+    } while (access((const char *)path, F_OK) != 0);
 
-    if (access((const char *)_path, F_OK) != 0)
+    if (access((const char *)path, F_OK) != 0)
     {
-        fprintf(stderr, "wmix_stream_init: %s timeout\n", _path);
+        fprintf(stderr, "wmix_stream_init: %s timeout\n", path);
         return -1;
     }
-
-    fd = open(_path, O_RDONLY);
-    if (path)
-        strcpy(path, _path);
+    fd = open(path, O_RDONLY);
     return fd;
 }
 

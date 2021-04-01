@@ -918,6 +918,16 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                 }
                 break;
 #endif
+#if (MAKE_AAC)
+            //fifo录音aac流
+            case WMT_FIFO_AAC:
+                wmix_load_thread(wmix,
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_record_aac_fifo);
+                break;
+#endif
             //开关log
             case WMT_LOG_SW:
                 if (msg.value[0])
@@ -1043,19 +1053,18 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
             recordTickTimeout = 0;
             wmix->recordRun = true;
         }
-        //
         delayus(10000);
     }
     //删除队列
     msgctl(wmix->msg_fd, IPC_RMID, NULL);
-    //
+
     if (wmix->debug)
         printf("wmix_msg_thread exit\r\n");
-    //
+
     if (wmtp->param)
         free(wmtp->param);
     free(wmtp);
-    //
+
     if (err_exit)
     {
         wmix_signal(SIGINT);
@@ -1368,6 +1377,7 @@ WMix_Struct *wmix_init(void)
     //接收 ctrl+c 信号,在进程关闭时做出内存释放处理
     signal(SIGINT, wmix_signal);
     signal(SIGTERM, wmix_signal);
+    signal(SIGPIPE, wmix_signal);
 
 #if (MAKE_MATH_FFT)
     wmix->fftStream = (float *)calloc(MAKE_MATH_FFT, sizeof(float));
@@ -1732,8 +1742,8 @@ void wmix_signal(int signo)
     if (SIGINT == signo || SIGTERM == signo)
     {
         wmix_exit(main_wmix);
+        exit(0);
     }
-    exit(0);
 }
 
 void help(char *argv0)

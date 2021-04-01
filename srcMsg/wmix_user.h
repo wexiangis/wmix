@@ -65,39 +65,33 @@ void wmix_kill_all();
  *  参数:
  *      backgroundReduce: 同上面
  *      channels: 声道数(取值1,2)
- *      sample: 采样位数bit(取值16)
  *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
- *      path: fifo路径
  *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
  */
-int wmix_stream_open(
+int wmix_fifo_play(
     uint8_t channels,
-    uint8_t sample,
     uint16_t freq,
-    uint8_t backgroundReduce,
-    char *path);
+    uint8_t backgroundReduce);
 
 /*
  *  音频流录音
  *  参数:
  *      channels: 声道数(取值1,2)
- *      sample: 采样位数bit(取值16)
- *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
- *      path: fifo路径
+ *      freq: 频率不得大于wmix原声频率
+ *      useAAC: 使用aac格式(如果启用了MAKE_AAC)
  *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
  */
-int wmix_record_stream_open(
+int wmix_fifo_record(
     uint8_t channels,
-    uint8_t sample,
     uint16_t freq,
-    char *path);
+    bool useAAC);
 
 /*
  *  录音到文件
  *  参数:
  *      channels: 声道数(取值1,2)
  *      sample: 采样位数bit(取值16)
- *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
+ *      freq: 频率不得大于wmix原声频率
  *      second: 录音时长秒
  *      useAAC: 录制aac文件,否则wav
  * 返回: 正常0
