@@ -104,94 +104,21 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len);
 //原始录音共享内存数据, len和返回长度都按int16计算长度
 int16_t wmix_mem_write2(int16_t *dat, int16_t len);
 
-/*
- *  把长度为ret的buff根据divPow放大/缩小为buffSize2长度的数据,
- *  数据所在地址仍为buff,其中chn为输出通道数,WMIX_CHN为源通道数
- */
-#if (WMIX_CHN == 1)
-#define RECORD_DATA_TRANSFER()                               \
-    if (chn == 1)                                            \
-    {                                                        \
-        for (count = 0, src.U8 = dist.U8 = buff;             \
-             count < ret; count += frame_size)               \
-        {                                                    \
-            if (divCount >= 1.0)                             \
-            {                                                \
-                src.U16++;                                   \
-                divCount -= 1.0;                             \
-            }                                                \
-            else                                             \
-            {                                                \
-                *dist.U16++ = *src.U16++;                    \
-                divCount += divPow;                          \
-            }                                                \
-        }                                                    \
-        src.U8 = buff;                                       \
-        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;        \
-    }                                                        \
-    else                                                     \
-    {                                                        \
-        memcpy(&buff[ret], buff, ret);                       \
-        for (count = 0, src.U8 = &buff[ret], dist.U8 = buff; \
-             count < ret; count += frame_size)               \
-        {                                                    \
-            if (divCount >= 1.0)                             \
-            {                                                \
-                src.U16++;                                   \
-                divCount -= 1.0;                             \
-            }                                                \
-            else                                             \
-            {                                                \
-                *dist.U16++ = *src.U16;                      \
-                *dist.U16++ = *src.U16++;                    \
-                divCount += divPow;                          \
-            }                                                \
-        }                                                    \
-        src.U8 = buff;                                       \
-        buffSize2 = (size_t)(dist.U16 - src.U16) * 2;        \
-    }
-#else
-#define RECORD_DATA_TRANSFER()                        \
-    if (chn == 1)                                     \
-    {                                                 \
-        for (count = 0, src.U8 = dist.U8 = buff;      \
-             count < ret; count += frame_size)        \
-        {                                             \
-            if (divCount >= 1.0)                      \
-            {                                         \
-                src.U16++;                            \
-                src.U16++;                            \
-                divCount -= 1.0;                      \
-            }                                         \
-            else                                      \
-            {                                         \
-                *dist.U16++ = *src.U16++;             \
-                src.U16++;                            \
-                divCount += divPow;                   \
-            }                                         \
-        }                                             \
-        src.U8 = buff;                                \
-        buffSize2 = (size_t)(dist.U16 - src.U16) * 2; \
-    }                                                 \
-    else                                              \
-    {                                                 \
-        for (count = 0, src.U8 = dist.U8 = buff;      \
-             count < ret; count += frame_size)        \
-        {                                             \
-            if (divCount >= 1.0)                      \
-            {                                         \
-                src.U32++;                            \
-                divCount -= 1.0;                      \
-            }                                         \
-            else                                      \
-            {                                         \
-                *dist.U32++ = *src.U32++;             \
-                divCount += divPow;                   \
-            }                                         \
-        }                                             \
-        src.U8 = buff;                                \
-        buffSize2 = (size_t)(dist.U32 - src.U32) * 4; \
-    }
-#endif
+//知道输入长度,计算缩放后输出长度(注意长度必须2倍数)
+uint32_t wmix_len_of_out(
+    uint8_t inChn, uint16_t inFreq,
+    uint32_t inLen,
+    uint8_t outChn, uint16_t outFreq);
+//知道输出长度,计算缩需要的输入长度(注意长度必须2倍数)
+uint32_t wmix_len_of_in(
+    uint8_t inChn, uint16_t inFreq,
+    uint8_t outChn, uint16_t outFreq,
+    uint32_t outLen);
+//缩放,返回输出长度(注意长度必须2倍数)
+uint32_t wmix_pcm_zoom(
+    uint8_t inChn, uint16_t inFreq,
+    uint8_t *in, uint32_t inLen,
+    uint8_t outChn, uint16_t outFreq,
+    uint8_t *out);
 
 #endif //end of file

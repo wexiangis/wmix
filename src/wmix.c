@@ -21,6 +21,170 @@
 #include "wmix.h"
 #include "delay.h"
 
+//知道输入长度,计算缩放后输出长度(注意长度必须2倍数)
+uint32_t wmix_len_of_out(
+    uint8_t inChn, uint16_t inFreq,
+    uint32_t inLen,
+    uint8_t outChn, uint16_t outFreq)
+{
+    uint32_t inCount = 0, outCount = 0;
+    //缩放分度格和计数
+    float div, divStep = 0;
+    //放大
+    if (inFreq < outFreq)
+    {
+        div = (float)inFreq / outFreq; //用小的除以大的
+        while (inCount < inLen)
+        {
+            outCount += outChn; //多声道时移动多次
+            divStep += div;
+            if ((int)divStep > 0) //计数满,移动一次
+            {
+                inCount += inChn; //多声道时移动多次
+                divStep -= 1.0;   //清1
+            }
+        }
+    }
+    //缩小
+    else
+    {
+        div = (float)outFreq / inFreq; //用小的除以大的
+        while (inCount < inLen)
+        {
+            divStep += div;
+            if ((int)divStep > 0) //计数满,赋值一次
+            {
+                outCount += outChn; //多声道时移动多次
+                divStep -= 1.0;     //清1
+            }
+            inCount += inChn; //多声道时移动多次
+        }
+    }
+    return outCount;
+}
+
+//知道输出长度,计算缩需要的输入长度(注意长度必须2倍数)
+uint32_t wmix_len_of_in(
+    uint8_t inChn, uint16_t inFreq,
+    uint8_t outChn, uint16_t outFreq,
+    uint32_t outLen)
+{
+    uint32_t inCount = 0, outCount = 0;
+    //缩放分度格和计数
+    float div, divStep = 0;
+    //放大
+    if (inFreq < outFreq)
+    {
+        div = (float)inFreq / outFreq; //用小的除以大的
+        while (outCount < outLen)
+        {
+            outCount += outChn; //多声道时移动多次
+            divStep += div;
+            if ((int)divStep > 0) //计数满,移动一次
+            {
+                inCount += inChn; //多声道时移动多次
+                divStep -= 1.0;   //清1
+            }
+        }
+    }
+    //缩小
+    else
+    {
+        div = (float)outFreq / inFreq; //用小的除以大的
+        while (outCount < outLen)
+        {
+            divStep += div;
+            if ((int)divStep > 0) //计数满,赋值一次
+            {
+                outCount += outChn; //多声道时移动多次
+                divStep -= 1.0;     //清1
+            }
+            inCount += inChn; //多声道时移动多次
+        }
+    }
+    return inCount;
+}
+
+//缩放,返回输出长度(注意长度必须2倍数)
+uint32_t wmix_pcm_zoom(
+    uint8_t inChn, uint16_t inFreq,
+    uint8_t *in, uint32_t inLen,
+    uint8_t outChn, uint16_t outFreq,
+    uint8_t *out)
+{
+    //头尾指针记录
+    WMix_Point inP = {.U8 = in};
+    WMix_Point inPEnd = {.U8 = in + inLen};
+    WMix_Point outP = {.U8 = out};
+    //缩放分度格和计数
+    float div, divStep = 0;
+    //声道匹配模式
+    uint8_t chnMode = (inChn << 4) | (outChn & 0x0F);
+    //放大
+    if (inFreq < outFreq)
+    {
+        div = (float)inFreq / outFreq; //用小的除以大的
+        while (inP.S16 < inPEnd.S16)
+        {
+            if (chnMode == 0x11) //单声道->单声道
+            {
+                *outP.S16++ = *inP.S16;
+            }
+            else if (chnMode == 0x12) //单声道->双声道
+            {
+                *outP.S16++ = *inP.S16;
+                *outP.S16++ = *inP.S16;
+            }
+            else if (chnMode == 0x21) //双声道->单声道
+            {
+                *outP.S16++ = *inP.S16;
+            }
+            else if (chnMode == 0x12) //双声道->双声道
+            {
+                *outP.S32++ = *inP.S32;
+            }
+            divStep += div;
+            if ((int)divStep > 0) //计数满,移动一次
+            {
+                inP.S16 += inChn; //多声道时移动多次
+                divStep -= 1.0;   //清1
+            }
+        }
+    }
+    //缩小
+    else
+    {
+        div = (float)outFreq / inFreq; //用小的除以大的
+        while (inP.S16 < inPEnd.S16)
+        {
+            divStep += div;
+            if ((int)divStep > 0) //计数满,赋值一次
+            {
+                if (chnMode == 0x11) //单声道->单声道
+                {
+                    *outP.S16++ = *inP.S16;
+                }
+                else if (chnMode == 0x12) //单声道->双声道
+                {
+                    *outP.S16++ = *inP.S16;
+                    *outP.S16++ = *inP.S16;
+                }
+                else if (chnMode == 0x21) //双声道->单声道
+                {
+                    *outP.S16++ = *inP.S16;
+                }
+                else if (chnMode == 0x12) //双声道->双声道
+                {
+                    *outP.S32++ = *inP.S32;
+                }
+                divStep -= 1.0; //清1
+            }
+            inP.S16 += inChn; //多声道时移动多次
+        }
+    }
+    return (uint32_t)(outP.U8 - out);
+}
+
 /*******************************************************************************
  * 名称: wmix_console
  * 功能: 重定向输出
@@ -302,25 +466,20 @@ uint8_t *playPkgBuff_get(uint8_t *buff, int delayms)
 void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 {
     WMix_Struct *wmix = wmtp->wmix;
-    WMix_Point src, dist;
     static WMix_Point rwTestSrc = {.U8 = 0}, rwTestHead = {.U8 = 0};
     static uint32_t tick = 0;
-    size_t count, ret;
-    //音频转换中间参数
-    float divCount, divPow;
-    //转换目标格式, "/tmp/wmix", 'I' 共享内存写入音频参数
-    int chn = 1, freq = 8000;
-    //转换后的包大小
-    size_t buffSize2;
+    size_t ret;
 #ifndef WMIX_RECORD_PLAY_SYNC
     //严格录音间隔
     DELAY_INIT;
     //采样时间间隔us
     int intervalUs = WMIX_INTERVAL_MS * 1000 - 2000;
 #endif
-    int frame_size = WMIX_FRAME_SIZE;
     //每包字节数
-    uint8_t buff[WMIX_PKG_SIZE];
+    uint8_t buffSrc[WMIX_PKG_SIZE];
+    //输出到共享内存 "/tmp/wmix", 'I' 的录音数据
+    uint32_t buffSizeDist = 2 * 8000 * WMIX_INTERVAL_MS / 1000;
+    uint8_t buffDist[2 * 8000 * WMIX_INTERVAL_MS / 1000];
 
 #ifdef AEC_SYNC_SAVE_FILE
     static int fd = 0;
@@ -329,10 +488,6 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
     if (fd == 0)
         fd = open(AEC_SYNC_SAVE_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 #endif
-
-    //录音频率和目标频率的比值
-    divPow = (float)(WMIX_FREQ - freq) / freq;
-    divCount = 0;
 
 #ifdef WMIX_RECORD_PLAY_SYNC
     if (wmix->run)
@@ -387,12 +542,12 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
             if (wmix->objAi)
             {
                 //读取一包数据
-                memset(buff, 0, WMIX_PKG_SIZE);
-                ret = wmix_ai_read(wmix->objAi, buff, WMIX_PKG_SIZE);
+                memset(buffSrc, 0, WMIX_PKG_SIZE);
+                ret = wmix_ai_read(wmix->objAi, buffSrc, WMIX_PKG_SIZE);
                 if (ret > 0)
                 {
                     //一包数据进入队列(要求ret == WMIX_PKG_SIZE)
-                    recordPkgBuff_add(buff);
+                    recordPkgBuff_add(buffSrc);
 #if (MAKE_WEBRTC_NS)
                     //噪音抑制
                     if (wmix->webrtcEnable[WR_NS] && WMIX_FREQ <= 32000 && WMIX_FREQ % 8000 == 0)
@@ -404,8 +559,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             //开始转换
                             ns_process(
                                 wmix->webrtcPoint[WR_NS],
-                                (int16_t *)buff,
-                                (int16_t *)buff,
+                                (int16_t *)buffSrc,
+                                (int16_t *)buffSrc,
                                 WMIX_FRAME_NUM);
                         }
                     }
@@ -422,7 +577,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 
 #ifdef AEC_SYNC_SAVE_FILE
                             playPkgBuff_get(playPkgBuff, AEC_INTERVALMS);
-                            pL = (int16_t *)buff;
+                            pL = (int16_t *)buffSrc;
                             pR = (int16_t *)playPkgBuff;
                             for (aec_sync_c = 0; aec_sync_c < WMIX_FRAME_NUM; aec_sync_c++)
                             {
@@ -434,8 +589,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             aec_process2(
                                 wmix->webrtcPoint[WR_AEC],
                                 (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVALMS), //要消除的数据,即 播音数据
-                                (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
-                                (int16_t *)buff,                                          //输出的数据,得 人说话声音
+                                (int16_t *)buffSrc,                                      //混杂的数据,即 播音数据 + 人说话声音
+                                (int16_t *)buffSrc,                                      //输出的数据,得 人说话声音
                                 WMIX_FRAME_NUM,
                                 0); //评估回声时延
                         }
@@ -452,8 +607,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             spx_aec_process(
                                 wmix->webrtcPoint[WR_AEC],
                                 (int16_t *)playPkgBuff_get(playPkgBuff, AEC_INTERVALMS), //要消除的数据,即 播音数据
-                                (int16_t *)buff,                                          //混杂的数据,即 播音数据 + 人说话声音
-                                (int16_t *)buff,                                          //输出的数据,得 人说话声音
+                                (int16_t *)buffSrc,                                      //混杂的数据,即 播音数据 + 人说话声音
+                                (int16_t *)buffSrc,                                      //输出的数据,得 人说话声音
                                 WMIX_FRAME_NUM);
                         }
                     }
@@ -470,8 +625,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                             //开始转换
                             agc_process(
                                 wmix->webrtcPoint[WR_AGC],
-                                (int16_t *)buff,
-                                (int16_t *)buff,
+                                (int16_t *)buffSrc,
+                                (int16_t *)buffSrc,
                                 WMIX_FRAME_NUM);
                         }
                     }
@@ -487,17 +642,17 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                         if (wmix->webrtcPoint[WR_VAD])
                             vad_process(
                                 wmix->webrtcPoint[WR_VAD],
-                                (int16_t *)buff,
+                                (int16_t *)buffSrc,
                                 WMIX_FRAME_NUM);
                     }
 #endif
                     //原始数据写共享内存
-                    wmix_mem_write2((int16_t *)buff, ret / 2);
+                    wmix_mem_write2((int16_t *)buffSrc, ret / 2);
 
                     //自收发测试
                     if (wmix->rwTest)
                     {
-                        rwTestSrc.U8 = buff;
+                        rwTestSrc.U8 = buffSrc;
                         rwTestHead = wmix_load_data(
                             wmix,
                             rwTestSrc,
@@ -516,8 +671,8 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     }
 
                     //转换格式为单声道8000Hz并存到共享内存
-                    RECORD_DATA_TRANSFER();
-                    wmix_mem_write((int16_t *)buff, buffSize2 / 2);
+                    wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, 1, 8000, buffDist);
+                    wmix_mem_write((int16_t *)buffDist, buffSizeDist / 2);
                 }
                 else
                 {
@@ -540,7 +695,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     if (wmix->volumeMic != wmix_ai_vol_get(wmix->objAi))
                         wmix_ai_vol_set(wmix->objAi, wmix->volumeMic);
                     //丢弃一包数据
-                    wmix_ai_read(wmix->objAi, buff, WMIX_PKG_SIZE);
+                    wmix_ai_read(wmix->objAi, buffSrc, WMIX_PKG_SIZE);
 #ifdef WMIX_RECORD_PLAY_SYNC
                     return;
 #else

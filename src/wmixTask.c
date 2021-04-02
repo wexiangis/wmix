@@ -19,26 +19,28 @@
 
 void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
 {
+    //传入参数(目标播放参数)
     char *path = (char *)&wmtp->param[4];
-
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
-
+    //读流
+    ssize_t ret;
     int fd_read;
     uint8_t *buff;
     uint32_t buffSize;
-
+    //载入混音池标记
+    uint32_t tick;
     WMix_Point head, src;
-    ssize_t ret, total = 0;
-    // ssize_t totalWait;
-    uint32_t tick, second = 0, bytes_p_second, bpsCount = 0;
-    uint8_t rdce = ((wmtp->flag >> 8) & 0xFF) + 1, rdceIsMe = 0;
-
-    // int timeout;
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //背景削减: reduce>1时表示别人的削减倍数,reduceSkip标记自己不参与削减
+    uint8_t reduce = ((wmtp->flag >> 8) & 0xFF) + 1, reduceSkip = 0;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordFifo;
 
+    //确认路径和打开流
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
     {
         WMIX_ERR("mkfifo err\r\n");
@@ -47,30 +49,30 @@ void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
     fd_read = open(path, O_RDONLY);
 
     //独占 reduceMode
-    if (rdce > 1 && wmtp->wmix->reduceMode == 1)
+    if (reduce > 1 && wmtp->wmix->reduceMode == 1)
     {
-        wmtp->wmix->reduceMode = rdce;
-        rdceIsMe = 1;
+        wmtp->wmix->reduceMode = reduce;
+        reduceSkip = 1;
     }
     else
-        rdce = 1;
+        reduce = 1;
 
-    bytes_p_second = chn * sample / 8 * freq;
-    buffSize = bytes_p_second;
-    // totalWait = bytes_p_second / 2;
+    //一秒数据量和缓存分配
+    secBytes = chn * sample / 8 * freq;
+    buffSize = secBytes;
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
         printf("<< FIFO-W: %s start >>\n"
                "   通道数: %d\n"
                "   采样位数: %d bit\n"
-               "   采样率: %d Hz\n"
-               "   每秒字节: %d Bytes\n\r\n",
-               path, chn, sample, freq, bytes_p_second);
-
+               "   采样率: %d Hz\n",
+               path, chn, sample, freq);
+    //指针准备
     src.U8 = buff;
     head.U8 = 0;
     tick = 0;
+
     //线程计数
     wmtp->wmix->thread_play += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
@@ -78,95 +80,66 @@ void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
         ret = read(fd_read, buff, buffSize);
         if (ret > 0)
         {
-            //等播放指针赶上写入进度
-            // timeout = 0;
-            // while(wmtp->wmix->run && timeout++ < 200 &&
-            //     loopWord == wmtp->wmix->loopWordFifo &&
-            //     tick > wmtp->wmix->tick &&
-            //     tick - wmtp->wmix->tick > totalWait)
-            //     delayus(5000);
-            //
+            //载入混音池
             head = wmix_load_data(
-                wmtp->wmix,
-                src, ret, freq, chn, sample, head, rdce, &tick);
+                wmtp->wmix, src, ret, freq, chn, sample, head, reduce, &tick);
             if (head.U8 == 0)
                 break;
-
-            bpsCount += ret;
-            total += ret;
             //播放时间
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
+                {
+                    secBytesCount -= secBytes;
+                    second += 1;
                     printf("  FIFO-W: %s %02d:%02d\r\n", path, second / 60, second % 60);
+                }
             }
             continue;
         }
         else if (errno != EAGAIN)
             break;
-
         delayus(5000);
     }
-
     if (wmtp->wmix->debug)
         printf(">> FIFO-W: %s end <<\r\n", path);
-
+    //关闭流和删除fifo文件
     close(fd_read);
-    //删除文件
     remove(path);
-    free(buff);
     //线程计数
     wmtp->wmix->thread_play -= 1;
-
-    if (wmtp->param)
-        free(wmtp->param);
     //关闭 reduceMode
-    if (rdceIsMe)
+    if (reduceSkip)
         wmtp->wmix->reduceMode = 1;
+    //内存回收
+    free(buff);
+    free(wmtp->param);
     free(wmtp);
 }
 
 void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
 {
+    //传入参数(目标录制参数)
     char *path = (char *)&wmtp->param[4];
-
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
-
-    size_t buffSize, buffSize2, frame_size, count;
-    WMix_Point src, dist;
-    ssize_t ret, total = 0;
-    uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
-
-    float divCount, divPow;
+    //写流
+    ssize_t ret;
     int fd_write;
-    int16_t record_addr = -1;
-#if (WMIX_CHN == 1)
-    uint8_t buff[1024];
-#else
-    uint8_t buff[512];
-#endif
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordFifo;
 
-    if (freq > WMIX_FREQ)
-    {
-        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
-        return;
-    }
-    if (sample != WMIX_SAMPLE)
-    {
-        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
-        return;
-    }
-    if (chn != 1 && chn != 2)
-    {
-        WMIX_ERR("channels err, must be 1 or 2\r\n");
-        return;
-    }
+    //确认路径和打开流
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
     {
         WMIX_ERR("mkfifo err\r\n");
@@ -174,52 +147,49 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
     }
     fd_write = open(path, O_WRONLY);
 
-    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_FRAME_SIZE;
-#if (WMIX_CHN == 1)
-    buffSize = sizeof(buff) / 2;
-#else
-    buffSize = sizeof(buff);
-#endif
-    divPow = (float)(WMIX_FREQ - freq) / freq;
-    divCount = 0;
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,10包作为最小单位
+    buffSizeSrc = WMIX_PKG_SIZE * 10;
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
+    buffSizeDist = wmix_len_of_out(WMIX_CHN, WMIX_FREQ, buffSizeSrc, chn, freq);
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+
     if (wmtp->wmix->debug)
         printf("<< FIFO-R: %s record >>\n"
                "   通道数: %d\n"
                "   采样位数: %d bit\n"
                "   采样率: %d Hz\n"
-               "   每秒字节: %d Bytes\n"
                "   时间长度: -- sec\n\r\n",
-               path, chn, sample, freq, bytes_p_second2);
+               path, chn, sample, freq);
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
     {
-        ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, false) * 2;
+        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, false) * 2;
         if (ret > 0)
         {
-            bpsCount += ret;
-            total += ret;
             //录制时间
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
+                {
+                    secBytesCount -= secBytes;
+                    second += 1;
                     printf("  FIFO-R: %s %02d:%02d\r\n", path, second / 60, second % 60);
+                }
             }
-            if (!wmtp->wmix->run)
-                break;
-            //不同频率和通道数的数据处理
-            RECORD_DATA_TRANSFER();
-            ret = write(fd_write, buff, buffSize2);
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
+            //输出
+            ret = write(fd_write, buffDist, ret);
             if (ret < 0 && errno != EAGAIN)
                 break;
         }
         else if (ret < 0)
         {
-            WMIX_ERR2("read err %d\r\n", (int)ret);
+            WMIX_ERR2("read mem err %d\r\n", (int)ret);
             break;
         }
         else
@@ -228,59 +198,46 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
             fsync(fd_write);
         }
     }
-    close(fd_write);
     if (wmtp->wmix->debug)
         printf(">> FIFO-R: %s end <<\r\n", path);
-    //删除文件
+    //关闭流和删除fifo文件
+    close(fd_write);
     remove(path);
     //线程计数
     wmtp->wmix->thread_record -= 1;
-    if (wmtp->param)
-        free(wmtp->param);
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
     free(wmtp);
 }
 
 #if (MAKE_AAC)
 void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp)
 {
+    //传入参数(目标录制参数)
     char *path = (char *)&wmtp->param[4];
-
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
-
-    size_t buffSize, buffSize2, frame_size, count, buffSizeR;
-    WMix_Point src, dist;
-    ssize_t ret, total = 0;
-    uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
-
-    float divCount, divPow;
+    //写流
+    ssize_t ret;
     int fd_write;
-    int16_t record_addr = -1;
-
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
+    //aac编码用
     void *aacEnc = NULL;
-    uint8_t *buff, *buff2;
-    uint8_t *pBuff2_S, *pBuff2_E;
     uint8_t aacBuff[4096];
-
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordFifo;
 
-    if (freq > WMIX_FREQ)
-    {
-        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
-        return;
-    }
-    if (sample != WMIX_SAMPLE)
-    {
-        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
-        return;
-    }
-    if (chn != 1 && chn != 2)
-    {
-        WMIX_ERR("channels err, must be 1 or 2\r\n");
-        return;
-    }
+    //确认路径和打开流
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
     {
         WMIX_ERR("mkfifo err\r\n");
@@ -288,213 +245,164 @@ void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp)
     }
     fd_write = open(path, O_WRONLY);
 
-    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_FRAME_SIZE;
-
-    buffSize = WMIX_CHN * WMIX_SAMPLE / 8 * 1024;
-    buffSizeR = chn * sample / 8 * 1024;
-
-    buff = malloc(2 * WMIX_SAMPLE / 8 * 1024); //原始数据
-    buff2 = malloc(buffSizeR * 2); //变频后的原始数据
-    pBuff2_S = pBuff2_E = buff2;
-
-    divPow = (float)(WMIX_FREQ - freq) / freq;
-    divCount = 0;
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,配合aac编码需要,设置输出格式
+    buffSizeDist = 1024 * chn * sample / 8;
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
-        printf("<< FIFO-R: %s aac >>\n"
+        printf("<< FIFO-AAC: %s aac >>\n"
                "   通道数: %d\n"
                "   采样位数: %d bit\n"
-               "   采样率: %d Hz\n"
-               "   每秒字节: %d Bytes\n"
-               "   时间长度: -- sec\n\r\n",
-               path, chn, sample, freq, bytes_p_second2);
+               "   采样率: %d Hz\n",
+               path, chn, sample, freq);
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
     {
-        ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
+        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         if (ret > 0)
         {
-            bpsCount += ret;
-            total += ret;
             //录制时间
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
-                    printf("  RECORD-AAC: %s %02d:%02d\r\n", path, second / 60, second % 60);
-            }
-            if (!wmtp->wmix->run)
-                break;
-            //不同频率和通道数的数据处理
-            RECORD_DATA_TRANSFER();
-            memcpy(pBuff2_E, buff, buffSize2);
-            pBuff2_E += buffSize2;
-            while (pBuff2_E - pBuff2_S >= buffSizeR)
-            {
-                ret = aac_encode(&aacEnc, pBuff2_S, buffSizeR, aacBuff, 4096, chn, freq);
-                if (ret > 0)
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
                 {
-                    ret = write(fd_write, aacBuff, ret);
-                    if (ret < 0 && errno != EAGAIN)
-                    {
-                        WMIX_ERR2("write err %d\r\n", errno);
-                        break;
-                    }
+                    secBytesCount -= secBytes;
+                    second += 1;
+                    printf("  FIFO-AAC: %s %02d:%02d\r\n", path, second / 60, second % 60);
                 }
-                pBuff2_S += buffSizeR;
             }
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
+            //编码
+            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freq);
+            //输出
+            ret = write(fd_write, aacBuff, ret);
             if (ret < 0 && errno != EAGAIN)
                 break;
-
-            memcpy(buff2, pBuff2_S, (size_t)(pBuff2_E - pBuff2_S));
-            pBuff2_E = &buff2[pBuff2_E - pBuff2_S];
-            pBuff2_S = buff2;
         }
         else if (ret < 0)
         {
-            WMIX_ERR2("read err %d\r\n", (int)ret);
+            WMIX_ERR2("read mem err %d\r\n", (int)ret);
             break;
         }
     }
-    close(fd_write);
-    free(buff);
-    free(buff2);
     if (wmtp->wmix->debug)
-        printf(">> FIFO-R: %s end <<\r\n", path);
-    //删除文件
+        printf(">> FIFO-AAC: %s end <<\r\n", path);
+    //关闭aac编码器
+    if (aacEnc)
+        aac_encodeRelease(&aacEnc);
+    //关闭流和删除fifo文件
+    close(fd_write);
     remove(path);
     //线程计数
     wmtp->wmix->thread_record -= 1;
-    if (aacEnc)
-        aac_encodeRelease(&aacEnc);
-    if (wmtp->param)
-        free(wmtp->param);
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
     free(wmtp);
 }
 #endif
 
 void wmix_thread_record_wav(WMixThread_Param *wmtp)
 {
+    //传入参数(目标录音参数)
     char *path = (char *)&wmtp->param[6];
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
-    uint16_t duration_time = (wmtp->param[4] << 8) | wmtp->param[5];
-    size_t buffSize, buffSize2, frame_size, count;
-    WMix_Point src, dist;
-    ssize_t ret, total = 0;
-    uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0, TOTAL;
-    float divCount, divPow;
-    int fd;
+    uint16_t time = (wmtp->param[4] << 8) | wmtp->param[5];
+    //读流
+    ssize_t ret;
+    int fd_write;
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
     WAVContainer_t wav;
-    int16_t record_addr = -1;
-#if (WMIX_CHN == 1)
-    uint8_t buff[1024];
-#else
-    uint8_t buff[512];
-#endif
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
 
-    if (freq > WMIX_FREQ)
-    {
-        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
-        return;
-    }
-    if (sample != WMIX_SAMPLE)
-    {
-        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
-        return;
-    }
-    if (chn != 1 && chn != 2)
-    {
-        WMIX_ERR("channels err, must be 1 or 2\r\n");
-        return;
-    }
-    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd <= 0)
+    fd_write = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd_write < 1)
     {
         WMIX_ERR2("open %s err\r\n", path);
         return;
     }
-    WAV_Params(&wav, duration_time, chn, sample, freq);
-    if (WAV_WriteHeader(fd, &wav) < 0)
+    //wav头
+    WAV_Params(&wav, time, chn, sample, freq);
+    if (WAV_WriteHeader(fd_write, &wav) < 0)
     {
-        close(fd);
+        close(fd_write);
         WMIX_ERR("WAV_WriteHeader err\r\n");
         return;
     }
 
-    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_FRAME_SIZE;
-#if (WMIX_CHN == 1)
-    buffSize = sizeof(buff) / 2;
-#else
-    buffSize = sizeof(buff);
-#endif
-    TOTAL = bytes_p_second * duration_time;
-
-    divPow = (float)(WMIX_FREQ - freq) / freq;
-    divCount = 0;
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,5包作为最小单位
+    buffSizeSrc = WMIX_PKG_SIZE * 5;
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
+    buffSizeDist = wmix_len_of_out(WMIX_CHN, WMIX_FREQ, buffSizeSrc, chn, freq);
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
-        printf("<< RECORD-WAV: %s record >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   时间长度: %d sec\n\r\n",
-               path, chn, sample, freq, bytes_p_second2, duration_time);
+        printf("<< RECORD-WAV: %s record >>\n"
+               "   通道数: %d\n"
+               "   采样位数: %d bit\n"
+               "   采样率: %d Hz\n"
+               "   时间长度: %d sec\n\r\n",
+               path, chn, sample, freq, time);
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
-        //最后一帧
-        if (total + buffSize >= TOTAL)
-        {
-            buffSize = TOTAL - total;
-        }
-        ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, false) * 2;
+        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, false) * 2;
         if (ret > 0)
         {
-            bpsCount += ret;
-            total += ret;
-            //录制时间
-            if (bpsCount > bytes_p_second)
+            secBytesCount += ret;
+            if (secBytesCount >= secBytes)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
+                secBytesCount -= secBytes;
+                second += 1;
                 if (wmtp->wmix->debug)
                     printf("  RECORD-WAV: %s %02d:%02d\r\n", path, second / 60, second % 60);
             }
-            if (!wmtp->wmix->run)
-                break;
-            //不同频率和通道数的数据处理
-            RECORD_DATA_TRANSFER();
-            ret = write(fd, buff, buffSize2);
-            if (ret < 0 && errno != EAGAIN)
-            {
-                WMIX_ERR2("write err %d\r\n", errno);
-                break;
-            }
-            if (total >= TOTAL)
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
+            //输出
+            ret = write(fd_write, buffDist, ret);
+            if (ret < 0 || second >= time)
                 break;
         }
         else if (ret < 0)
         {
-            WMIX_ERR2("read err %d\r\n", (int)ret);
+            WMIX_ERR2("read mem err %d\r\n", (int)ret);
             break;
         }
         else
             delayus(5000);
     }
-    close(fd);
     if (wmtp->wmix->debug)
         printf(">> RECORD-WAV: %s end <<\r\n", path);
+    //关闭流
+    close(fd_write);
     //线程计数
     wmtp->wmix->thread_record -= 1;
-    if (wmtp->param)
-        free(wmtp->param);
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
     free(wmtp);
 }
 
@@ -531,193 +439,135 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
 #if (MAKE_AAC)
 void wmix_thread_record_aac(WMixThread_Param *wmtp)
 {
+    //传入参数(目标录制参数)
     char *path = (char *)&wmtp->param[6];
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
-    uint16_t duration_time = (wmtp->param[4] << 8) | wmtp->param[5];
-
-    size_t buffSize, buffSize2, frame_size, count, buffSizeR;
-    WMix_Point src, dist;
-    ssize_t ret, total = 0;
-    uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0, TOTAL;
-    float divCount, divPow;
-    int fd;
-
+    uint16_t time = (wmtp->param[4] << 8) | wmtp->param[5];
+    //写流
+    ssize_t ret;
+    int fd_write;
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
+    //aac编码用
     void *aacEnc = NULL;
-    uint8_t *buff, *buff2, *pBuff2_S, *pBuff2_E;
-    int16_t record_addr = -1;
     uint8_t aacBuff[4096];
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
 
-    if (freq > WMIX_FREQ)
-    {
-        WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
-        return;
-    }
-    if (sample != WMIX_SAMPLE)
-    {
-        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
-        return;
-    }
-    if (chn != 1 && chn != 2)
-    {
-        WMIX_ERR("channels err, must be 1 or 2\r\n");
-        return;
-    }
-    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd <= 0)
+    fd_write = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd_write < 1)
     {
         WMIX_ERR2("open %s err\r\n", path);
         return;
     }
 
-    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_FRAME_SIZE;
-
-    buffSize = WMIX_CHN * WMIX_SAMPLE / 8 * 1024;
-    buffSizeR = chn * sample / 8 * 1024;
-
-    buff = malloc(2 * WMIX_SAMPLE / 8 * 1024);
-    buff2 = malloc(buffSizeR * 2);
-    pBuff2_S = pBuff2_E = buff2;
-
-    TOTAL = bytes_p_second * duration_time;
-
-    divPow = (float)(WMIX_FREQ - freq) / freq;
-    divCount = 0;
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,配合aac编码需要,设置输出格式
+    buffSizeDist = 1024 * chn * sample / 8;
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
-        printf("<< RECORD-AAC: %s record >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   时间长度: %d sec\n\r\n",
-               path, chn, sample, freq, bytes_p_second2, duration_time);
+        printf("<< RECORD-AAC: %s record >>\n"
+               "   通道数: %d\n"
+               "   采样位数: %d bit\n"
+               "   采样率: %d Hz\n"
+               "   时间长度: %d sec %d - %d\n\r\n",
+               path, chn, sample, freq, time, buffSizeSrc, buffSizeDist);
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
-        //最后一帧
-        if (total + buffSize >= TOTAL)
-            buffSize = TOTAL - total;
-
-        ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
+        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         if (ret > 0)
         {
-            bpsCount += ret;
-            total += ret;
             //录制时间
-            if (bpsCount > bytes_p_second)
+            secBytesCount += ret;
+            if (secBytesCount >= secBytes)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
+                secBytesCount -= secBytes;
+                second += 1;
                 if (wmtp->wmix->debug)
                     printf("  RECORD-AAC: %s %02d:%02d\r\n", path, second / 60, second % 60);
             }
-            if (!wmtp->wmix->run)
-                break;
-            //不同频率和通道数的数据处理
-            RECORD_DATA_TRANSFER();
-            memcpy(pBuff2_E, buff, buffSize2);
-            pBuff2_E += buffSize2;
-
-            while (pBuff2_E - pBuff2_S >= buffSizeR)
-            {
-                ret = aac_encode(&aacEnc, pBuff2_S, buffSizeR, aacBuff, 4096, chn, freq);
-                if (ret > 0)
-                {
-                    ret = write(fd, aacBuff, ret);
-                    if (ret < 0 && errno != EAGAIN)
-                    {
-                        WMIX_ERR2("write err %d\r\n", errno);
-                        break;
-                    }
-                }
-                pBuff2_S += buffSizeR;
-            }
-            if (ret < 0 && errno != EAGAIN)
-                break;
-
-            memcpy(buff2, pBuff2_S, (size_t)(pBuff2_E - pBuff2_S));
-            pBuff2_E = &buff2[pBuff2_E - pBuff2_S];
-            pBuff2_S = buff2;
-
-            if (total >= TOTAL)
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
+            //编码
+            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freq);
+            //输出
+            ret = write(fd_write, aacBuff, ret);
+            if (ret < 0 || second >= time)
                 break;
         }
         else if (ret < 0)
         {
-            WMIX_ERR2("read err %d\r\n", (int)ret);
+            WMIX_ERR2("read mem err %d\r\n", (int)ret);
             break;
         }
     }
-    close(fd);
-    free(buff);
-    free(buff2);
     if (wmtp->wmix->debug)
         printf(">> RECORD-AAC: %s end <<\r\n", path);
-    //线程计数
-    wmtp->wmix->thread_record -= 1;
+    //关闭aac编码器
     if (aacEnc)
         aac_encodeRelease(&aacEnc);
-    if (wmtp->param)
-        free(wmtp->param);
+    //关闭流和删除fifo文件
+    close(fd_write);
+    //线程计数
+    wmtp->wmix->thread_record -= 1;
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
     free(wmtp);
 }
 
 void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
     FILE *fp;
     WMix_Msg msg;
-
+    //传入参数(目标录制参数)
+    char *url = (char *)&wmtp->param[11];
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
-
-    size_t buffSize, buffSizeR, buffSize2, frame_size, count;
-    WMix_Point src, dist;
-    ssize_t ret, total = 0;
-    uint32_t second = 0, bytes_p_second, bytes_p_second2, bpsCount = 0;
-    float divCount, divPow;
-
-    int16_t record_addr = -1;
-    uint8_t *buff, *buff2, *pBuff2_S, *pBuff2_E;
+    //写流
+    ssize_t ret;
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
+    //aac编码用
     void *aacEnc = NULL;
-    uint8_t aacbuff[4096];
-
-    DELAY_INIT;
-
+    uint8_t aacBuff[4096];
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //rtp
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
     long ctrlType = 0;
-
+    DELAY_INIT;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
 
-    //参数检查,是否在允许的变参范围内
-    // if (freq > WMIX_FREQ)
-    // {
-    //     WMIX_ERR2("freq err, %dHz > %dHz(machine)\r\n", freq, WMIX_FREQ);
-    //     return;
-    // }
-    if (sample != WMIX_SAMPLE)
-    {
-        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
-        return;
-    }
-    if (chn != 1 && chn != 2)
-    {
-        WMIX_ERR("channels err, must be 1 or 2\r\n");
-        return;
-    }
     //初始化rtp
-    rcs = rtpChain_get(path, port, true, bindMode);
+    rcs = rtpChain_get(url, port, true, bindMode);
     if (!rcs)
     {
         WMIX_ERR("rtpChain_get: err\r\n");
@@ -725,7 +575,7 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_AAC, 1, 0, 0, 0x32411);
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
+    msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -734,7 +584,7 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
         //写节点描述
         if ((fp = fopen(msgPath, "w")))
         {
-            fprintf(fp, "rtp send aac %s:%d", path, port);
+            fprintf(fp, "rtp send aac %s:%d", url, port);
             fclose(fp);
         }
         //创建消息
@@ -746,31 +596,24 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     //生成sdp文件
     rtp_create_sdp(
         "/tmp/record-aac.sdp",
-        path, port, chn, freq,
+        url, port, chn, freq,
         RTP_PAYLOAD_TYPE_AAC);
 
-    bytes_p_second = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    bytes_p_second2 = chn * sample / 8 * freq;
-    frame_size = WMIX_FRAME_SIZE;
-    //每次从ai读取字节数
-    buffSize = WMIX_CHN * WMIX_SAMPLE / 8 * 1024;
-    buffSizeR = chn * sample / 8 * 1024;
-
-    buff = malloc(2 * WMIX_SAMPLE / 8 * 1024);
-    buff2 = malloc(buffSizeR * 2);
-    pBuff2_S = pBuff2_E = buff2;
-
-    divPow = (float)(WMIX_FREQ - freq) / freq;
-    divCount = 0;
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,配合aac编码需要,设置输出格式
+    buffSizeDist = 1024 * chn * sample / 8;
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
         printf(
             "<< RTP-SEND-AAC: %s:%d start >>\r\n"
             "   通道数: %d\r\n"
             "   采样位数: %d bit\r\n"
-            "   采样率: %d Hz\r\n"
-            "   每秒字节: %d Bytes\r\n",
-            path, port, chn, sample, freq, bytes_p_second2);
+            "   采样率: %d Hz\r\n",
+            url, port, chn, sample, freq);
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRtp)
@@ -780,62 +623,50 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
 
         DELAY_RESET();
 
-        ret = wmix_mem_read2((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
+        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         if (ret > 0)
         {
             //使用0数据
             if (ctrlType == WCT_SILENCE)
-                memset(buff, 0, ret);
+                memset(buffSrc, 0, ret);
             //录制时间
-            bpsCount += ret;
-            total += ret;
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
-                    printf("  RTP-SEND-AAC: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
-            }
-            if (!wmtp->wmix->run)
-                break;
-            //不同频率和通道数的数据处理
-            RECORD_DATA_TRANSFER();
-
-            memcpy(pBuff2_E, buff, buffSize2);
-            pBuff2_E += buffSize2;
-
-            while (pBuff2_E - pBuff2_S >= buffSizeR)
-            {
-                ret = aac_encode(&aacEnc, pBuff2_S, buffSizeR, aacbuff, sizeof(aacbuff), chn, freq);
-                if (ret > 0)
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
                 {
-                    ret -= 7;
-                    memcpy(&rtpPacket.payload[4], &aacbuff[7], ret);
-                    pthread_mutex_lock(&rcs->lock);
-                    //bindMode时,作为主机的一端必须先收到数据才开始发送数据
-                    // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
-                    //     ;
-                    // else
-                    ret = rtp_send(rcs->ss, &rtpPacket, ret);
-                    pthread_mutex_unlock(&rcs->lock);
-                    if (ret < 0)
-                    {
-                        // WMIX_ERR("rtp_send err !!\r\n");
-                        delayus(1000000);
-                        //重连
-                        rtpChain_reconnect(rcs);
-                        break;
-                    }
-                    //理论上无须延时,阻塞取数据足矣
-                    DELAY_US(18000);
+                    secBytesCount -= secBytes;
+                    second += 1;
+                    printf("  RTP-SEND-AAC: %s %02d:%02d\r\n", url, second / 60, second % 60);
                 }
-                pBuff2_S += buffSizeR;
             }
-            if (ret < 0)
-                break;
-            memcpy(buff2, pBuff2_S, (size_t)(pBuff2_E - pBuff2_S));
-            pBuff2_E = &buff2[pBuff2_E - pBuff2_S];
-            pBuff2_S = buff2;
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
+            //编码
+            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freq);
+            //输出
+            if (ret > 7)
+            {
+                ret -= 7;
+                memcpy(&rtpPacket.payload[4], &aacBuff[7], ret);
+                pthread_mutex_lock(&rcs->lock);
+                //bindMode时,作为主机的一端必须先收到数据才开始发送数据
+                // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
+                //     ;
+                // else
+                ret = rtp_send(rcs->ss, &rtpPacket, ret);
+                pthread_mutex_unlock(&rcs->lock);
+                if (ret < 0)
+                {
+                    // WMIX_ERR("rtp_send err !!\r\n");
+                    delayus(1000000);
+                    //重连
+                    rtpChain_reconnect(rcs);
+                    break;
+                }
+                //理论上无须延时,阻塞取数据足矣
+                DELAY_US(18000);
+            }
         }
         else if (ret < 0)
         {
@@ -844,74 +675,76 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
         }
     }
     if (wmtp->wmix->debug)
-        printf(">> RTP-SEND-AAC: %s:%d end <<\r\n", path, port);
-    //线程计数
-    wmtp->wmix->thread_record -= 1;
-
+        printf(">> RTP-SEND-AAC: %s:%d end <<\r\n", url, port);
+    //关闭aac编码器
+    if (aacEnc)
+        aac_encodeRelease(&aacEnc);
+    //释放rtp链表
+    rtpChain_release(rcs, true);
+    //关闭流和删除fifo文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
-
-    free(buff);
-    free(buff2);
-    rtpChain_release(rcs, true);
-
-    if (aacEnc)
-        aac_encodeRelease(&aacEnc);
-    if (wmtp->param)
-        free(wmtp->param);
+    //线程计数
+    wmtp->wmix->thread_record -= 1;
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
     free(wmtp);
 }
 
 void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
     FILE *fp;
     WMix_Msg msg;
-
+    //传入参数(目标播放参数)
+    char *url = (char *)&wmtp->param[11];
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
-    uint32_t bytes_p_second;
-    int chnInt, freqInt; //用于decode参数
-
-    int ret = 0;
-    uint8_t buff[8192];
+    //读流
+    ssize_t ret;
+    uint8_t *buff;
+    uint32_t buffSize;
+    //载入混音池标记
+    uint32_t tick;
     WMix_Point head, src;
-    uint32_t tick, total = 0;
-    uint32_t second = 0, bpsCount = 0;
-    uint8_t rdce = ((wmtp->flag >> 8) & 0xFF) + 1, rdceIsMe = 0;
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //背景削减: reduce>1时表示别人的削减倍数,reduceSkip标记自己不参与削减
+    uint8_t reduce = ((wmtp->flag >> 8) & 0xFF) + 1, reduceSkip = 0;
     //aac解码句柄
     void *aacDec = NULL;
     int datUse = 0;
+    int chnInt, freqInt; //用于decode参数
     uint8_t aacBuff[4096];
-
+    //rtp
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
     int intervalUs = 10000;
-
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
 
     //初始化rtp
-    rcs = rtpChain_get(path, port, false, bindMode);
+    rcs = rtpChain_get(url, port, false, bindMode);
     if (!rcs)
     {
         WMIX_ERR("rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
+    msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -920,7 +753,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
         //写节点描述
         if ((fp = fopen(msgPath, "w")))
         {
-            fprintf(fp, "rtp recv aac %s:%d", path, port);
+            fprintf(fp, "rtp recv aac %s:%d", url, port);
             fclose(fp);
         }
         //创建消息
@@ -929,33 +762,37 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
     }
     else
         msgPath = NULL;
+
     //独占 reduceMode
-    if (rdce > 1 && wmtp->wmix->reduceMode == 1)
+    if (reduce > 1 && wmtp->wmix->reduceMode == 1)
     {
-        wmtp->wmix->reduceMode = rdce;
-        rdceIsMe = 1;
+        wmtp->wmix->reduceMode = reduce;
+        reduceSkip = 1;
     }
     else
-        rdce = 1;
-    //默认缓冲区大小设为1秒字播放字节数
-    bytes_p_second = chn * sample / 8 * freq;
-    //
+        reduce = 1;
+
+    //一秒数据量和缓存分配
+    secBytes = chn * sample / 8 * freq;
+    buffSize = wmix_len_of_out(chn, freq, chn * sample / 8 * 1024, WMIX_CHN, WMIX_FREQ);
+    buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
+
     if (wmtp->wmix->debug)
         printf(
             "<< RTP-RECV-AAC: %s:%d start >>\r\n"
             "   通道数: %d\r\n"
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
-            path, port, chn, sample, freq);
+            url, port, chn, sample, freq);
 
     src.U8 = buff;
     head.U8 = 0;
     tick = 0;
     chnInt = chn;
     freqInt = freq;
+
     //线程计数
     wmtp->wmix->thread_play += 1;
-
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRtp)
     {
         //msg 检查
@@ -964,32 +801,35 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
         pthread_mutex_lock(&rcs->lock);
         ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
         pthread_mutex_unlock(&rcs->lock);
+
         if (ret > 0 && retSize > 0)
         {
+            //自创建aac头(rtp不传输aac头)并组装数据
             aac_createHeader(aacBuff, chnInt, freqInt, 0x7FF, retSize);
             memcpy(&aacBuff[7], &rtpPacket.payload[4], retSize);
+            //开始解码
             ret = aac_decode(
                 &aacDec,
                 aacBuff, retSize + 7,
                 buff, &datUse,
                 &chnInt, &freqInt);
             if (ret < 0)
-                WMIX_ERR2("aac_decode err %d !!\r\n", ret);
+                WMIX_ERR2("aac_decode err %d !!\r\n", (int)ret);
             //自动纠正参数(功能有限)
             if (chnInt != chn || freqInt != freq)
             {
                 chn = chnInt;
                 freq = freqInt;
                 //默认缓冲区大小设为1秒字播放字节数
-                bytes_p_second = chn * sample / 8 * freq;
-                //
+                secBytes = chn * sample / 8 * freq;
+
                 if (wmtp->wmix->debug)
                     printf(
                         "<< RTP-RECV-AAC: %s:%d start >>\r\n"
                         "   通道数: %d\r\n"
                         "   采样位数: %d bit\r\n"
                         "   采样率: %d Hz\r\n",
-                        path, port, chn, sample, freq);
+                        url, port, chn, sample, freq);
             }
             recv_timeout = 0;
         }
@@ -1018,105 +858,87 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
             //使用0数据
             if (ctrlType == WCT_SILENCE)
                 memset(buff, 0, ret);
-
-            if (!wmtp->wmix->run)
-                break;
             //写入循环缓冲区
             head = wmix_load_data(
                 wmtp->wmix,
                 src, ret,
                 freq,
                 chn,
-                sample, head, rdce, &tick);
-            //写入的总字节数统计
-            bpsCount += ret;
-            total += ret;
+                sample, head, reduce, &tick);
             //播放时间
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
-                    printf("  RTP-RECV-AAC: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
+                {
+                    secBytesCount -= secBytes;
+                    second += 1;
+                    printf("  RTP-RECV-AAC: %s %02d:%02d\r\n", url, second / 60, second % 60);
+                }
             }
             continue;
         }
         else
             delayus(intervalUs);
     }
-
     if (wmtp->wmix->debug)
-        printf(">> RTP-RECV-AAC: %s:%d end <<\r\n", path, port);
+        printf(">> RTP-RECV-AAC: %s:%d end <<\r\n", url, port);
     //删除文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
-    rtpChain_release(rcs, false);
+    //关闭解码器
     if (aacDec)
         aac_decodeRelease(&aacDec);
+    //释放rtp链表
+    rtpChain_release(rcs, false);
     //线程计数
     wmtp->wmix->thread_play -= 1;
-
-    if (wmtp->param)
-        free(wmtp->param);
     //关闭 reduceMode
-    if (rdceIsMe)
+    if (reduceSkip)
         wmtp->wmix->reduceMode = 1;
+    //内存回收
+    free(buff);
+    free(wmtp->param);
     free(wmtp);
 }
 #endif //if(MAKE_AAC)
 
 void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
     FILE *fp;
     WMix_Msg msg;
-
+    //传入参数(目标录制参数)
+    char *url = (char *)&wmtp->param[11];
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
-
-    size_t buffSize;
-    // WMix_Point src, dist;
-    ssize_t ret = 0, total = 0;
-    uint32_t second = 0, bytes_p_second, bpsCount = 0;
-
+    //写流
+    ssize_t ret;
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //rtp
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
     long ctrlType = 0;
-
     DELAY_INIT2;
-
-    int16_t record_addr = -1;
-    uint8_t *buff;
-
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
-    //参数检查,是否在允许的变参范围内
-    if (freq != 8000)
-    {
-        WMIX_ERR("freq warnning, must be 8000Hz \r\n");
-        freq = 8000;
-    }
-    if (sample != WMIX_SAMPLE)
-    {
-        WMIX_ERR2("sample err, must be %dbit(machine)\r\n", WMIX_SAMPLE);
-        return;
-    }
-    if (chn != 1 && chn != 2)
-    {
-        WMIX_ERR("channels err, must be 1 or 2\r\n");
-        return;
-    }
+
     //初始化rtp
-    rcs = rtpChain_get(path, port, true, bindMode);
+    rcs = rtpChain_get(url, port, true, bindMode);
     if (!rcs)
     {
         WMIX_ERR("rtpChain_get: err\r\n");
@@ -1124,7 +946,7 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
     }
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_PCMA, 1, 0, 0, 0);
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
+    msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -1133,7 +955,7 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
         //写节点描述
         if ((fp = fopen(msgPath, "w")))
         {
-            fprintf(fp, "rtp send pcma %s:%d", path, port);
+            fprintf(fp, "rtp send pcma %s:%d", url, port);
             fclose(fp);
         }
         //创建消息
@@ -1145,13 +967,16 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
     //生成sdp文件
     rtp_create_sdp(
         "/tmp/record.sdp",
-        path, port, chn, freq,
+        url, port, chn, freq,
         RTP_PAYLOAD_TYPE_PCMA);
 
-    bytes_p_second = chn * sample / 8 * freq;
-    //每次从ai读取字节数
-    buffSize = 320;
-    buff = malloc(2 * WMIX_SAMPLE / 8 * 1024);
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,配合aac编码需要,设置输出格式
+    buffSizeDist = 1024 * chn * sample / 8;
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
         printf(
@@ -1159,7 +984,7 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             "   通道数: %d\r\n"
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
-            path, port, chn, sample, freq);
+            url, port, chn, sample, freq);
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
@@ -1171,20 +996,23 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             DELAY_US2(19500, 50);
             //使用0数据
             if (ctrlType == WCT_SILENCE)
-                memset(buff, 0, ret);
+                memset(buffSrc, 0, ret);
             //录制时间
-            bpsCount += ret;
-            total += ret;
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
-                    printf("  RTP-SEND-PCM: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
+                {
+                    secBytesCount -= secBytes;
+                    second += 1;
+                    printf("  RTP-SEND-PCM: %s %02d:%02d\r\n", url, second / 60, second % 60);
+                }
             }
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
             //把buff数据转换后存到rtpPacket.payload
             //注意参数ret是按char计算长度,返回ret都是按int16计算的长度
-            ret = PCM2G711a((char *)buff, (char *)rtpPacket.payload, ret, 0);
+            ret = PCM2G711a((char *)buffDist, (char *)rtpPacket.payload, ret, 0);
             rtpPacket.rtpHeader.timestamp += ret;
             pthread_mutex_lock(&rcs->lock);
             //bindMode时,作为主机的一端必须先收到数据才开始发送数据
@@ -1203,70 +1031,73 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             }
         }
         //发完数据,趁空闲立即取数据
-        ret = wmix_mem_read((int16_t *)buff, buffSize / 2, &record_addr, true) * 2;
+        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         //msg 检查
         WMIX_RTP_CTRL_MSG_RECV("RTP-SEND-PCM");
     }
-
     if (wmtp->wmix->debug)
-        printf(">> RTP-SEND-PCM: %s:%d end <<\r\n", path, port);
-    //线程计数
-    wmtp->wmix->thread_record -= 1;
-
+        printf(">> RTP-SEND-PCM: %s:%d end <<\r\n", url, port);
+    //释放rtp链表
+    rtpChain_release(rcs, true);
+    //关闭流和删除fifo文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
-    rtpChain_release(rcs, true);
-
-    if (wmtp->param)
-        free(wmtp->param);
+    //线程计数
+    wmtp->wmix->thread_record -= 1;
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
     free(wmtp);
 }
 
 void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
 {
-    char *path = (char *)&wmtp->param[11];
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
     FILE *fp;
     WMix_Msg msg;
-
+    //传入参数(目标播放参数)
+    char *url = (char *)&wmtp->param[11];
     uint8_t chn = wmtp->param[0];
     uint8_t sample = wmtp->param[1];
     uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
     uint16_t port = (wmtp->param[4] << 8) | wmtp->param[5];
     bool bindMode = wmtp->param[6] ? true : false;
-    // int reserve = (wmtp->param[7] << 24) | (wmtp->param[8] << 16) | (wmtp->param[9] << 8) | wmtp->param[10];
-    uint32_t bytes_p_second;
-
-    int ret = 0;
-    uint8_t buff[1024];
+    //读流
+    ssize_t ret;
+    uint8_t *buff;
+    uint32_t buffSize;
+    //载入混音池标记
+    uint32_t tick;
     WMix_Point head, src;
-    uint32_t tick, total = 0;
-    uint32_t second = 0, bpsCount = 0;
-    uint8_t rdce = ((wmtp->flag >> 8) & 0xFF) + 1, rdceIsMe = 0;
-
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //背景削减: reduce>1时表示别人的削减倍数,reduceSkip标记自己不参与削减
+    uint8_t reduce = ((wmtp->flag >> 8) & 0xFF) + 1, reduceSkip = 0;
+    //rtp
     RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
-    int intervalUs = 8000;
-
+    int intervalUs = 10000;
+    //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
 
     //初始化rtp
-    rcs = rtpChain_get(path, port, false, bindMode);
+    rcs = rtpChain_get(url, port, false, bindMode);
     if (!rcs)
     {
         WMIX_ERR("rtpChain_get: err\r\n");
         return;
     }
     //初始化消息
-    msgPath = (char *)&wmtp->param[strlen(path) + 11 + 1];
+    msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
@@ -1275,7 +1106,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
         //写节点描述
         if ((fp = fopen(msgPath, "w")))
         {
-            fprintf(fp, "rtp recv pcma %s:%d", path, port);
+            fprintf(fp, "rtp recv pcma %s:%d", url, port);
             fclose(fp);
         }
         //创建消息
@@ -1284,16 +1115,20 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
     }
     else
         msgPath = NULL;
+
     //独占 reduceMode
-    if (rdce > 1 && wmtp->wmix->reduceMode == 1)
+    if (reduce > 1 && wmtp->wmix->reduceMode == 1)
     {
-        wmtp->wmix->reduceMode = rdce;
-        rdceIsMe = 1;
+        wmtp->wmix->reduceMode = reduce;
+        reduceSkip = 1;
     }
     else
-        rdce = 1;
-    //默认缓冲区大小设为1秒字播放字节数
-    bytes_p_second = chn * sample / 8 * freq;
+        reduce = 1;
+
+    //一秒数据量和缓存分配
+    secBytes = chn * sample / 8 * freq;
+    buffSize = wmix_len_of_out(chn, freq, chn * sample / 8 * 1024, WMIX_CHN, WMIX_FREQ);
+    buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
         printf(
@@ -1301,7 +1136,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
             "   通道数: %d\r\n"
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
-            path, port, chn, sample, freq);
+            url, port, chn, sample, freq);
 
     src.U8 = buff;
     head.U8 = 0;
@@ -1318,6 +1153,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
         pthread_mutex_lock(&rcs->lock);
         ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
         pthread_mutex_unlock(&rcs->lock);
+
         if (ret > 0 && retSize > 0)
         {
             ret = G711a2PCM((char *)rtpPacket.payload, (char *)buff, retSize, 0);
@@ -1354,17 +1190,17 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
                 src, ret,
                 freq,
                 chn,
-                sample, head, rdce, &tick);
-            //写入的总字节数统计
-            bpsCount += ret;
-            total += ret;
+                sample, head, reduce, &tick);
             //播放时间
-            if (bpsCount > bytes_p_second)
+            if (wmtp->wmix->debug)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
-                if (wmtp->wmix->debug)
-                    printf("  RTP-RECV-PCM: %s:%d %02d:%02d\r\n", path, port, second / 60, second % 60);
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
+                {
+                    secBytesCount -= secBytes;
+                    second += 1;
+                    printf("  RTP-RECV-PCM: %s %02d:%02d\r\n", url, second / 60, second % 60);
+                }
             }
             continue;
         }
@@ -1372,21 +1208,22 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
             delayus(intervalUs);
     }
     if (wmtp->wmix->debug)
-        printf(">> RTP-RECV-PCM: %s:%d end <<\r\n", path, port);
+        printf(">> RTP-RECV-PCM: %s:%d end <<\r\n", url, port);
     //删除文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
+    //释放rtp链表
     rtpChain_release(rcs, false);
     //线程计数
     wmtp->wmix->thread_play -= 1;
-
-    if (wmtp->param)
-        free(wmtp->param);
     //关闭 reduceMode
-    if (rdceIsMe)
+    if (reduceSkip)
         wmtp->wmix->reduceMode = 1;
+    //内存回收
+    free(buff);
+    free(wmtp->param);
     free(wmtp);
 }
 
@@ -1408,9 +1245,9 @@ void wmix_task_play_wav(
     WMix_Point src, head;
     //播放计时
     uint32_t tick, total = 0, totalWait;
-    uint32_t second = 0, bpsCount = 0;
+    uint32_t second = 0, secBytesCount = 0;
     //背景消减和重复播放延时
-    uint8_t rdce = reduce + 1, rdceIsMe = 0;
+    uint8_t reduceSkip = 0;
     uint16_t repeat = (uint16_t)repeatInterval * 10;
     //消息通信
     WMix_Msg msg;
@@ -1453,13 +1290,14 @@ void wmix_task_play_wav(
             wmix->tick,
             msg_fd);
     //独占 reduceMode
-    if (rdce > 1 && wmix->reduceMode == 1)
+    reduce += 1;
+    if (reduce > 1 && wmix->reduceMode == 1)
     {
-        wmix->reduceMode = rdce;
-        rdceIsMe = 1;
+        wmix->reduceMode = reduce;
+        reduceSkip = 1;
     }
     else
-        rdce = 1;
+        reduce = 1;
     //默认缓冲区大小设为1秒字播放字节数
     buffSize = wav.format.bytes_p_second;
     buffSize2 = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
@@ -1525,14 +1363,14 @@ void wmix_task_play_wav(
                 src, ret,
                 wav.format.sample_rate,
                 wav.format.channels,
-                wav.format.sample_length, head, rdce, &tick);
+                wav.format.sample_length, head, reduce, &tick);
             //写入的总字节数统计
-            bpsCount += ret;
+            secBytesCount += ret;
             total += ret;
             //播放时间
-            if (bpsCount > wav.format.bytes_p_second)
+            if (secBytesCount > wav.format.bytes_p_second)
             {
-                bpsCount -= wav.format.bytes_p_second;
+                secBytesCount -= wav.format.bytes_p_second;
                 second = total / wav.format.bytes_p_second;
                 if (wmix->debug)
                     printf("  PLAY-WAV: %s %02d:%02d\r\n", wavPath, second / 60, second % 60);
@@ -1548,7 +1386,7 @@ void wmix_task_play_wav(
         else if (repeat)
         {
             //关闭 reduceMode
-            if (rdceIsMe && wmix->reduceMode == rdce)
+            if (reduceSkip && wmix->reduceMode == reduce)
                 wmix->reduceMode = 1;
             //
             lseek(fd, 44, SEEK_SET);
@@ -1580,19 +1418,24 @@ void wmix_task_play_wav(
                 break;
             }
             //重启 reduceMode
-            if (rdceIsMe && wmix->reduceMode == 1)
-                wmix->reduceMode = rdce;
-            //
+            if (reduceSkip && wmix->reduceMode == 1)
+                wmix->reduceMode = reduce;
+
             if (wmix->debug)
-                printf("<< PLAY-WAV: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\r\n",
+                printf("<< PLAY-WAV: %s start >>\n"
+                       "   通道数: %d\n"
+                       "   采样位数: %d bit\n"
+                       "   采样率: %d Hz\n"
+                       "   每秒字节: %d Bytes\n"
+                       "   重播间隔: %d sec\r\n",
                        wavPath,
                        wav.format.channels,
                        wav.format.sample_length,
                        wav.format.sample_rate,
                        wav.format.bytes_p_second,
                        repeat / 10);
-            //
-            total = bpsCount = 0;
+
+            total = secBytesCount = 0;
             src.U8 = buff;
             head.U8 = wmix->head.U8;
             tick = 0;
@@ -1607,7 +1450,7 @@ void wmix_task_play_wav(
     if (wmix->debug)
         printf(">> PLAY-WAV: %s end <<\r\n", wavPath);
     //关闭 reduceMode
-    if (rdceIsMe && wmix->reduceMode == rdce)
+    if (reduceSkip && wmix->reduceMode == reduce)
         wmix->reduceMode = 1;
 }
 
@@ -1625,44 +1468,44 @@ void wmix_task_play_aac(
     WMix_Point src, head;
     //播放计时
     uint32_t tick, total = 0, totalWait;
-    uint32_t second = 0, bpsCount = 0;
+    uint32_t second = 0, secBytesCount = 0;
     //背景消减和重复播放延时
-    uint8_t rdce = reduce + 1, rdceIsMe = 0;
+    uint8_t reduceSkip = 0;
     uint16_t repeat = (uint16_t)repeatInterval * 10;
     //消息通信
     WMix_Msg msg;
     //aac解码句柄
     void *aacDec = NULL;
-    uint8_t out[8192];
+    uint8_t buff[8192];
     //音频基本参数
     int chn;
     int sample = 16;
     int freq;
-    uint32_t bytes_p_second;
+    uint32_t secBytes;
     //系统更新loopWord时,会关闭该条播放
     int timeout;
     uint8_t loopWord;
     loopWord = wmix->loopWord;
-    //
+
     if (!wmix || !wmix->run || !aacPath)
         return;
-    //
+
     if ((fd = open(aacPath, O_RDONLY)) <= 0)
     {
         WMIX_ERR2("%s open err\r\n", aacPath);
         return;
     }
     //初始化解码器
-    ret = aac_decode2(&aacDec, fd, out, (int *)&chn, (int *)&freq);
+    ret = aac_decode2(&aacDec, fd, buff, (int *)&chn, (int *)&freq);
     if (ret < 0)
     {
         WMIX_ERR("aac_decode2 err\r\n");
         close(fd);
         return;
     }
-    //
-    bytes_p_second = chn * sample / 8 * freq;
-    //
+
+    secBytes = chn * sample / 8 * freq;
+
     if (wmix->debug)
         printf(
             "<< PLAY-AAC: %s start >>\r\n"
@@ -1671,36 +1514,29 @@ void wmix_task_play_aac(
             "   采样率: %d Hz\r\n"
             "   每秒字节: %d Bytes\r\n"
             "   重播间隔: %d sec\r\n",
-            aacPath,
-            chn,
-            sample,
-            freq,
-            bytes_p_second,
-            repeat / 10);
+            aacPath, chn, sample, freq, secBytes, repeat / 10);
     //独占 reduceMode
-    if (rdce > 1 && wmix->reduceMode == 1)
+    reduce += 1;
+    if (reduce > 1 && wmix->reduceMode == 1)
     {
-        wmix->reduceMode = rdce;
-        rdceIsMe = 1;
+        wmix->reduceMode = reduce;
+        reduceSkip = 1;
     }
     else
-        rdce = 1;
-    //
+        reduce = 1;
+
     totalWait = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ / 2;
-    //
-    src.U8 = out;
+
+    src.U8 = buff;
     head.U8 = 0;
     tick = 0;
-    //
-    while (wmix->run &&
-           loopWord == wmix->loopWord)
+
+    while (wmix->run && loopWord == wmix->loopWord)
     {
         //msg 检查
         if (msg_fd)
         {
-            if (msgrcv(msg_fd, &msg,
-                       WMIX_MSG_BUFF_SIZE,
-                       0, IPC_NOWAIT) < 1 &&
+            if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 &&
                 errno != ENOMSG) //消息队列被关闭
             {
                 if (wmix->debug)
@@ -1726,19 +1562,18 @@ void wmix_task_play_aac(
                 src, ret,
                 freq,
                 chn,
-                sample, head, rdce, &tick);
+                sample, head, reduce, &tick);
             //写入的总字节数统计
-            bpsCount += ret;
+            secBytesCount += ret;
             total += ret;
             //播放时间
-            if (bpsCount > bytes_p_second)
+            if (secBytesCount > secBytes)
             {
-                bpsCount -= bytes_p_second;
-                second = total / bytes_p_second;
+                secBytesCount -= secBytes;
+                second = total / secBytes;
                 if (wmix->debug)
                     printf("  PLAY-AAC: %s %02d:%02d\r\n", aacPath, second / 60, second % 60);
             }
-            //
             if (head.U8 == 0)
                 break;
         }
@@ -1747,18 +1582,17 @@ void wmix_task_play_aac(
         else if (repeat)
         {
             //关闭 reduceMode
-            if (rdceIsMe && wmix->reduceMode == rdce)
+            if (reduceSkip && wmix->reduceMode == reduce)
                 wmix->reduceMode = 1;
-            //
+
             lseek(fd, 0, SEEK_SET);
-            //
+
             for (ret = 0; ret < repeat; ret++)
             {
                 delayus(100000);
-                //
                 if (!wmix->run || loopWord != wmix->loopWord)
                     break;
-                //
+
                 if (msg_fd)
                 {
                     if (msgrcv(msg_fd, &msg,
@@ -1772,44 +1606,43 @@ void wmix_task_play_aac(
                     }
                 }
             }
-            //
             if (ret != repeat)
             {
                 ret = -1;
                 break;
             }
             //重启 reduceMode
-            if (rdceIsMe && wmix->reduceMode == 1)
-                wmix->reduceMode = rdce;
-            //
+            if (reduceSkip && wmix->reduceMode == 1)
+                wmix->reduceMode = reduce;
+
             if (wmix->debug)
-                printf("<< PLAY-AAC: %s start >>\n   通道数: %d\n   采样位数: %d bit\n   采样率: %d Hz\n   每秒字节: %d Bytes\n   重播间隔: %d sec\r\n",
-                       aacPath,
-                       chn,
-                       sample,
-                       freq,
-                       bytes_p_second,
-                       repeat / 10);
-            //
-            total = bpsCount = 0;
-            src.U8 = out;
+                printf("<< PLAY-AAC: %s start >>\n"
+                       "   通道数: %d\n"
+                       "   采样位数: %d bit\n"
+                       "   采样率: %d Hz\n"
+                       "   每秒字节: %d Bytes\n"
+                       "   重播间隔: %d sec\r\n",
+                       aacPath, chn, sample, freq, secBytes, repeat / 10);
+
+            total = secBytesCount = 0;
+            src.U8 = buff;
             head.U8 = wmix->head.U8;
             tick = 0;
         }
         else
             break;
-        //
-        ret = aac_decode2(&aacDec, fd, out, (int *)&chn, (int *)&freq);
+        //解码
+        ret = aac_decode2(&aacDec, fd, buff, (int *)&chn, (int *)&freq);
+        if (ret < 0)
+            break;
     }
-    //
     close(fd);
     if (aacDec)
         aac_decodeRelease(&aacDec);
-    //
     if (wmix->debug)
         printf(">> PLAY-AAC: %s end <<\r\n", aacPath);
     //关闭 reduceMode
-    if (rdceIsMe && wmix->reduceMode == rdce)
+    if (reduceSkip && wmix->reduceMode == reduce)
         wmix->reduceMode = 1;
 }
 #endif
@@ -1819,27 +1652,26 @@ typedef struct
 {
     // char *msgPath;//消息队列挂靠路径
     char *mp3Path;
-    //
     WMix_Msg msg;
     // key_t msg_key;
     int msg_fd;
-    //
+
     void *fdm;     //mmap首地址
     uint32_t seek; //fdm跳过多少才到mp3数据段
     uint32_t size; //实际mp3数据段长度
-    //
+
     WMix_Point head, src; //同步循环缓冲区的head指针 和 指向数据的src指针
     WMix_Struct *wmix;
-    //
+
     uint32_t tick;             //循环缓冲区head指针走过了多少字节,用于防止数据写如缓冲区太快超过head指针
     uint8_t loopWord;          //每个播放线程的循环标志都要与该值一致,否则循环结束,用于打断全局播放
     uint32_t total, totalWait; //total:文件读取字节数
-    //
-    uint32_t bps, bpsCount; //bps:每秒字节数 bpsCount计数用于计算当前播放时间
-    //
-    uint8_t rdce;    //reduce
+
+    uint32_t bps, secBytesCount; //bps:每秒字节数 secBytesCount计数用于计算当前播放时间
+
+    uint8_t reduce;  //reduce
     uint16_t repeat; //repeatInterval*10
-    uint8_t rdceIsMe;
+    uint8_t reduceSkip;
 } WMix_Mp3;
 
 static int16_t mad_scale(mad_fixed_t sample)
@@ -1858,7 +1690,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     uint32_t count = 0, second;
     int16_t *val = (int16_t *)&pcm->samples[0][count];
     int timeout;
-    //
+
     if (!wmm->wmix->run || wmm->loopWord != wmm->wmix->loopWord)
         return MAD_FLOW_STOP;
     //参数初始化
@@ -1866,7 +1698,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
     {
         wmm->bps = pcm->channels * 16 / 8 * header->samplerate;
         wmm->totalWait = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ / 2; //等半秒
-        //
+
         if (wmm->wmix->debug)
             printf(
                 "<< PLAY-MP3: %s start >>\r\n"
@@ -1880,8 +1712,8 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
                 header->samplerate,
                 wmm->bps,
                 wmm->repeat / 10);
-        //
-        wmm->total = wmm->bpsCount = 0;
+
+        wmm->total = wmm->secBytesCount = 0;
         wmm->head.U8 = 0;
         wmm->tick = 0;
     }
@@ -1900,7 +1732,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
             return MAD_FLOW_STOP;
         }
     }
-    //
+
     if (pcm->channels == 2)
     {
         for (count = 0; count < pcm->length; count++)
@@ -1939,22 +1771,21 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
         header->samplerate,
         pcm->channels,
         16,
-        wmm->head, wmm->rdce, &wmm->tick);
+        wmm->head, wmm->reduce, &wmm->tick);
     //总字节数计数
-    wmm->bpsCount += count;
+    wmm->secBytesCount += count;
     wmm->total += count;
     //播放时间
-    if (wmm->bpsCount > wmm->bps)
+    if (wmm->secBytesCount > wmm->bps)
     {
-        wmm->bpsCount -= wmm->bps;
+        wmm->secBytesCount -= wmm->bps;
         second = wmm->total / wmm->bps;
         if (wmm->wmix->debug)
             printf("  PLAY-MP3: %s %02d:%02d\r\n", wmm->mp3Path, second / 60, second % 60);
     }
-    //
+
     if (wmm->head.U8 == 0)
         return MAD_FLOW_STOP;
-    //
     return MAD_FLOW_CONTINUE;
 }
 
@@ -1965,19 +1796,18 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
     if (wmm->size > 0)
     {
         mad_stream_buffer(stream, wmm->fdm + wmm->seek, wmm->size);
-        //
+
         if (wmm->repeat)
         {
             if (wmm->head.U8) //已经播放完一遍了
             {
                 //关闭 reduceMode
-                if (wmm->rdceIsMe && wmm->wmix->reduceMode == wmm->rdce)
+                if (wmm->reduceSkip && wmm->wmix->reduceMode == wmm->reduce)
                     wmm->wmix->reduceMode = 1;
-                //
+
                 for (count = 0; count < wmm->repeat; count++)
                 {
                     delayus(100000);
-                    //
                     if (!wmm->wmix->run || wmm->loopWord != wmm->wmix->loopWord)
                         return MAD_FLOW_STOP;
                     //msg 检查
@@ -1996,13 +1826,13 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
                     }
                 }
                 //重启 reduceMode
-                if (wmm->rdceIsMe && wmm->wmix->reduceMode == 1)
-                    wmm->wmix->reduceMode = wmm->rdce;
+                if (wmm->reduceSkip && wmm->wmix->reduceMode == 1)
+                    wmm->wmix->reduceMode = wmm->reduce;
             }
         }
         else
             wmm->size = 0;
-        //
+
         wmm->head.U8 = 0;
         return MAD_FLOW_CONTINUE;
     }
@@ -2023,22 +1853,21 @@ void wmix_task_play_mp3(
     uint8_t reduce,
     uint8_t repeatInterval)
 {
-    struct stat sta;
-    int fd;
-    //
     WMix_Mp3 wmm;
     struct mad_decoder decoder;
 
+    struct stat sta;
+    int fd;
     //参数准备
     memset(&wmm, 0, sizeof(WMix_Mp3));
     wmm.wmix = wmix;
     wmm.mp3Path = mp3Path;
     wmm.repeat = (uint16_t)repeatInterval * 10;
     wmm.loopWord = wmix->loopWord;
-    wmm.rdceIsMe = 0;
-    wmm.rdce = reduce + 1;
+    wmm.reduceSkip = 0;
+    wmm.reduce = reduce + 1;
     wmm.msg_fd = msg_fd;
-    //
+
     if ((fd = open(mp3Path, O_RDONLY)) <= 0)
     {
         WMIX_ERR2("open %s err\r\n", mp3Path);
@@ -2055,7 +1884,6 @@ void wmix_task_play_mp3(
     wmm.seek = id3_len(mp3Path);
     wmm.size = sta.st_size - wmm.seek;
 
-    //
     wmm.fdm = mmap(0, sta.st_size, PROT_READ, MAP_SHARED, fd, 0);
     if (wmm.fdm == MAP_FAILED || !wmm.fdm)
     {
@@ -2065,13 +1893,13 @@ void wmix_task_play_mp3(
     }
 
     //独占 reduceMode
-    if (wmm.rdce > 1 && wmix->reduceMode == 1)
+    if (wmm.reduce > 1 && wmix->reduceMode == 1)
     {
-        wmix->reduceMode = wmm.rdce;
-        wmm.rdceIsMe = 1;
+        wmix->reduceMode = wmm.reduce;
+        wmm.reduceSkip = 1;
     }
     else
-        wmm.rdce = 1;
+        wmm.reduce = 1;
 
     //configure input, output, and error functions
     mad_decoder_init(&decoder, &wmm,
@@ -2085,7 +1913,7 @@ void wmix_task_play_mp3(
     mad_decoder_finish(&decoder);
 
     //关闭 reduceMode
-    if (wmm.rdceIsMe && wmix->reduceMode == wmm.rdce)
+    if (wmm.reduceSkip && wmix->reduceMode == wmm.reduce)
         wmix->reduceMode = 1;
 
     close(fd);

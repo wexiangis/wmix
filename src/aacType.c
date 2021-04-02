@@ -212,11 +212,15 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
  */
 int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq)
 {
+    AacHeader aacHead;
+    NeAACDecHandle hDecoder;
+    NeAACDecFrameInfo hInfo;
+    uint8_t in[2048];
+    uint8_t *retp;
+    size_t ret;
+
     if (!aacDec)
         return -1;
-
-    AacHeader aacHead;
-    uint8_t in[2048];
     //找到aac头
     do
     {
@@ -230,11 +234,11 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
                 break;
         }
     } while (1);
-
+    //读数据段
     if (read(aacFile_fd, &in[7], aacHead.aacFrameLength - 7) != aacHead.aacFrameLength - 7)
         return -1;
     //第一次初始化解码器句柄
-    NeAACDecHandle hDecoder = *((NeAACDecHandle *)aacDec);
+    hDecoder = *((NeAACDecHandle *)aacDec);
     if (!hDecoder)
     {
         hDecoder = NeAACDecOpen();
@@ -243,8 +247,6 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
         *aacDec = hDecoder;
     }
     //解码
-    NeAACDecFrameInfo hInfo;
-    uint8_t *retp;
     retp = (uint8_t *)NeAACDecDecode(hDecoder, &hInfo, in, aacHead.aacFrameLength);
     if (!retp || hInfo.error > 0)
     {
@@ -253,9 +255,10 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
         return -1;
     }
     //拷贝数据
-    size_t ret = hInfo.samples * hInfo.channels;
+    ret = hInfo.samples * hInfo.channels;
     if (ret > 0)
         memcpy(out, retp, ret);
+
     //参数返回
     *chn = hInfo.channels;
     *freq = hInfo.samplerate;
@@ -269,15 +272,16 @@ void aac_decodeToFile(char *aacFile, char *pcmFile)
     uint8_t *out = NULL;
     int ret = 0, chn = 0, freq = 0;
     size_t totalBytes = 0;
+    int fw, fr;
 
     remove(pcmFile);
-    int fw = open(pcmFile, O_WRONLY | O_CREAT, 0666);
+    fw = open(pcmFile, O_WRONLY | O_CREAT, 0666);
     if (fw < 1)
         return;
-
-    int fr = open(aacFile, O_RDONLY);
+    fr = open(aacFile, O_RDONLY);
     if (fr < 1)
         return;
+
     //循环取数据
     out = (uint8_t *)malloc(8192);
     do
@@ -368,12 +372,13 @@ void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq)
     uint8_t *in, *out;
     int ret, rLen = 2048 * chn;
     size_t totalBytes = 0;
+    int fw, fr;
 
-    int fw = aacFile_fd;
+    fw = aacFile_fd;
     if (fw < 1)
         return;
 
-    int fr = pcmFile_fd;
+    fr = pcmFile_fd;
     if (fr < 1)
         return;
 
@@ -409,12 +414,14 @@ void aac_encodeToFile2(int pcmFile_fd, int aacFile_fd, int chn, int freq)
 
 void aac_encodeToFile(char *pcmFile, char *aacFile, int chn, int freq)
 {
+    int fw, fr;
+
     remove(aacFile);
-    int fw = open(aacFile, O_WRONLY | O_CREAT, 0666);
+    fw = open(aacFile, O_WRONLY | O_CREAT, 0666);
     if (fw < 1)
         return;
 
-    int fr = open(pcmFile, O_RDONLY);
+    fr = open(pcmFile, O_RDONLY);
     if (fr < 1)
     {
         close(fw);

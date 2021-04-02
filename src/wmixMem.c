@@ -142,8 +142,10 @@ int16_t wmix_mem_write(int16_t *dat, int16_t len)
     }
     for (i = 0; i < len; i++)
     {
-        ao_circle->buff[ao_circle->w++] = *dat++;
-        if (ao_circle->w >= AI_CIRCLE_BUFF_LEN)
+        ao_circle->buff[ao_circle->w] = *dat++;
+        if (ao_circle->w + 1 < AI_CIRCLE_BUFF_LEN)
+            ao_circle->w += 1;
+        else
             ao_circle->w = 0;
     }
     return i;
@@ -165,8 +167,10 @@ int16_t wmix_mem_write2(int16_t *dat, int16_t len)
     }
     for (i = 0; i < len; i++)
     {
-        ao_circleLocal->buff[ao_circleLocal->w++] = *dat++;
-        if (ao_circleLocal->w >= AI_CIRCLE_BUFF_LEN)
+        ao_circleLocal->buff[ao_circleLocal->w] = *dat++;
+        if (ao_circleLocal->w + 1 < AI_CIRCLE_BUFF_LEN)
+            ao_circleLocal->w += 1;
+        else
             ao_circleLocal->w = 0;
     }
     return i;
