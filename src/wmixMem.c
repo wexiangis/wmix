@@ -69,7 +69,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     }
     if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
         w = ai_circle->w;
-    for (i = 0; i < len; i++)
+    for (i = 0; i < len;)
     {
         if (w == ai_circle->w)
         {
@@ -83,6 +83,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         *dat++ = ai_circle->buff[w++];
         if (w >= AI_CIRCLE_BUFF_LEN)
             w = 0;
+        i += 1;
     }
     *addr = w;
     return i;
@@ -101,12 +102,11 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
             WMIX_ERR("wmix_mem_read2: shm_create err !!\r\n");
             return 0;
         }
-        //
         w = ao_circleLocal->w;
     }
     if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
         w = ao_circleLocal->w;
-    for (i = 0; i < len; i++)
+    for (i = 0; i < len;)
     {
         if (w == ao_circleLocal->w)
         {
@@ -120,6 +120,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         *dat++ = ao_circleLocal->buff[w++];
         if (w >= AI_CIRCLE_BUFF_LEN)
             w = 0;
+        i += 1;
     }
     *addr = w;
     return i;

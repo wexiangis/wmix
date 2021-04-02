@@ -38,7 +38,7 @@ CFLAGS += -Wl,-gc-sections -lrt -ldl
 MAKE_ALSA = 0
 MAKE_MP3 = 0
 # 选配
-MAKE_AAC = 1 # uclib不支持
+MAKE_AAC = 1
 MAKE_WEBRTC_VAD = 0
 MAKE_WEBRTC_AEC = 0
 MAKE_WEBRTC_NS = 0
@@ -153,6 +153,9 @@ endif
 ifdef LIBSPATH
 CINC += -I$(LIBSPATH)/include
 CLIBS += -L$(LIBSPATH)/lib
+else
+CINC += -I../libs/include
+CLIBS += -L../libs/lib
 endif
 
 # wmix

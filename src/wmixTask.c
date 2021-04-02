@@ -359,11 +359,6 @@ void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp)
             WMIX_ERR2("read err %d\r\n", (int)ret);
             break;
         }
-        else
-        {
-            fsync(fd_write);
-            delayus(10000);
-        }
     }
     close(fd_write);
     free(buff);
@@ -654,8 +649,6 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
             WMIX_ERR2("read err %d\r\n", (int)ret);
             break;
         }
-        else
-            delayus(10000);
     }
     close(fd);
     free(buff);

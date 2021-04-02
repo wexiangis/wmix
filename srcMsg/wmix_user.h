@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V5.5RC1 - 20210401"
+#define WMIX_VERSION "V5.5RC1 - 20210402"
 
 //时间工具
 void wmix_delayus(uint32_t us);
