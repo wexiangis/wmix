@@ -53,6 +53,7 @@ typedef enum
     WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件,写0关闭
     WMT_FFT = 27,             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
     WMT_FIFO_AAC = 28,        //fifo录音aac流 (value格式见wmix_user.c)
+    WMT_FIFO_G711A = 29,      //fifo录音g711a流 (value格式见wmix_user.c)
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息
@@ -364,7 +365,7 @@ int wmix_fifo_play(
 int wmix_fifo_record(
     uint8_t channels,
     uint16_t freq,
-    bool useAAC)
+    int type)
 {
     if (!freq || !channels)
         return -1;
@@ -382,7 +383,12 @@ int wmix_fifo_record(
     wmix_auto_path(path, 0);
     // remove(path);
     //装填 message
-    msg.type = (int)(useAAC ? WMT_FIFO_AAC : WMT_FIFO_RECORD);
+    if (type == 2)
+        msg.type = (int)WMT_FIFO_G711A;
+    else if (type == 1)
+        msg.type = (int)WMT_FIFO_AAC;
+    else
+        msg.type = (int)WMT_FIFO_RECORD;
     msg.value[0] = channels;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
@@ -591,7 +597,7 @@ void wmix_mem_close(void)
 }
 
 //len和返回长度都按int16计算长度
-int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
+int16_t wmix_mem_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
     int16_t w = *addr;
@@ -603,7 +609,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void **)&ai_circle);
         if (!ai_circle)
         {
-            fprintf(stderr, "wmix_mem_read: shm_create err !!\n");
+            fprintf(stderr, "wmix_mem_1x8000: shm_create err !!\n");
             return 0;
         }
         w = ai_circle->w;
@@ -638,7 +644,7 @@ int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 }
 
 //原始录音共享内存数据, len和返回长度都按int16计算长度
-int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
+int16_t wmix_mem_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
     int16_t w = *addr;
@@ -649,7 +655,7 @@ int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait)
         wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ai_circle2);
         if (!ai_circle2)
         {
-            fprintf(stderr, "wmix_mem_read2: shm_create err !!\n");
+            fprintf(stderr, "wmix_mem_origin: shm_create err !!\n");
             return 0;
         }
         w = ai_circle2->w;

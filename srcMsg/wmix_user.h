@@ -14,7 +14,7 @@ extern "C"
 {
 #endif
 
-#define WMIX_VERSION "V6.0RC1 - 20210403"
+#define WMIX_VERSION "V6.0RC1 - 20210406"
 
 //时间工具
 void wmix_delayus(uint32_t us);
@@ -78,13 +78,13 @@ int wmix_fifo_play(
  *  参数:
  *      channels: 声道数(取值1,2)
  *      freq: 频率不得大于wmix原声频率
- *      useAAC: 使用aac格式(如果启用了MAKE_AAC)
+ *      type: 录音格式: 0/pcm 1/aac(需启用MAKE_AAC) 2/g711a
  *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
  */
 int wmix_fifo_record(
     uint8_t channels,
     uint16_t freq,
-    bool useAAC);
+    int type);
 
 /*
  *  录音到文件
@@ -145,11 +145,11 @@ void wmix_log(bool on);
  *      wait: 阻塞
  *  返回: 按int16_t计算的数据长度
  *  说明:
- *      wmix_mem_read 读取最小的8000Hz单声道数据
- *      wmix_mem_read2 读取原始数据
+ *      wmix_mem_1x8000 读取8000Hz单声道数据
+ *      wmix_mem_origin 读取原始数据
  */
-int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
-int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait);
+int16_t wmix_mem_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait);
+int16_t wmix_mem_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 void wmix_mem_open(void);
 void wmix_mem_close(void);
 

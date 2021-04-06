@@ -53,9 +53,10 @@ void wmix_load_task(
     WMixThread_Param *wmtp);
 
 //用 wmix_load_thread() 加载的功能模块
-void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp);
-void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp);
-void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp);
+void wmix_thread_fifo_pcm_play(WMixThread_Param *wmtp);
+void wmix_thread_fifo_pcm_record(WMixThread_Param *wmtp);
+void wmix_thread_fifo_g711a_record(WMixThread_Param *wmtp);
+void wmix_thread_fifo_aac_record(WMixThread_Param *wmtp);
 void wmix_thread_record_wav(WMixThread_Param *wmtp);
 #if (MAKE_AAC)
 void wmix_thread_record_aac(WMixThread_Param *wmtp);
@@ -96,13 +97,13 @@ void wmix_task_play_mp3(
  *  "/tmp/wmix", 'L'： 原始录音数据写入，客户端读取或混音器自己的录音线程取用
  */
 //单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
-int16_t wmix_mem_read(int16_t *dat, int16_t len, int16_t *addr, bool wait);
+int16_t wmix_mem_read_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 //原始录音共享内存数据, len和返回长度都按int16计算长度
-int16_t wmix_mem_read2(int16_t *dat, int16_t len, int16_t *addr, bool wait);
+int16_t wmix_mem_read_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait);
 //单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
-int16_t wmix_mem_write(int16_t *dat, int16_t len);
+int16_t wmix_mem_write_1x8000(int16_t *dat, int16_t len);
 //原始录音共享内存数据, len和返回长度都按int16计算长度
-int16_t wmix_mem_write2(int16_t *dat, int16_t len);
+int16_t wmix_mem_write_origin(int16_t *dat, int16_t len);
 
 //知道输入长度,计算缩放后输出长度(注意长度必须2倍数)
 uint32_t wmix_len_of_out(

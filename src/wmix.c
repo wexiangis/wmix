@@ -647,7 +647,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
                     }
 #endif
                     //原始数据写共享内存
-                    wmix_mem_write2((int16_t *)buffSrc, ret / 2);
+                    wmix_mem_write_origin((int16_t *)buffSrc, ret / 2);
 
                     //自收发测试
                     if (wmix->rwTest)
@@ -672,7 +672,7 @@ void wmix_shmem_write_circle(WMixThread_Param *wmtp)
 
                     //转换格式为单声道8000Hz并存到共享内存
                     wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, 1, 8000, buffDist);
-                    wmix_mem_write((int16_t *)buffDist, buffSizeDist / 2);
+                    wmix_mem_write_1x8000((int16_t *)buffDist, buffSizeDist / 2);
                 }
                 else
                 {
@@ -880,26 +880,26 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  WMIX_MSG_BUFF_SIZE,
                                  &wmix_load_task);
                 break;
-            //fifo播放wav流
+            //fifo播放pcm流
             case WMT_FIFO_PLAY:
                 wmix_load_thread(wmix,
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_play_wav_fifo);
+                                 &wmix_thread_fifo_pcm_play);
                 break;
             //复位
             case WMT_RESET:
                 wmix->loopWord += 1;
                 wmix->run = false;
                 break;
-            //fifo录音wav流
+            //fifo录音pcm流
             case WMT_FIFO_RECORD:
                 wmix_load_thread(wmix,
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_record_wav_fifo);
+                                 &wmix_thread_fifo_pcm_record);
                 break;
             //录音wav文件
             case WMT_RECORD_WAV:
@@ -1080,9 +1080,17 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_record_aac_fifo);
+                                 &wmix_thread_fifo_aac_record);
                 break;
 #endif
+            //fifo录音g711a流
+            case WMT_FIFO_G711A:
+                wmix_load_thread(wmix,
+                                 msg.type,
+                                 msg.value,
+                                 WMIX_MSG_BUFF_SIZE,
+                                 &wmix_thread_fifo_g711a_record);
+                break;
             //开关log
             case WMT_LOG_SW:
                 if (msg.value[0])

@@ -17,7 +17,7 @@
 #include "wmix.h"
 #include "delay.h"
 
-void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
+void wmix_thread_fifo_pcm_play(WMixThread_Param *wmtp)
 {
     //传入参数(目标播放参数)
     char *path = (char *)&wmtp->param[4];
@@ -118,7 +118,7 @@ void wmix_thread_play_wav_fifo(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
-void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
+void wmix_thread_fifo_pcm_record(WMixThread_Param *wmtp)
 {
     //传入参数(目标录制参数)
     char *path = (char *)&wmtp->param[4];
@@ -166,7 +166,7 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
     {
-        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, false) * 2;
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, false) * 2;
         if (ret > 0)
         {
             //录制时间
@@ -194,7 +194,7 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
         }
         else
         {
-            delayus(500);
+            delayus(5000);
             fsync(fd_write);
         }
     }
@@ -212,8 +212,101 @@ void wmix_thread_record_wav_fifo(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
+void wmix_thread_fifo_g711a_record(WMixThread_Param *wmtp)
+{
+    //传入参数(目标录制参数)
+    char *path = (char *)&wmtp->param[4];
+    uint8_t chn = wmtp->param[0];
+    uint8_t sample = wmtp->param[1];
+    uint16_t freq = (wmtp->param[2] << 8) | wmtp->param[3];
+    //写流
+    ssize_t ret;
+    int fd_write;
+    int16_t addr = -1; //读mem用
+    uint8_t *buffSrc;  //源录音数据
+    uint8_t *buffDist; //目标格式的录音数据
+    uint32_t buffSizeSrc;
+    uint32_t buffSizeDist;
+    //g711
+    uint8_t g711aBuff[640];
+    //计时打印:
+    uint32_t second = 0, secBytes, secBytesCount = 0;
+    //线程同步
+    uint8_t loopWord;
+    loopWord = wmtp->wmix->loopWordFifo;
+
+    //确认路径和打开流
+    if (mkfifo(path, 0666) < 0 && errno != EEXIST)
+    {
+        WMIX_ERR("mkfifo err\r\n");
+        return;
+    }
+    fd_write = open(path, O_WRONLY);
+
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+    //缓存分配,根据输出指定输入量
+    buffSizeDist = 640; //目标输出320字节的g711a数据,所以这里为320*2长度
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
+
+    if (wmtp->wmix->debug)
+        printf("<< FIFO-g711a: %s record >>\n"
+               "   通道数: %d\n"
+               "   采样位数: %d bit\n"
+               "   采样率: %d Hz\n"
+               "   时间长度: -- sec\n\r\n",
+               path, chn, sample, freq);
+    //线程计数
+    wmtp->wmix->thread_record += 1;
+    while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
+    {
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
+        if (ret > 0)
+        {
+            //录制时间
+            if (wmtp->wmix->debug)
+            {
+                secBytesCount += ret;
+                if (secBytesCount >= secBytes)
+                {
+                    secBytesCount -= secBytes;
+                    second += 1;
+                    printf("  FIFO-g711a: %s %02d:%02d\r\n", path, second / 60, second % 60);
+                }
+            }
+            //缩放
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
+            //转g711a
+            ret = PCM2G711a((char *)buffDist, (char *)g711aBuff, ret, 0);
+            //输出
+            ret = write(fd_write, g711aBuff, ret);
+            if (ret < 0 && errno != EAGAIN)
+                break;
+        }
+        else if (ret < 0)
+        {
+            WMIX_ERR2("read mem err %d\r\n", (int)ret);
+            break;
+        }
+    }
+    if (wmtp->wmix->debug)
+        printf(">> FIFO-g711a: %s end <<\r\n", path);
+    //关闭流和删除fifo文件
+    close(fd_write);
+    remove(path);
+    //线程计数
+    wmtp->wmix->thread_record -= 1;
+    //内存回收
+    free(buffSrc);
+    free(buffDist);
+    free(wmtp->param);
+    free(wmtp);
+}
+
 #if (MAKE_AAC)
-void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp)
+void wmix_thread_fifo_aac_record(WMixThread_Param *wmtp)
 {
     //传入参数(目标录制参数)
     char *path = (char *)&wmtp->param[4];
@@ -263,7 +356,7 @@ void wmix_thread_record_aac_fifo(WMixThread_Param *wmtp)
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
     {
-        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         if (ret > 0)
         {
             //录制时间
@@ -367,7 +460,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
-        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, false) * 2;
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, false) * 2;
         if (ret > 0)
         {
             secBytesCount += ret;
@@ -488,7 +581,7 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
     {
-        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         if (ret > 0)
         {
             //录制时间
@@ -623,7 +716,7 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
 
         DELAY_RESET();
 
-        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         if (ret > 0)
         {
             //使用0数据
@@ -1031,7 +1124,7 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             }
         }
         //发完数据,趁空闲立即取数据
-        ret = wmix_mem_read2((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
+        ret = wmix_mem_read_origin((int16_t *)buffSrc, buffSizeSrc / 2, &addr, true) * 2;
         //msg 检查
         WMIX_RTP_CTRL_MSG_RECV("RTP-SEND-PCM");
     }

@@ -16,7 +16,7 @@
 
 /* ---------- 需和客户端(程序)同步的信息 ---------- */
 
-#define WMIX_VERSION "V6.0RC1 - 20210403"
+#define WMIX_VERSION "V6.0RC1 - 20210406"
 
 #define WMIX_MSG_PATH "/tmp/wmix"
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -58,6 +58,7 @@ typedef enum
     WMT_NOTE = 26,            //保存混音数据池的数据流到wav文件,写0关闭
     WMT_FFT = 27,             //输出幅频/相频图像到fb设备或bmp文件,写0关闭
     WMT_FIFO_AAC = 28,        //fifo录音aac流 (value格式见wmix_user.c)
+    WMT_FIFO_G711A = 29,      //fifo录音g711a流 (value格式见wmix_user.c)
 
     WMT_LOG_SW = 100,  //开关log
     WMT_INFO = 101,    //打印信息
