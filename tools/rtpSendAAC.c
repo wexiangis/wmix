@@ -17,16 +17,18 @@
 int main(int argc, char *argv[])
 {
     int ret;
-    uint8_t aacBuff[2048];
     char wsdp = 0;
     //各种句柄
-    AacHeader AacHeader;
+    AacHeader aacHead;
     RtpPacket rtpPacket;
     SocketStruct *ss;
+
     int fd;
     bool bindMode = false;
     char *ip = RTP_IP;
     int port = RTP_PORT;
+    uint8_t chn = 1;
+    uint16_t freq = 44100, frameLen = 0, adtsBufferFullness = 0;
 
     if (argc < 2 || strstr(argv[1], "?") || strstr(argv[1], "help"))
     {
@@ -62,31 +64,28 @@ int main(int argc, char *argv[])
     {
         printf("--------------------------------\n");
 
-        ret = read(fd, aacBuff, 7);
+        ret = read(fd, (void *)&aacHead, 7);
         if (ret <= 0)
         {
             lseek(fd, 0, SEEK_SET);
             continue;
         }
 
-        if (aac_parseHeader(aacBuff, &AacHeader, 1) < 0)
+        if (aac_parseHeader(&aacHead, &chn, &freq, &frameLen, 1) < 0)
         {
-            printf("parse err\n");
+            printf("aac_parseHeader err\n");
             lseek(fd, 0, SEEK_SET);
             continue;
         }
+        adtsBufferFullness = (aacHead.adtsBufferFullnessH << 6) | aacHead.adtsBufferFullnessL;
 
         if (!wsdp)
         {
             wsdp = 1;
-            rtp_create_sdp("/tmp/record-aac.sdp",
-                           RTP_IP, RTP_PORT,
-                           AacHeader.channelCfg,
-                           aac_freqList[AacHeader.samplingFreqIndex],
-                           RTP_PAYLOAD_TYPE_AAC);
+            rtp_create_sdp("/tmp/record-aac.sdp", RTP_IP, RTP_PORT, chn, freq, RTP_PAYLOAD_TYPE_AAC);
         }
 
-        ret = read(fd, &rtpPacket.payload[4], AacHeader.aacFrameLength - 7);
+        ret = read(fd, &rtpPacket.payload[4], frameLen - 7);
         if (ret <= 0)
         {
             lseek(fd, 0, SEEK_SET);
@@ -95,10 +94,9 @@ int main(int argc, char *argv[])
 
         rtp_send(ss, &rtpPacket, ret);
 
-        rtpPacket.rtpHeader.timestamp += (AacHeader.adtsBufferFullness + 1) / 2;
+        rtpPacket.rtpHeader.timestamp += (adtsBufferFullness + 1) / 2;
 
-        usleep((AacHeader.adtsBufferFullness + 1) / 2 * 1000 * 1000 /
-                aac_freqList[AacHeader.samplingFreqIndex] - 1000);
+        usleep((adtsBufferFullness + 1) / 2 * 1000 * 1000 / freq - 1000);
     }
 
     close(fd);

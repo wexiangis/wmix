@@ -323,41 +323,12 @@ void wmix_thread_fifo_aac_record(WMixThread_Param *wmtp)
     uint32_t buffSizeDist;
     //aac编码用
     void *aacEnc = NULL;
-    uint16_t freqReal;
     uint8_t aacBuff[4096];
     //计时打印:
     uint32_t second = 0, secBytes, secBytesCount = 0;
     //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordFifo;
-
-    //频率修正(faac输入频率并不是实际输出频率,这里作匹配调整)
-    chn = 2;
-    if (freq <= 16000)
-    {
-        freq = 16000;
-        freqReal = 8000;
-    }
-    else if (freq <= 22050)
-    {
-        freq = 22050;
-        freqReal = 11025;
-    }
-    else if (freq <= 32000)
-    {
-        freq = 32000;
-        freqReal = 16000;
-    }
-    else if (freq <= 44100)
-    {
-        freq = 44100;
-        freqReal = 44100;
-    }
-    else
-    {
-        freq = 48000;
-        freqReal = 48000;
-    }
 
     //确认路径和打开流
     if (mkfifo(path, 0666) < 0 && errno != EEXIST)
@@ -372,7 +343,7 @@ void wmix_thread_fifo_aac_record(WMixThread_Param *wmtp)
     //缓存分配,配合aac编码需要,设置输出格式
     buffSizeDist = 1024 * chn * sample / 8;
     buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
-    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freqReal, buffSizeDist);
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
     buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
@@ -400,9 +371,9 @@ void wmix_thread_fifo_aac_record(WMixThread_Param *wmtp)
                 }
             }
             //缩放
-            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freqReal, buffDist);
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
             //编码
-            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freqReal);
+            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freq);
             //输出
             ret = write(fd_write, aacBuff, ret);
             if (ret < 0 && errno != EAGAIN)
@@ -577,41 +548,12 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
     uint32_t buffSizeDist;
     //aac编码用
     void *aacEnc = NULL;
-    uint16_t freqReal;
     uint8_t aacBuff[4096];
     //计时打印:
     uint32_t second = 0, secBytes, secBytesCount = 0;
     //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
-
-    //频率修正(faac输入频率并不是实际输出频率,这里作匹配调整)
-    chn = 2;
-    if (freq <= 16000)
-    {
-        freq = 16000;
-        freqReal = 8000;
-    }
-    else if (freq <= 22050)
-    {
-        freq = 22050;
-        freqReal = 11025;
-    }
-    else if (freq <= 32000)
-    {
-        freq = 32000;
-        freqReal = 16000;
-    }
-    else if (freq <= 44100)
-    {
-        freq = 44100;
-        freqReal = 44100;
-    }
-    else
-    {
-        freq = 48000;
-        freqReal = 48000;
-    }
 
     fd_write = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
     if (fd_write < 1)
@@ -625,7 +567,7 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
     //缓存分配,配合aac编码需要,设置输出格式
     buffSizeDist = 1024 * chn * sample / 8;
     buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
-    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freqReal, buffSizeDist);
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
     buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
@@ -652,9 +594,9 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
                     printf("  RECORD-AAC: %s %02d:%02d\r\n", path, second / 60, second % 60);
             }
             //缩放
-            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freqReal, buffDist);
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
             //编码
-            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freqReal);
+            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freq);
             //输出
             ret = write(fd_write, aacBuff, ret);
             if (ret < 0 || second >= time)
@@ -705,7 +647,6 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     uint32_t buffSizeDist;
     //aac编码用
     void *aacEnc = NULL;
-    uint16_t freqReal;
     uint8_t aacBuff[4096];
     //计时打印:
     uint32_t second = 0, secBytes, secBytesCount = 0;
@@ -716,35 +657,6 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
-
-    //频率修正(faac输入频率并不是实际输出频率,这里作匹配调整)
-    // chn = 2;
-    // if (freq <= 16000)
-    // {
-    //     freq = 16000;
-    //     freqReal = 8000;
-    // }
-    // else if (freq <= 22050)
-    // {
-    //     freq = 22050;
-    //     freqReal = 11025;
-    // }
-    // else if (freq <= 32000)
-    // {
-    //     freq = 32000;
-    //     freqReal = 16000;
-    // }
-    // else if (freq <= 44100)
-    // {
-    //     freq = 44100;
-    //     freqReal = 44100;
-    // }
-    // else
-    // {
-    //     freq = 48000;
-    //     freqReal = 48000;
-    // }
-    freqReal = freq;
 
     //初始化rtp
     rcs = rtpChain_get(url, port, true, bindMode);
@@ -775,17 +687,14 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
         msgPath = NULL;
 
     //生成sdp文件
-    rtp_create_sdp(
-        "/tmp/record-aac.sdp",
-        url, port, chn, freq,
-        RTP_PAYLOAD_TYPE_AAC);
+    rtp_create_sdp("/tmp/record-aac.sdp", url, port, chn, freq, RTP_PAYLOAD_TYPE_AAC);
 
     //一秒数据量
     secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     //缓存分配,配合aac编码需要,设置输出格式
     buffSizeDist = 1024 * chn * sample / 8;
     buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
-    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freqReal, buffSizeDist);
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
     buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
@@ -820,12 +729,13 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
                 }
             }
             //缩放
-            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freqReal, buffDist);
+            ret = wmix_pcm_zoom(WMIX_CHN, WMIX_FREQ, buffSrc, ret, chn, freq, buffDist);
             //编码
-            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freqReal);
+            ret = aac_encode(&aacEnc, buffDist, ret, aacBuff, sizeof(aacBuff), chn, freq);
             //输出
             if (ret > 7)
             {
+                // aac_parseHeader((AacHeader *)aacBuff, NULL, NULL, NULL, 1);
                 ret -= 7;
                 memcpy(&rtpPacket.payload[4], &aacBuff[7], ret);
                 pthread_mutex_lock(&rcs->lock);
@@ -951,16 +861,16 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
 
     //一秒数据量和缓存分配
     secBytes = chn * sample / 8 * freq;
-    buffSize = wmix_len_of_out(chn, freq, chn * sample / 8 * 1024, WMIX_CHN, WMIX_FREQ);
+    buffSize = chn * sample / 8 * 1024;
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
 
-    // if (wmtp->wmix->debug)
-    //     printf(
-    //         "<< RTP-RECV-AAC: %s:%d start >>\r\n"
-    //         "   通道数: %d\r\n"
-    //         "   采样位数: %d bit\r\n"
-    //         "   采样率: %d Hz\r\n",
-    //         url, port, chn, sample, freq);
+    if (wmtp->wmix->debug)
+        printf(
+            "<< RTP-RECV-AAC: %s:%d start >>\r\n"
+            "   通道数: %d\r\n"
+            "   采样位数: %d bit\r\n"
+            "   采样率: %d Hz\r\n",
+            url, port, chn, sample, freq);
 
     src.U8 = buff;
     head.U8 = 0;
@@ -982,7 +892,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
         if (ret > 0 && retSize > 0)
         {
             //自创建aac头(rtp不传输aac头)并组装数据
-            aac_createHeader(aacBuff, chnInt, freqInt, 0x7FF, retSize);
+            aac_createHeader((AacHeader *)aacBuff, chnInt, freqInt, 0x7FF, retSize);
             memcpy(&aacBuff[7], &rtpPacket.payload[4], retSize);
             //开始解码
             ret = aac_decode(
@@ -999,7 +909,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
                 freq = freqInt;
                 //一秒数据量和缓存分配
                 secBytes = chn * sample / 8 * freq;
-                buffSize = wmix_len_of_out(chn, freq, chn * sample / 8 * 1024, WMIX_CHN, WMIX_FREQ);
+                buffSize = chn * sample / 8 * 1024;
                 free(buff);
                 buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
                 src.U8 = buff;

@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
     if (argc < 2 || strstr(argv[1], "?") || strstr(argv[1], "help"))
     {
         printf("Usage: %s <save file> <bind 0/1> <chn %d> <freq %d> <ip %s> <port %d>\n",
-            argv[0], ip, port, chn, freq);
+            argv[0], chn, freq, ip, port);
         return -1;
     }
     if (argc > 2)
@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
         if (ret > 0)
         {
             printf("rtp_recv: %d / %d + %d\n", ret, ret - dataSize, dataSize);
-            aac_createHeader(aacBuff, chn, freq, 0x7FF, dataSize);
+            aac_createHeader((AacHeader *)aacBuff, chn, freq, 0x7FF, dataSize);
             memcpy(&aacBuff[7], &rtpPacket.payload[4], dataSize);
             write(fd, aacBuff, dataSize + 7);
             continue;

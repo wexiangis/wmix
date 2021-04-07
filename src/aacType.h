@@ -13,37 +13,12 @@
 #define MAKE_AAC 1
 #endif
 
-//aac的头字段,共7字节
+//aac的头字段,共7字节,注意每字节中低位数据放在在前面(实际bit流高位在先)
 typedef struct
 {
-#if 1
-    uint32_t syncword;          //12 bit 同步字 '1111 1111 1111',说明一个ADTS帧的开始
-    uint32_t id;                //1 bit MPEG 标示符, 0 for MPEG-4,1 for MPEG-2
-    uint32_t layer;             //2 bit 总是'00'
-    uint32_t protectionAbsent;  //1 bit 1表示没有crc,0表示有crc
-    uint32_t profile;           //2 bit 表示使用哪个级别的AAC
-    uint32_t samplingFreqIndex; //4 bit 表示使用的采样频率
-    uint32_t privateBit;        //1 bit
-    uint32_t channelCfg;        //3 bit 表示声道数
-    uint32_t originalCopy;      //1 bit
-    uint32_t home;              //1 bit
-
-    /*下面的为改变的参数即每一帧都不同*/
-    uint32_t copyrightIdentificationBit;   //1 bit
-    uint32_t copyrightIdentificationStart; //1 bit
-    uint32_t aacFrameLength;               //13 bit 一个ADTS帧的长度包括ADTS头和AAC原始流
-    uint32_t adtsBufferFullness;           //11 bit 0x7FF 说明是码率可变的码流
-
-    /* number_of_raw_data_blocks_in_frame
-     * 表示ADTS帧中有number_of_raw_data_blocks_in_frame + 1个AAC原始帧
-     * 所以说number_of_raw_data_blocks_in_frame == 0 
-     * 表示说ADTS帧中有一个AAC数据块并不是说没有。(一个AAC原始帧包含一段时间内1024个采样及相关数据)
-     */
-    uint32_t numberOfRawDataBlockInFrame; //2 bit
-#else
     //byte 1
     uint8_t syncwordH : 8; //8 bit 同步字高位 0xFF,说明一个ADTS帧的开始
-    //byte 2 注意这里低位排在前面(下同)
+    //byte 2
     uint8_t protectionAbsent : 1; //1 bit 1表示没有crc,0表示有crc
     uint8_t layer : 2;            //2 bit 总是'00'
     uint8_t id : 1;               //1 bit MPEG 标示符, 0 for MPEG-4,1 for MPEG-2
@@ -54,34 +29,28 @@ typedef struct
     uint8_t samplingFreqIndex : 4; //4 bit 表示使用的采样频率
     uint8_t profile : 2;           //2 bit 表示使用哪个级别的AAC
     //byte 4
-    uint8_t emphasls : 2;     //2 bit
-    uint8_t home : 1;         //1 bit
-    uint8_t originalCopy : 1; //1 bit
-    uint8_t chnL : 2;         //2 bit 表示声道数(低位)
-
-    /*下面的为改变的参数即每一帧都不同*/
-    uint32_t copyrightIdentificationBit;   //1 bit
-    uint32_t copyrightIdentificationStart; //1 bit
-    uint32_t aacFrameLength;               //13 bit 一个ADTS帧的长度包括ADTS头和AAC原始流
-    uint32_t adtsBufferFullness;           //11 bit 0x7FF 说明是码率可变的码流
-
-    /* number_of_raw_data_blocks_in_frame
-     * 表示ADTS帧中有number_of_raw_data_blocks_in_frame + 1个AAC原始帧
-     * 所以说number_of_raw_data_blocks_in_frame == 0 
-     * 表示说ADTS帧中有一个AAC数据块并不是说没有。(一个AAC原始帧包含一段时间内1024个采样及相关数据)
-     */
-    uint32_t numberOfRawDataBlockInFrame; //2 bit
-#endif
+    uint8_t aacFrameLengthH : 2;              //2 bit 帧长度高位(一个ADTS帧的长度包括ADTS头和AAC原始流)
+    uint8_t copyrightIdentificationStart : 1; //1 bit
+    uint8_t copyrightIdentificationBit : 1;   //1 bit
+    uint8_t home : 1;                         //1 bit
+    uint8_t originalCopy : 1;                 //1 bit
+    uint8_t chnL : 2;                         //2 bit 表示声道数(低位)
+    //byte 5
+    uint8_t aacFrameLengthM : 8; //8 bit 帧长度中位(一个ADTS帧的长度包括ADTS头和AAC原始流)
+    //byte 6
+    uint8_t adtsBufferFullnessH : 5; //5 bit 0x7 说明是码率可变的码流高位
+    uint8_t aacFrameLengthL : 3;     //3 bit 帧长度低位(一个ADTS帧的长度包括ADTS头和AAC原始流)
+    //byte 7
+    uint8_t numberOfRawDataBlockInFrame : 2; //2 bits 表示ADTS帧中有 该值+1个AAC原始帧,一般为0
+    uint8_t adtsBufferFullnessL : 6;         //6 bit 0xFF 说明是码率可变的码流低位
 } AacHeader;
 
-extern int aac_freqList[13];
-
 //返回0成功
-int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show);
+int aac_parseHeader(AacHeader *head, uint8_t *chn, uint16_t *freq, uint16_t *frameLen, uint8_t show);
 
 //返回总长度, 7 + datLen
 //codeRate: 该包aac数据解包成pcm的数据长度,典型值2048
-int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate, uint16_t datLen);
+int aac_createHeader(AacHeader *head, uint8_t chn, uint16_t freq, uint16_t codeRate, uint16_t datLen);
 
 //------------------ faac, faad ------------------
 

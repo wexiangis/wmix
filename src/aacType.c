@@ -9,117 +9,96 @@
 
 #include "aacType.h"
 
-int aac_freqList[13] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
+//虽有15格,实际只有前13中
+int aac_freqList[15] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0};
 
-int aac_createHeader(uint8_t *in, uint8_t chn, uint16_t freq, uint16_t codeRate, uint16_t datLen)
+int aac_createHeader(AacHeader *head, uint8_t chn, uint16_t freq, uint16_t codeRate, uint16_t datLen)
 {
     datLen += 7;
-
     //byte 1
-    *in++ = 0xFF; //syncword[8]
+    head->syncwordH = 0xFF;
     //byte 2
-    *in++ = 0xF1; //syncword[4],id[1],layer[2],protectionAbsent[1]
+    head->syncwordL = 0xF;
+    head->id = 0;
+    head->layer = 0;
+    head->protectionAbsent = 1;
     //byte 3
-    *in = (0x1 << 6); //profile[2]
-    if (freq == 96000)
-        *in |= (0x9 << 2); //samplingFreqIndex[4]
-    else if (freq == 88200)
-        *in |= (0x1 << 2);
-    else if (freq == 64000)
-        *in |= (0x2 << 2);
-    else if (freq == 48000)
-        *in |= (0x3 << 2);
-    else if (freq == 44100)
-        *in |= (0x4 << 2);
-    else if (freq == 32000)
-        *in |= (0x5 << 2);
-    else if (freq == 24000)
-        *in |= (0x6 << 2);
-    else if (freq == 22050)
-        *in |= (0x7 << 2);
-    else if (freq == 16000)
-        *in |= (0x8 << 2);
-    else if (freq == 12000)
-        *in |= (0x9 << 2);
-    else if (freq == 11025)
-        *in |= (0xa << 2);
-    else if (freq == 8000)
-        *in |= (0xb << 2);
-    else if (freq == 7350)
-        *in |= (0xc << 2);
+    head->profile = 1;
+    if (freq <= aac_freqList[12])
+        head->samplingFreqIndex = 12;
+    else if (freq <= aac_freqList[11])
+        head->samplingFreqIndex = 11;
+    else if (freq <= aac_freqList[10])
+        head->samplingFreqIndex = 10;
+    else if (freq <= aac_freqList[9])
+        head->samplingFreqIndex = 9;
+    else if (freq <= aac_freqList[8])
+        head->samplingFreqIndex = 8;
+    else if (freq <= aac_freqList[7])
+        head->samplingFreqIndex = 7;
+    else if (freq <= aac_freqList[6])
+        head->samplingFreqIndex = 6;
+    else if (freq <= aac_freqList[5])
+        head->samplingFreqIndex = 5;
+    else if (freq <= aac_freqList[4])
+        head->samplingFreqIndex = 4;
+    else if (freq <= aac_freqList[3])
+        head->samplingFreqIndex = 3;
+    else if (freq <= aac_freqList[2])
+        head->samplingFreqIndex = 2;
+    else if (freq <= aac_freqList[1])
+        head->samplingFreqIndex = 1;
     else
-        *in |= (0x8 << 2);
-    *in |= (0x0 << 1);   //privateBit[1]
-    *in++ |= (chn >> 2); //channelCfg[1]
+        head->samplingFreqIndex = 0;
+    head->privateBit = 0;
+    head->chnH = (chn >> 2) & 0x1;
     //byte 4
-    *in = ((chn & 0x3) << 6); //channelCfg[2]
-    *in |= (0x0 << 5);        //originalCopy[1]
-    *in |= (0x0 << 4);        //home[1]
-    *in |= (0x0 << 3);        //copyrightIdentificationBit[1]
-    *in |= (0x0 << 2);        //copyrightIdentificationStart[1]
-    *in++ |= (datLen >> 11);  //aacFrameLength[2]
+    head->chnL = chn & 0x3;
+    head->originalCopy = 0;
+    head->home = 0;
+    head->copyrightIdentificationBit = 0;
+    head->copyrightIdentificationStart = 0;
+    head->aacFrameLengthH = (datLen >> 11) & 0x3;
     //byte 5
-    *in++ = ((datLen >> 3) & 0xFF); //aacFrameLength[8]
+    head->aacFrameLengthM = (datLen >> 3) & 0xFF;
     //byte 6
-    *in = ((datLen & 0x7) << 5); //aacFrameLength[3]
-    *in++ |= (codeRate >> 6);    //adtsBufferFullness[5]
+    head->aacFrameLengthL = datLen & 0x7;
+    head->adtsBufferFullnessH = (codeRate >> 6) & 0x1F;
     //byte 7
-    *in = ((codeRate & 0x3F) << 2); //adtsBufferFullness[6]
-    *in++ |= (0x0 & 0x3);           //numberOfRawDataBlockInFrame[2]
-    //
+    head->adtsBufferFullnessL = codeRate & 0x3F;
+    head->numberOfRawDataBlockInFrame = 0;
     return datLen;
 }
 
-int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show)
+int aac_parseHeader(AacHeader *head, uint8_t *chn, uint16_t *freq, uint16_t *frameLen, uint8_t show)
 {
-    // static int frame_number = 0;
-    memset(res, 0, sizeof(*res));
-
-    if ((in[0] == 0xFF) && ((in[1] & 0xF0) == 0xF0))
-    {
-        res->id = ((unsigned int)in[1] & 0x08) >> 3;
-        res->layer = ((unsigned int)in[1] & 0x06) >> 1;
-        res->protectionAbsent = (unsigned int)in[1] & 0x01;
-        res->profile = ((unsigned int)in[2] & 0xc0) >> 6;
-        res->samplingFreqIndex = ((unsigned int)in[2] & 0x3c) >> 2;
-        res->privateBit = ((unsigned int)in[2] & 0x02) >> 1;
-        res->channelCfg = ((((unsigned int)in[2] & 0x01) << 2) | (((unsigned int)in[3] & 0xc0) >> 6));
-        res->originalCopy = ((unsigned int)in[3] & 0x20) >> 5;
-        res->home = ((unsigned int)in[3] & 0x10) >> 4;
-        res->copyrightIdentificationBit = ((unsigned int)in[3] & 0x08) >> 3;
-        res->copyrightIdentificationStart = (unsigned int)in[3] & 0x04 >> 2;
-        res->aacFrameLength = (((((unsigned int)in[3]) & 0x03) << 11) |
-                               (((unsigned int)in[4] & 0xFF) << 3) |
-                               ((unsigned int)in[5] & 0xE0) >> 5);
-        res->adtsBufferFullness = (((unsigned int)in[5] & 0x1f) << 6 |
-                                   ((unsigned int)in[6] & 0xfc) >> 2);
-        res->numberOfRawDataBlockInFrame = ((unsigned int)in[6] & 0x03);
-
-        if (show)
-        {
-            printf("adts:id  %d\n", res->id);
-            printf("adts:layer  %d\n", res->layer);
-            printf("adts:protection_absent  %d\n", res->protectionAbsent);
-            printf("adts:profile  %d\n", res->profile);
-            printf("adts:sf_index  %dHz\n", aac_freqList[res->samplingFreqIndex]);
-            printf("adts:pritvate_bit  %d\n", res->privateBit);
-            printf("adts:channel_configuration  %d\n", res->channelCfg);
-            printf("adts:original  %d\n", res->originalCopy);
-            printf("adts:home  %d\n", res->home);
-            printf("adts:copyright_identification_bit  %d\n", res->copyrightIdentificationBit);
-            printf("adts:copyright_identification_start  %d\n", res->copyrightIdentificationStart);
-            printf("adts:aac_frame_length  %d\n", res->aacFrameLength);
-            printf("adts:adts_buffer_fullness  %d\n", res->adtsBufferFullness);
-            printf("adts:no_raw_data_blocks_in_frame  %d\n", res->numberOfRawDataBlockInFrame);
-        }
-
-        return 0;
-    }
-    else
-    {
-        printf("failed to parse adts header\n");
+    if (head->syncwordH != 0xFF || head->syncwordL != 0xF)
         return -1;
+    if (chn)
+        *chn = (head->chnH << 3) | head->chnL;
+    if (freq)
+        *freq = aac_freqList[head->samplingFreqIndex];
+    if (frameLen)
+        *frameLen = (head->aacFrameLengthH << 11) | (head->aacFrameLengthM << 3) | head->aacFrameLengthL;
+    if (show)
+    {
+        printf("adts:id  %d\n", head->id);
+        printf("adts:layer  %d\n", head->layer);
+        printf("adts:protection_absent  %d\n", head->protectionAbsent);
+        printf("adts:profile  %d\n", head->profile);
+        printf("adts:sf_index  %dHz\n", aac_freqList[head->samplingFreqIndex]);
+        printf("adts:pritvate_bit  %d\n", head->privateBit);
+        printf("adts:channel_configuration  %d\n", (head->chnH << 3) | head->chnL);
+        printf("adts:original  %d\n", head->originalCopy);
+        printf("adts:home  %d\n", head->home);
+        printf("adts:copyright_identification_bit  %d\n", head->copyrightIdentificationBit);
+        printf("adts:copyright_identification_start  %d\n", head->copyrightIdentificationStart);
+        printf("adts:aac_frame_length  %d\n", (head->aacFrameLengthH << 11) | (head->aacFrameLengthM << 3) | head->aacFrameLengthL);
+        printf("adts:adts_buffer_fullness  %d\n", (head->adtsBufferFullnessH << 6) | head->adtsBufferFullnessL);
+        printf("adts:no_raw_data_blocks_in_frame  %d\n", head->numberOfRawDataBlockInFrame);
+        printf("\n");
     }
+    return 0;
 }
 
 //------------------ faac, faad ------------------
@@ -146,7 +125,7 @@ int aac_parseHeader(uint8_t *in, AacHeader *res, uint8_t show)
 int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq)
 {
     int count = 0;
-    AacHeader aacHead = {.aacFrameLength = 0};
+    uint16_t frameLen = 0;
     NeAACDecHandle hDecoder;
     NeAACDecFrameInfo hInfo;
     uint8_t *ret;
@@ -158,7 +137,7 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     {
         if (in[0] == 0xFF && (in[1] & 0xF0) == 0xF0)
         {
-            if (aac_parseHeader(in, &aacHead, 0) == 0)
+            if (aac_parseHeader((AacHeader *)in, NULL, NULL, &frameLen, 0) == 0)
             {
                 if (count > 0)
                     printf("break at %d\n", count);
@@ -168,11 +147,11 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
         in++;
     }
     //检查是否足够一包数据
-    if (aacHead.aacFrameLength == 0)
+    if (frameLen == 0)
         return 0;
-    else if (inLen - count < aacHead.aacFrameLength)
+    else if (inLen - count < frameLen)
     {
-        *bytesConsumed = aacHead.aacFrameLength - (inLen - count);
+        *bytesConsumed = frameLen - (inLen - count);
         return 0;
     }
     //第一次初始化解码器句柄
@@ -181,11 +160,11 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     {
         hDecoder = NeAACDecOpen();
         //初始化解码器
-        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, (unsigned long *)freq, (unsigned char *)chn);
+        NeAACDecInit(hDecoder, in, frameLen, (unsigned long *)freq, (unsigned char *)chn);
         *aacDec = hDecoder;
     }
     //解码
-    ret = (uint8_t *)NeAACDecDecode(hDecoder, &hInfo, in, aacHead.aacFrameLength);
+    ret = (uint8_t *)NeAACDecDecode(hDecoder, &hInfo, in, frameLen);
     if (!ret || hInfo.error > 0)
     {
         printf("aac_decode: err %d [%s]\n",
@@ -212,7 +191,7 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
  */
 int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq)
 {
-    AacHeader aacHead;
+    uint16_t frameLen = 0;
     NeAACDecHandle hDecoder;
     NeAACDecFrameInfo hInfo;
     uint8_t in[2048];
@@ -230,12 +209,12 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
         {
             if (read(aacFile_fd, &in[2], 5) != 5)
                 return -1;
-            if (aac_parseHeader(in, &aacHead, 0) == 0)
+            if (aac_parseHeader((AacHeader *)in, NULL, NULL, &frameLen, 0) == 0)
                 break;
         }
     } while (1);
     //读数据段
-    if (read(aacFile_fd, &in[7], aacHead.aacFrameLength - 7) != aacHead.aacFrameLength - 7)
+    if (read(aacFile_fd, &in[7], frameLen - 7) != frameLen - 7)
         return -1;
     //第一次初始化解码器句柄
     hDecoder = *((NeAACDecHandle *)aacDec);
@@ -243,11 +222,11 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
     {
         hDecoder = NeAACDecOpen();
         //初始化解码器
-        NeAACDecInit(hDecoder, in, aacHead.aacFrameLength, (unsigned long *)freq, (unsigned char *)chn);
+        NeAACDecInit(hDecoder, in, frameLen, (unsigned long *)freq, (unsigned char *)chn);
         *aacDec = hDecoder;
     }
     //解码
-    retp = (uint8_t *)NeAACDecDecode(hDecoder, &hInfo, in, aacHead.aacFrameLength);
+    retp = (uint8_t *)NeAACDecDecode(hDecoder, &hInfo, in, frameLen);
     if (!retp || hInfo.error > 0)
     {
         printf("aac_decode: err %d [%s]\n",
