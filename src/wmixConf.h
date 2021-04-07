@@ -10,22 +10,20 @@
 
 #include "wmixPlat.h"
 
-//不带参数 和 带参数
-#define WMIX_ERR(fmt)           fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__)
-#define WMIX_ERR2(fmt, argv...) fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__, ##argv)
+/* ---------- 需和客户端(程序)保持同步的信息 ---------- */
 
-/* ---------- 需和客户端(程序)同步的信息 ---------- */
+#define WMIX_VERSION "V6.0RC1 - 20210407"
 
-#define WMIX_VERSION "V6.0RC1 - 20210406"
-
-#define WMIX_MSG_PATH "/tmp/wmix"
+//路径检查指令
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
 #define WMIX_MSG_PATH_AUTHORITY "chmod 777 /tmp/wmix -R"
-#define WMIX_MSG_ID 'w'
-#define WMIX_MSG_BUFF_SIZE 128
 
-//录音共享内存循环缓冲区大小,必须和 wmix_user.c 中的一致
-#define AI_CIRCLE_BUFF_LEN 10240
+//消息地址
+#define WMIX_MSG_PATH "/tmp/wmix"
+//消息地址标志
+#define WMIX_MSG_ID 'w'
+//消息体长度
+#define WMIX_MSG_BUFF_SIZE 128
 
 //客户端 发 服务端 消息类型
 typedef enum
@@ -66,17 +64,6 @@ typedef enum
     WMT_TOTAL,
 } WMIX_MSG_TYPE;
 
-//客户端(根据id) 发 服务端线程 控制类型
-typedef enum
-{
-    //下列控制状态是互斥的,即设置一个就会清掉别的控制状态
-    WCT_CLEAR = 1,   //清控制状态
-    WCT_STOP = 2,    //结束线程
-    WCT_RESET = 3,   //重置/重连(rtp)
-    WCT_SILENCE = 4, //静音,使用0数据运行
-    WCT_TOTAL,
-} WMIX_CTRL_TYPE;
-
 //消息载体格式
 typedef struct
 {
@@ -91,6 +78,31 @@ typedef struct
      */
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 } WMix_Msg;
+
+#include <sys/shm.h>
+//共享内存循环缓冲区长度
+#define WMIX_MEM_CIRCLE_BUFF_LEN 10240
+//共享内存1x8000录音数据地址标志
+#define WMIX_MEM_AI_1X8000_CHAR 'I'
+//共享内存原始录音数据地址标志
+#define WMIX_MEM_AI_ORIGIN_CHAR 'L'
+
+typedef struct
+{
+    int16_t w;
+    int16_t buff[WMIX_MEM_CIRCLE_BUFF_LEN + 4];
+} WMix_MemCircle;
+
+//客户端(根据id) 发 服务端线程 控制类型
+typedef enum
+{
+    //下列控制状态是互斥的,即设置一个就会清掉别的控制状态
+    WCT_CLEAR = 1,   //清控制状态
+    WCT_STOP = 2,    //结束线程
+    WCT_RESET = 3,   //重置/重连(rtp)
+    WCT_SILENCE = 4, //静音,使用0数据运行
+    WCT_TOTAL,
+} WMIX_CTRL_TYPE;
 
 /* ---------- 音频参数 ---------- */
 

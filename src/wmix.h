@@ -19,6 +19,10 @@
 //aac编码
 #include "aacType.h"
 
+//不带参数 和 带参数
+#define WMIX_ERR(fmt)           fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__)
+#define WMIX_ERR2(fmt, argv...) fprintf(stderr, "%s(%d): "fmt, __func__, __LINE__, ##argv)
+
 //第三方程序调用入口
 void wmix_start(void);
 //初始化
@@ -90,19 +94,13 @@ void wmix_task_play_mp3(
     uint8_t repeatInterval);
 #endif
 
-/*
- *  共享内存使用说明：
- *  "/tmp/wmix", 'O'： 单通道8000Hz客户端写入音频数据，这里读并播放
- *  "/tmp/wmix", 'I'： 单通道8000Hz这里录音并写入，客户端读取录音数据
- *  "/tmp/wmix", 'L'： 原始录音数据写入，客户端读取或混音器自己的录音线程取用
- */
-//单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
+//单通道8000Hz共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_read_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait);
-//原始录音共享内存数据, len和返回长度都按int16计算长度
+//原始录音共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_read_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait);
-//单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
+//单通道8000Hz共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_write_1x8000(int16_t *dat, int16_t len);
-//原始录音共享内存数据, len和返回长度都按int16计算长度
+//原始录音共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_write_origin(int16_t *dat, int16_t len);
 
 //知道输入长度,计算缩放后输出长度(注意长度必须2倍数)

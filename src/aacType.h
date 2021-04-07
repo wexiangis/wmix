@@ -16,10 +16,10 @@
 //aac的头字段,共7字节
 typedef struct
 {
-    uint32_t syncword;          //12 bit 同步字 '1111 1111 1111'，说明一个ADTS帧的开始
-    uint32_t id;                //1 bit MPEG 标示符， 0 for MPEG-4，1 for MPEG-2
+    uint32_t syncword;          //12 bit 同步字 '1111 1111 1111',说明一个ADTS帧的开始
+    uint32_t id;                //1 bit MPEG 标示符, 0 for MPEG-4,1 for MPEG-2
     uint32_t layer;             //2 bit 总是'00'
-    uint32_t protectionAbsent;  //1 bit 1表示没有crc，0表示有crc
+    uint32_t protectionAbsent;  //1 bit 1表示没有crc,0表示有crc
     uint32_t profile;           //2 bit 表示使用哪个级别的AAC
     uint32_t samplingFreqIndex; //4 bit 表示使用的采样频率
     uint32_t privateBit;        //1 bit

@@ -69,6 +69,12 @@ void help(char *argv0)
         "  -console path : 重定向打印信息输出路径,path示例: /dev/console /dev/ttyAMA0 或者文件\n"
         "  -? --help : 显示帮助\n"
         "\n"
+        "Extra:\n"
+        "  -note wavPath : 保存混音数据池的数据流到wav文件,写0关闭(如-note 0)\n"
+        "  -fft path : 1.指定fb设备路径(如/dev/fb0)连续输出幅频/相频图像,写0关闭(如-fft 0)\n"
+        "            : 2.指定.bmp文件路径(如./fft.bmp)输出幅频/相频图像\n"
+        "            : <将根据path内容自动选择模式>\n"
+        "\n"
         "Test:\n"
         "  -tm : 测试 wmix_mem_1x8000 接口,录制5秒的1x8000Hz的.pcm文件\n"
         "  -tm2 : 测试 wmix_mem_origin 接口,录制5秒的原始参数的.pcm文件\n"
@@ -76,23 +82,18 @@ void help(char *argv0)
         "  -tfi2 : 测试 wmix_fifo_record 接口aac模式,录制5秒的原始参数的.aac文件\n"
         "\n"
         "Return:\n"
-        "  0/OK <0/ERROR >0/id use to \"-k id\"\n"
+        "  = 0: ok\n"
+        "  < 0: error\n"
+        "  > 0: id, use to \"-k id\"\n"
         "\n"
         "Version: %s\n"
-        "\n"
-        "Extra:\n"
-        "  -note wavPath : 保存混音数据池的数据流到wav文件,写0关闭(如-note 0)\n"
-        "  -fft path : 1.指定fb设备路径(如/dev/fb0)连续输出幅频/相频图像,写0关闭(如-fft 0)\n"
-        "            : 2.指定.bmp文件路径(如./fft.bmp)输出幅频/相频图像\n"
-        "            : <将根据path内容自动选择模式>\n"
         "\n"
         "Example:\n"
         "  %s -v 10\n"
         "  %s ./music.wav\n"
-        "  %s ./music.wav -t 1\n"
         "  %s -r ./record.wav\n"
         "\n",
-        argv0, WMIX_VERSION, argv0, argv0, argv0, argv0);
+        argv0, WMIX_VERSION, argv0, argv0, argv0);
 }
 
 /*
@@ -197,7 +198,7 @@ int main(int argc, char **argv)
     int order = 0; //排序方式 0/-l 1/-i 2/-m -1/-b
 
     int rt = 5, rc = 1, rr = 8000; //指定录音的 时长(秒)、通道、频率
-    bool rAac = false; //以aac格式录音
+    int recordType = 0; //录音格式： 0/wav 1/aac
 
     char *rtp_ip; //rtp(g711格式) 全双工配置
     int rtp_port = 9999;
@@ -268,7 +269,7 @@ int main(int argc, char **argv)
         if (argvLen == 2 && strstr(argv[i], "-r"))
         {
             record = true;
-            rAac = false;
+            recordType = 0;
         }
         else if (argvLen == 4 && strstr(argv[i], "-log"))
         {
@@ -280,7 +281,7 @@ int main(int argc, char **argv)
         else if (argvLen == 5 && strstr(argv[i], "-raac"))
         {
             record = true;
-            rAac = true;
+            recordType = 1;
         }
         else if (argvLen == 3 && strstr(argv[i], "-rt"))
         {
@@ -722,7 +723,7 @@ int main(int argc, char **argv)
         else if (tfi_test_mode >= 0)
             wmix_fifo_test(filePath, rc, rr, rt, tfi_test_mode);
         else if (record)
-            wmix_record(filePath, rc, 16, rr, rt, rAac);
+            wmix_record(filePath, rc, rr, rt, recordType);
         else
             ret_id = wmix_play(filePath, reduce, interval, order);
         helpFalg = false;

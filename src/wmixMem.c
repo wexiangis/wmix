@@ -1,8 +1,5 @@
 /*
- *  共享内存使用说明：
- *  "/tmp/wmix", 'O'： 单通道8000Hz客户端写入音频数据，这里读并播放
- *  "/tmp/wmix", 'I'： 单通道8000Hz这里录音并写入，客户端读取录音数据
- *  "/tmp/wmix", 'L'： 原始录音数据写入，客户端读取或混音器自己的录音线程取用
+ *  共享内存使用说明
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,13 +14,7 @@
 
 #include "wmix.h"
 
-typedef struct
-{
-    int16_t w;
-    int16_t buff[AI_CIRCLE_BUFF_LEN + 4];
-} ShmemAi_Circle;
-
-static ShmemAi_Circle *ai_circle = NULL, *ao_circle = NULL, *ao_circleLocal = NULL;
+static WMix_MemCircle *mem1x8000 = NULL, *memOrigin = NULL;
 
 int wmix_mem_create(char *path, int flag, int size, void **mem)
 {
@@ -52,36 +43,36 @@ int wmix_mem_destroy(int id)
     return shmctl(id, IPC_RMID, NULL);
 }
 
-//单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
+//单通道8000Hz共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_read_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
     int16_t w = *addr;
-    if (!ai_circle)
+    if (!mem1x8000)
     {
-        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void **)&ai_circle);
-        if (!ai_circle)
+        wmix_mem_create(WMIX_MSG_PATH, WMIX_MEM_AI_1X8000_CHAR, sizeof(WMix_MemCircle), (void **)&mem1x8000);
+        if (!mem1x8000)
         {
             WMIX_ERR("wmix_mem_read_1x8000: shm_create err !!\r\n");
             return 0;
         }
-        w = ai_circle->w;
+        w = mem1x8000->w;
     }
-    if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
-        w = ai_circle->w;
+    if (w < 0 || w >= WMIX_MEM_CIRCLE_BUFF_LEN)
+        w = mem1x8000->w;
     for (i = 0; i < len;)
     {
-        if (w == ai_circle->w)
+        if (w == mem1x8000->w)
         {
-            if (wait && ai_circle)
+            if (wait && mem1x8000)
             {
                 usleep(5000);
                 continue;
             }
             break;
         }
-        *dat++ = ai_circle->buff[w++];
-        if (w >= AI_CIRCLE_BUFF_LEN)
+        *dat++ = mem1x8000->buff[w++];
+        if (w >= WMIX_MEM_CIRCLE_BUFF_LEN)
             w = 0;
         i += 1;
     }
@@ -89,36 +80,36 @@ int16_t wmix_mem_read_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait
     return i;
 }
 
-//原始录音共享内存数据, len和返回长度都按int16计算长度
+//原始录音共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_read_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait)
 {
     int16_t i = 0;
     int16_t w = *addr;
-    if (!ao_circleLocal)
+    if (!memOrigin)
     {
-        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ao_circleLocal);
-        if (!ao_circleLocal)
+        wmix_mem_create(WMIX_MSG_PATH, WMIX_MEM_AI_ORIGIN_CHAR, sizeof(WMix_MemCircle), (void **)&memOrigin);
+        if (!memOrigin)
         {
             WMIX_ERR("wmix_mem_read_origin: shm_create err !!\r\n");
             return 0;
         }
-        w = ao_circleLocal->w;
+        w = memOrigin->w;
     }
-    if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
-        w = ao_circleLocal->w;
+    if (w < 0 || w >= WMIX_MEM_CIRCLE_BUFF_LEN)
+        w = memOrigin->w;
     for (i = 0; i < len;)
     {
-        if (w == ao_circleLocal->w)
+        if (w == memOrigin->w)
         {
-            if (wait && ao_circleLocal)
+            if (wait && memOrigin)
             {
                 usleep(5000);
                 continue;
             }
             break;
         }
-        *dat++ = ao_circleLocal->buff[w++];
-        if (w >= AI_CIRCLE_BUFF_LEN)
+        *dat++ = memOrigin->buff[w++];
+        if (w >= WMIX_MEM_CIRCLE_BUFF_LEN)
             w = 0;
         i += 1;
     }
@@ -126,52 +117,52 @@ int16_t wmix_mem_read_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait
     return i;
 }
 
-//单通道8000Hz共享内存数据, len和返回长度都按int16计算长度
+//单通道8000Hz共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_write_1x8000(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
-    if (!ao_circle)
+    if (!mem1x8000)
     {
-        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void **)&ao_circle);
-        if (!ao_circle)
+        wmix_mem_create(WMIX_MSG_PATH, WMIX_MEM_AI_1X8000_CHAR, sizeof(WMix_MemCircle), (void **)&mem1x8000);
+        if (!mem1x8000)
         {
             WMIX_ERR("wmix_mem_write_1x8000: shm_create err !!\r\n");
             return 0;
         }
-        ao_circle->w = 0;
+        mem1x8000->w = 0;
     }
     for (i = 0; i < len; i++)
     {
-        ao_circle->buff[ao_circle->w] = *dat++;
-        if (ao_circle->w + 1 < AI_CIRCLE_BUFF_LEN)
-            ao_circle->w += 1;
+        mem1x8000->buff[mem1x8000->w] = *dat++;
+        if (mem1x8000->w + 1 < WMIX_MEM_CIRCLE_BUFF_LEN)
+            mem1x8000->w += 1;
         else
-            ao_circle->w = 0;
+            mem1x8000->w = 0;
     }
     return i;
 }
 
-//原始录音共享内存数据, len和返回长度都按int16计算长度
+//原始录音共享内存数据,len和返回长度都按int16计算长度
 int16_t wmix_mem_write_origin(int16_t *dat, int16_t len)
 {
     int16_t i = 0;
-    if (!ao_circleLocal)
+    if (!memOrigin)
     {
-        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ao_circleLocal);
-        if (!ao_circleLocal)
+        wmix_mem_create(WMIX_MSG_PATH, WMIX_MEM_AI_ORIGIN_CHAR, sizeof(WMix_MemCircle), (void **)&memOrigin);
+        if (!memOrigin)
         {
             WMIX_ERR("wmix_mem_write_origin: shm_create err !!\r\n");
             return 0;
         }
-        ao_circleLocal->w = 0;
+        memOrigin->w = 0;
     }
     for (i = 0; i < len; i++)
     {
-        ao_circleLocal->buff[ao_circleLocal->w] = *dat++;
-        if (ao_circleLocal->w + 1 < AI_CIRCLE_BUFF_LEN)
-            ao_circleLocal->w += 1;
+        memOrigin->buff[memOrigin->w] = *dat++;
+        if (memOrigin->w + 1 < WMIX_MEM_CIRCLE_BUFF_LEN)
+            memOrigin->w += 1;
         else
-            ao_circleLocal->w = 0;
+            memOrigin->w = 0;
     }
     return i;
 }

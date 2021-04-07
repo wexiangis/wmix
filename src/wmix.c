@@ -30,8 +30,11 @@ uint32_t wmix_len_of_out(
     uint32_t inCount = 0, outCount = 0;
     //缩放分度格和计数
     float div, divStep = 0;
+    //一样
+    if (inFreq == outFreq && inChn == outChn)
+        return inLen;
     //放大
-    if (inFreq < outFreq)
+    else if (inFreq < outFreq)
     {
         div = (float)inFreq / outFreq; //用小的除以大的
         while (inCount < inLen)
@@ -72,8 +75,11 @@ uint32_t wmix_len_of_in(
     uint32_t inCount = 0, outCount = 0;
     //缩放分度格和计数
     float div, divStep = 0;
+    //一样
+    if (inFreq == outFreq && inChn == outChn)
+        return outLen;
     //放大
-    if (inFreq < outFreq)
+    else if (inFreq < outFreq)
     {
         div = (float)inFreq / outFreq; //用小的除以大的
         while (outCount < outLen)
@@ -120,8 +126,14 @@ uint32_t wmix_pcm_zoom(
     float div, divStep = 0;
     //声道匹配模式
     uint8_t chnMode = (inChn << 4) | (outChn & 0x0F);
+    //一样
+    if (inFreq == outFreq && inChn == outChn)
+    {
+        memcpy(out, in, inLen);
+        return inLen;
+    }
     //放大
-    if (inFreq < outFreq)
+    else if (inFreq < outFreq)
     {
         div = (float)inFreq / outFreq; //用小的除以大的
         while (inP.S16 < inPEnd.S16)

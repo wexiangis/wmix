@@ -18,8 +18,13 @@
 
 #include "wmix_user.h"
 
+/* ---------- 需和服务端(程序)同步的信息 ---------- */
+
+//消息地址
 #define WMIX_MSG_PATH "/tmp/wmix"
+//消息地址标志
 #define WMIX_MSG_ID 'w'
+//消息体长度
 #define WMIX_MSG_BUFF_SIZE 128
 
 //客户端 发 服务端 消息类型
@@ -75,6 +80,22 @@ typedef struct
      */
     uint8_t value[WMIX_MSG_BUFF_SIZE];
 } WMix_Msg;
+
+#include <sys/shm.h>
+//共享内存循环缓冲区长度
+#define WMIX_MEM_CIRCLE_BUFF_LEN 10240
+//共享内存1x8000录音数据地址标志
+#define WMIX_MEM_AI_1X8000_CHAR 'I'
+//共享内存原始录音数据地址标志
+#define WMIX_MEM_AI_ORIGIN_CHAR 'L'
+
+typedef struct
+{
+    int16_t w;
+    int16_t buff[WMIX_MEM_CIRCLE_BUFF_LEN + 4];
+} WMix_MemCircle;
+
+/* ---------- 需和服务端(程序)同步的信息 ---------- */
 
 //时间工具
 #include <sys/time.h>
@@ -167,7 +188,11 @@ int wmix_auto_path(char *buff, int id)
     return ret;
 }
 
-int wmix_play(char *wavOrMp3, uint8_t backgroundReduce, uint8_t repeatInterval, int order)
+int wmix_play(
+    char *wavOrMp3,
+    uint8_t backgroundReduce,
+    uint8_t repeatInterval,
+    int order)
 {
     WMix_Msg msg;
     char msgPath[128] = {0};
@@ -299,11 +324,11 @@ void *_tmp_callback(void *path)
 }
 
 int wmix_fifo_play(
-    uint8_t channels,
+    uint8_t chn,
     uint16_t freq,
     uint8_t backgroundReduce)
 {
-    if (!freq || !channels)
+    if (!freq || !chn)
         return -1;
 
     int fd = 0;
@@ -320,7 +345,7 @@ int wmix_fifo_play(
     // remove(path);
     //装填 message
     msg.type = (int)WMT_FIFO_PLAY + backgroundReduce * 0x100;
-    msg.value[0] = channels;
+    msg.value[0] = chn > 1 ? 2 : 1;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
     msg.value[3] = freq & 0xFF;
@@ -363,11 +388,11 @@ int wmix_fifo_play(
 }
 
 int wmix_fifo_record(
-    uint8_t channels,
+    uint8_t chn,
     uint16_t freq,
     int type)
 {
-    if (!freq || !channels)
+    if (!freq || !chn)
         return -1;
 
     int fd = 0;
@@ -389,7 +414,7 @@ int wmix_fifo_record(
         msg.type = (int)WMT_FIFO_AAC;
     else
         msg.type = (int)WMT_FIFO_RECORD;
-    msg.value[0] = channels;
+    msg.value[0] = chn > 1 ? 2 : 1;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
     msg.value[3] = freq & 0xFF;
@@ -415,11 +440,10 @@ int wmix_fifo_record(
 
 int wmix_record(
     char *wavPath,
-    uint8_t channels,
-    uint8_t sample,
+    uint8_t chn,
     uint16_t freq,
     uint16_t second,
-    bool useAAC)
+    int type)
 {
     if (!wavPath)
         return -1;
@@ -428,9 +452,9 @@ int wmix_record(
     MSG_INIT();
     //装填 message
     memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = useAAC ? WMT_RECORD_AAC : WMT_RECORD_WAV;
-    msg.value[0] = channels;
-    msg.value[1] = sample;
+    msg.type = type == 1 ? WMT_RECORD_AAC : WMT_RECORD_WAV;
+    msg.value[0] = chn > 1 ? 2 : 1;
+    msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
     msg.value[3] = freq & 0xFF;
     msg.value[4] = (second >> 8) & 0xFF;
@@ -485,7 +509,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     else
         msg.type = isSend ? WMT_RTP_SEND_PCMA : WMT_RTP_RECV_PCMA;
     msg.type += backgroundReduce * 0x100;
-    msg.value[0] = chn;
+    msg.value[0] = chn > 1 ? 2 : 1;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xff;
     msg.value[3] = freq & 0xff;
@@ -540,17 +564,8 @@ bool wmix_check_id(int id)
 
 //============= shm =============
 
-#include <sys/shm.h>
-
-#define AI_CIRCLE_BUFF_LEN 10240
-typedef struct
-{
-    int16_t w;
-    int16_t buff[AI_CIRCLE_BUFF_LEN + 4];
-} ShmemAi_Circle;
-
-static ShmemAi_Circle *ai_circle = NULL, *ai_circle2 = NULL;
-static int wmix_shmemRun = 0;
+static WMix_MemCircle *mem1x8000 = NULL, *memOrigin = NULL;
+static int memIsOpen = 0;
 
 int wmix_mem_create(char *path, int flag, int size, void **mem)
 {
@@ -582,18 +597,18 @@ int wmix_mem_destroy(int id)
 
 void wmix_mem_open(void)
 {
-    if (wmix_shmemRun)
+    if (memIsOpen)
         return;
     _wmix_set_value(WMT_MEM_SW, 1);
-    wmix_shmemRun = 1;
+    memIsOpen = 1;
 }
 
 void wmix_mem_close(void)
 {
-    if (!wmix_shmemRun)
+    if (!memIsOpen)
         return;
     _wmix_set_value(WMT_MEM_SW, 0);
-    wmix_shmemRun = 0;
+    memIsOpen = 0;
 }
 
 //len和返回长度都按int16计算长度
@@ -603,25 +618,25 @@ int16_t wmix_mem_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     int16_t w = *addr;
     int timeout = 0;
 
-    if (!ai_circle)
+    if (!mem1x8000)
     {
         wmix_mem_open();
-        wmix_mem_create("/tmp/wmix", 'I', sizeof(ShmemAi_Circle), (void **)&ai_circle);
-        if (!ai_circle)
+        wmix_mem_create(WMIX_MSG_PATH, WMIX_MEM_AI_1X8000_CHAR, sizeof(WMix_MemCircle), (void **)&mem1x8000);
+        if (!mem1x8000)
         {
             fprintf(stderr, "wmix_mem_1x8000: shm_create err !!\n");
             return 0;
         }
-        w = ai_circle->w;
+        w = mem1x8000->w;
     }
 
-    if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
-        w = ai_circle->w;
+    if (w < 0 || w >= WMIX_MEM_CIRCLE_BUFF_LEN)
+        w = mem1x8000->w;
     for (i = 0; i < len;)
     {
-        if (w == ai_circle->w)
+        if (w == mem1x8000->w)
         {
-            if (wait && ai_circle)
+            if (wait && mem1x8000)
             {
                 timeout += 5;
                 if (timeout > 2000) //2秒超时
@@ -634,8 +649,8 @@ int16_t wmix_mem_1x8000(int16_t *dat, int16_t len, int16_t *addr, bool wait)
             }
             break;
         }
-        *dat++ = ai_circle->buff[w++];
-        if (w >= AI_CIRCLE_BUFF_LEN)
+        *dat++ = mem1x8000->buff[w++];
+        if (w >= WMIX_MEM_CIRCLE_BUFF_LEN)
             w = 0;
         i += 1;
     }
@@ -650,23 +665,23 @@ int16_t wmix_mem_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait)
     int16_t w = *addr;
     int timeout = 0;
 
-    if (!ai_circle2)
+    if (!memOrigin)
     {
-        wmix_mem_create("/tmp/wmix", 'L', sizeof(ShmemAi_Circle), (void **)&ai_circle2);
-        if (!ai_circle2)
+        wmix_mem_create(WMIX_MSG_PATH, WMIX_MEM_AI_ORIGIN_CHAR, sizeof(WMix_MemCircle), (void **)&memOrigin);
+        if (!memOrigin)
         {
             fprintf(stderr, "wmix_mem_origin: shm_create err !!\n");
             return 0;
         }
-        w = ai_circle2->w;
+        w = memOrigin->w;
     }
-    if (w < 0 || w >= AI_CIRCLE_BUFF_LEN)
-        w = ai_circle2->w;
+    if (w < 0 || w >= WMIX_MEM_CIRCLE_BUFF_LEN)
+        w = memOrigin->w;
     for (i = 0; i < len;)
     {
-        if (w == ai_circle2->w)
+        if (w == memOrigin->w)
         {
-            if (wait && ai_circle2)
+            if (wait && memOrigin)
             {
                 timeout += 5;
                 if (timeout > 2000) //2秒超时
@@ -679,8 +694,8 @@ int16_t wmix_mem_origin(int16_t *dat, int16_t len, int16_t *addr, bool wait)
             }
             break;
         }
-        *dat++ = ai_circle2->buff[w++];
-        if (w >= AI_CIRCLE_BUFF_LEN)
+        *dat++ = memOrigin->buff[w++];
+        if (w >= WMIX_MEM_CIRCLE_BUFF_LEN)
             w = 0;
         i += 1;
     }
@@ -764,7 +779,7 @@ void wmix_console(char *path)
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 }
 
-int wmix_ctrl(int id, int ctrl_type)
+int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type)
 {
     key_t msg_key;
     int msg_fd;
@@ -789,7 +804,7 @@ int wmix_ctrl(int id, int ctrl_type)
         return -1;
     }
     //组装消息
-    msg.type = ctrl_type;
+    msg.type = (int)ctrl_type;
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
     return 0;
