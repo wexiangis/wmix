@@ -355,11 +355,21 @@ int aac_encode(void **aacEnc, uint8_t *in, int inLen, uint8_t *out, uint32_t out
         }
 
         pConfiguration = faacEncGetCurrentConfiguration(hEncoder);
+        // printf("aac_encode: \n"
+        //     "  nInputSamples %d\n"
+        //     "  nMaxOutputBytes %d\n"
+        //     "  outputFormat %d\n"
+        //     "  inputFormat %d\n"
+        //     "  bitrate %d\n"
+        //     "  bandWidth %d\r\n",
+        //     nInputSamples,
+        //     nMaxOutputBytes,
+        //     pConfiguration->outputFormat,
+        //     pConfiguration->inputFormat,
+        //     pConfiguration->bitRate,
+        //     pConfiguration->bandWidth);
         pConfiguration->inputFormat = FAAC_INPUT_16BIT;
         faacEncSetConfiguration(hEncoder, pConfiguration);
-
-        // printf("nInputSamples %d, bitrate %d, bandWidth %d\r\n",
-        //     nInputSamples, pConfiguration->bitRate, pConfiguration->bandWidth);
         *aacEnc = hEncoder;
     }
     return faacEncEncode(hEncoder, (int32_t *)in, inLen / 2, out, outSize);

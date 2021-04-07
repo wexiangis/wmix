@@ -99,7 +99,7 @@ int wmix_fifo_play(
  *      freq: 频率不得大于wmix原声频率
  *      type: 录音格式: 0/pcm 1/aac(需启用MAKE_AAC) 2/g711a
  *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
- *  说明: 对于aac格式,由于使用的faac库限制,仅支持双声道和16000、32000、44100Hz配置
+ *  说明: 对于aac格式,仅支持双声道和16000、22050、32000、44100Hz配置
  */
 int wmix_fifo_record(
     uint8_t chn,
@@ -114,7 +114,7 @@ int wmix_fifo_record(
  *      second: 录音时长秒
  *      type: 录音格式: 0/wav 1/aac(需启用MAKE_AAC)
  *  返回: 正常0
- *  说明: 对于aac格式,由于使用的faac库限制,仅支持双声道和16000、32000、44100Hz配置
+ *  说明: 对于aac格式,仅支持双声道和16000、22050、32000、44100Hz配置
  */
 int wmix_record(
     char *wavPath,
@@ -132,7 +132,6 @@ int wmix_record(
  *      bindMode: 以服务器形式连接(bind),这个设置很重要
  *      backgroundReduce: 同上面
  *  返回: 正常返回>0特定id,可用于"wmix_play_kill(id)"  失败返回-1
- *  说明: 对于aac格式,由于使用的faac库限制,仅支持双声道和16000、32000、44100Hz配置
  */
 int wmix_rtp_recv(
     char *ip,
@@ -151,7 +150,7 @@ int wmix_rtp_recv(
  *      type: 0/pcma 1/aac
  *      bindMode: 以服务器形式连接(bind),这个设置很重要
  *  返回: 正常返回>0特定id,可用于"wmix_play_kill(id)"  失败返回-1
- *  说明: 对于aac格式,由于使用的faac库限制,仅支持双声道和16000、32000、44100Hz配置
+ *  说明: 对于aac格式,仅支持双声道和16000、22050、32000、44100Hz配置
  */
 int wmix_rtp_send(
     char *ip,
