@@ -810,7 +810,8 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
     //aac解码句柄
     void *aacDec = NULL;
     int datUse = 0;
-    int chnInt, freqInt; //用于decode参数
+    uint8_t chnInt; //用于decode参数
+    uint16_t freqInt;
     uint8_t aacBuff[4096];
     //rtp
     RtpChain_Struct *rcs;
@@ -1533,10 +1534,10 @@ void wmix_task_play_wav(
         else
             break;
     }
-    //
+
     close(fd);
     free(buff);
-    //
+
     if (wmix->debug)
         printf(">> PLAY-WAV: %s end <<\r\n", wavPath);
     //关闭 reduceMode
@@ -1568,9 +1569,9 @@ void wmix_task_play_aac(
     void *aacDec = NULL;
     uint8_t buff[8192];
     //音频基本参数
-    int chn;
+    uint8_t  chn;
+    uint16_t freq;
     int sample = 16;
-    int freq;
     uint32_t secBytes;
     //系统更新loopWord时,会关闭该条播放
     int timeout;
@@ -1586,7 +1587,7 @@ void wmix_task_play_aac(
         return;
     }
     //初始化解码器
-    ret = aac_decode2(&aacDec, fd, buff, (int *)&chn, (int *)&freq);
+    ret = aac_decode2(&aacDec, fd, buff, &chn, &freq);
     if (ret < 0)
     {
         WMIX_ERR("aac_decode2 err\r\n");
@@ -1594,6 +1595,7 @@ void wmix_task_play_aac(
         return;
     }
 
+    //一秒字节数
     secBytes = chn * sample / 8 * freq;
 
     if (wmix->debug)
@@ -1722,7 +1724,7 @@ void wmix_task_play_aac(
         else
             break;
         //解码
-        ret = aac_decode2(&aacDec, fd, buff, (int *)&chn, (int *)&freq);
+        ret = aac_decode2(&aacDec, fd, buff, &chn, &freq);
         if (ret < 0)
             break;
     }

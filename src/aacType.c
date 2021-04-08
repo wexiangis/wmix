@@ -122,13 +122,15 @@ int aac_parseHeader(AacHeader *head, uint8_t *chn, uint16_t *freq, uint16_t *fra
  *      bytesConsumed: 已使用in数据长度,用于in数据偏移,返回0时表示缺少数据量
  *  返回: pcm数据长度, -1/解析aac头失败, 0/数据不足,bytesConsumed返回缺少数据量
  */
-int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, int *chn, int *freq)
+int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesConsumed, uint8_t *chn, uint16_t *freq)
 {
     int count = 0;
     uint16_t frameLen = 0;
     NeAACDecHandle hDecoder;
     NeAACDecFrameInfo hInfo;
     uint8_t *ret;
+    unsigned long samplerate;
+    unsigned char channels;
 
     if (!aacDec)
         return -1;
@@ -160,7 +162,7 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     {
         hDecoder = NeAACDecOpen();
         //初始化解码器
-        NeAACDecInit(hDecoder, in, frameLen, (unsigned long *)freq, (unsigned char *)chn);
+        NeAACDecInit(hDecoder, in, frameLen, &samplerate, &channels);
         *aacDec = hDecoder;
     }
     //解码
@@ -173,10 +175,14 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
     }
     //拷贝数据
     memcpy(out, ret, hInfo.samples * hInfo.channels);
+
     //参数返回
-    *bytesConsumed = hInfo.bytesconsumed + count;
-    *chn = hInfo.channels;
-    *freq = hInfo.samplerate;
+    if (bytesConsumed)
+        *bytesConsumed = hInfo.bytesconsumed + count;
+    if (chn)
+        *chn = hInfo.channels;
+    if (freq)
+        *freq = hInfo.samplerate;
 
     return hInfo.samples * hInfo.channels;
 }
@@ -189,7 +195,7 @@ int aac_decode(void **aacDec, uint8_t *in, int inLen, uint8_t *out, int *bytesCo
  *      out: 返回数据缓冲区,要求大于等于8192
  *  返回: pcm数据长度, -1失败
  */
-int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq)
+int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, uint8_t *chn, uint16_t *freq)
 {
     uint16_t frameLen = 0;
     NeAACDecHandle hDecoder;
@@ -197,6 +203,8 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
     uint8_t in[2048];
     uint8_t *retp;
     size_t ret;
+    unsigned long samplerate;
+    unsigned char channels;
 
     if (!aacDec)
         return -1;
@@ -222,7 +230,7 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
     {
         hDecoder = NeAACDecOpen();
         //初始化解码器
-        NeAACDecInit(hDecoder, in, frameLen, (unsigned long *)freq, (unsigned char *)chn);
+        NeAACDecInit(hDecoder, in, frameLen, &samplerate, &channels);
         *aacDec = hDecoder;
     }
     //解码
@@ -239,9 +247,10 @@ int aac_decode2(void **aacDec, int aacFile_fd, uint8_t *out, int *chn, int *freq
         memcpy(out, retp, ret);
 
     //参数返回
-    *chn = hInfo.channels;
-    *freq = hInfo.samplerate;
-
+    if (chn)
+        *chn = hInfo.channels;
+    if (freq)
+        *freq = hInfo.samplerate;
     return ret;
 }
 
@@ -249,7 +258,9 @@ void aac_decodeToFile(char *aacFile, char *pcmFile)
 {
     void *aacDec = NULL;
     uint8_t *out = NULL;
-    int ret = 0, chn = 0, freq = 0;
+    int ret = 0;
+    uint8_t chn = 0;
+    uint16_t freq = 0;
     size_t totalBytes = 0;
     int fw, fr;
 
