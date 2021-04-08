@@ -499,34 +499,34 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
     free(wmtp);
 }
 
-#define WMIX_RTP_CTRL_MSG_RECV(thread_name)                  \
-    if (msg_fd)                                              \
-    {                                                        \
-        if (msgrcv(msg_fd, &msg,                             \
-                   WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1)   \
-        {                                                    \
-            if (errno != ENOMSG)                             \
-            {                                                \
-                if (wmtp->wmix->debug)                       \
-                    printf("%s exit: %d msgrecv err/%d\r\n", \
-                           thread_name, msg_fd, errno);      \
-                break;                                       \
-            }                                                \
-        }                                                    \
-        else                                                 \
-        {                                                    \
-            if (wmtp->wmix->debug)                           \
-                printf("%s: msg recv %ld\r\n",               \
-                       thread_name, msg.type);               \
-            ctrlType = msg.type & 0xFF;                      \
-            if (ctrlType == WCT_RESET)                       \
-            {                                                \
-                rtpChain_reconnect(rcs);                     \
-                ctrlType = WCT_CLEAR;                        \
-            }                                                \
-            else if (ctrlType == WCT_STOP)                   \
-                break;                                       \
-        }                                                    \
+#define WMIX_RTP_CTRL_MSG_RECV(thread_name)                     \
+    if (msg_fd)                                                 \
+    {                                                           \
+        if (msgrcv(msg_fd, &msg,                                \
+                   WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1)      \
+        {                                                       \
+            if (errno != ENOMSG)                                \
+            {                                                   \
+                if (wmtp->wmix->debug)                          \
+                    printf("%s exit: %d msgrecv err/%d\r\n",    \
+                           thread_name, msg_fd, errno);         \
+                break;                                          \
+            }                                                   \
+        }                                                       \
+        else                                                    \
+        {                                                       \
+            if (wmtp->wmix->debug)                              \
+                printf("%s: msg recv %ld\r\n",                  \
+                       thread_name, msg.type);                  \
+            ctrlType = msg.type & 0xFF;                         \
+            if (ctrlType == WCT_RESET)                          \
+            {                                                   \
+                rtp_socket_reconnect(&ss, url, port, bindMode); \
+                ctrlType = WCT_CLEAR;                           \
+            }                                                   \
+            else if (ctrlType == WCT_STOP)                      \
+                break;                                          \
+        }                                                       \
     }
 
 #if (MAKE_AAC)
@@ -648,24 +648,27 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     //aac编码用
     void *aacEnc = NULL;
     uint8_t aacBuff[4096];
+    AacHeader *aacHead = (AacHeader *)aacBuff;
     //计时打印:
     uint32_t second = 0, secBytes, secBytesCount = 0;
     //rtp
-    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    SocketStruct *ss;
     long ctrlType = 0;
     //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
 
-    //初始化rtp
-    rcs = rtpChain_get(url, port, true, bindMode);
-    if (!rcs)
+    //初始化rtp,建立socket
+    ss = rtp_socket(url, port, bindMode);
+    if (!ss)
     {
-        WMIX_ERR("rtpChain_get: err\r\n");
+        WMIX_ERR2("rtp_socket: %s:%d <%d> err\r\n", url, port, bindMode ? 1 : 0);
         return;
     }
+    //rtp帧头准备
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_AAC, 1, 0, 0, 0x32411);
+
     //初始化消息
     msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
@@ -686,9 +689,6 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     else
         msgPath = NULL;
 
-    //生成sdp文件
-    rtp_create_sdp("/tmp/record-aac.sdp", url, port, chn, freq, RTP_PAYLOAD_TYPE_AAC);
-
     //一秒数据量
     secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     //缓存分配,配合aac编码需要,设置输出格式
@@ -696,6 +696,12 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
     buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
     buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
+
+    //生成sdp文件,可用于vlc播放
+    rtp_create_sdp(
+        "/tmp/record-aac.sdp",
+        url, port, chn, freq,
+        RTP_PAYLOAD_TYPE_AAC);
 
     if (wmtp->wmix->debug)
         printf(
@@ -735,22 +741,20 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
             //输出
             if (ret > 7)
             {
-                // aac_parseHeader((AacHeader *)aacBuff, NULL, NULL, NULL, 1);
+                // aac_parseHeader(aacHead, NULL, NULL, NULL, 1);
                 ret -= 7;
                 memcpy(&rtpPacket.payload[4], &aacBuff[7], ret);
-                pthread_mutex_lock(&rcs->lock);
-                //bindMode时,作为主机的一端必须先收到数据才开始发送数据
-                // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
-                //     ;
-                // else
-                ret = rtp_send(rcs->ss, &rtpPacket, ret);
-                pthread_mutex_unlock(&rcs->lock);
+                //时间戳更新
+                rtpPacket.rtpHeader.timestamp +=
+                    (((aacHead->adtsBufferFullnessH << 6) | aacHead->adtsBufferFullnessL) + 1) / 2;
+                //发出
+                ret = rtp_send(ss, &rtpPacket, ret);
                 if (ret < 0)
                 {
                     // WMIX_ERR("rtp_send err !!\r\n");
                     delayus(1000000);
                     //重连
-                    rtpChain_reconnect(rcs);
+                    rtp_socket_reconnect(&ss, url, port, bindMode);
                     break;
                 }
             }
@@ -766,8 +770,8 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
     //关闭aac编码器
     if (aacEnc)
         aac_encodeRelease(&aacEnc);
-    //释放rtp链表
-    rtpChain_release(rcs, true);
+    //释放rtp
+    rtp_socket_close(&ss);
     //关闭流和删除fifo文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
@@ -814,8 +818,8 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
     uint16_t freqInt;
     uint8_t aacBuff[4096];
     //rtp
-    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    SocketStruct *ss;
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
@@ -824,13 +828,14 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
 
-    //初始化rtp
-    rcs = rtpChain_get(url, port, false, bindMode);
-    if (!rcs)
+    //初始化rtp,建立socket
+    ss = rtp_socket(url, port, bindMode);
+    if (!ss)
     {
-        WMIX_ERR("rtpChain_get: err\r\n");
+        WMIX_ERR2("rtp_socket: %s:%d <%d> err\r\n", url, port, bindMode ? 1 : 0);
         return;
     }
+
     //初始化消息
     msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
@@ -886,10 +891,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
         //msg 检查
         WMIX_RTP_CTRL_MSG_RECV("RTP-RECV-AAC");
         //往aacBuff读入数据
-        pthread_mutex_lock(&rcs->lock);
-        ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
-        pthread_mutex_unlock(&rcs->lock);
-
+        ret = rtp_recv(ss, &rtpPacket, (uint32_t *)&retSize);
         if (ret > 0 && retSize > 0)
         {
             //自创建aac头(rtp不传输aac头)并组装数据
@@ -939,7 +941,7 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
                 // WMIX_ERR("rtp_recv err !!\r\n");
                 delayus(1000000);
                 //重连
-                rtpChain_reconnect(rcs);
+                rtp_socket_reconnect(&ss, url, port, bindMode);
                 recv_timeout = 0;
                 continue;
             }
@@ -984,8 +986,8 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
     //关闭解码器
     if (aacDec)
         aac_decodeRelease(&aacDec);
-    //释放rtp链表
-    rtpChain_release(rcs, false);
+    //释放rtp
+    rtp_socket_close(&ss);
     //线程计数
     wmtp->wmix->thread_play -= 1;
     //关闭 reduceMode
@@ -1022,20 +1024,21 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
     //计时打印:
     uint32_t second = 0, secBytes, secBytesCount = 0;
     //rtp
-    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    SocketStruct *ss;
     long ctrlType = 0;
     //线程同步
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRecord;
 
-    //初始化rtp
-    rcs = rtpChain_get(url, port, true, bindMode);
-    if (!rcs)
+    //初始化rtp,建立socket
+    ss = rtp_socket(url, port, bindMode);
+    if (!ss)
     {
-        WMIX_ERR("rtpChain_get: err\r\n");
+        WMIX_ERR2("rtp_socket: %s:%d <%d> err\r\n", url, port, bindMode ? 1 : 0);
         return;
     }
+    //rtp帧头准备
     rtp_header(&rtpPacket, 0, 0, 0, RTP_VESION, RTP_PAYLOAD_TYPE_PCMA, 1, 0, 0, 0);
     //初始化消息
     msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
@@ -1057,19 +1060,30 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
     else
         msgPath = NULL;
 
-    //生成sdp文件
+    //一秒数据量
+    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
+
+#if 0
+    //该模式固定1x8000Hz配置
+    chn = 1;
+    freq = 8000;
+    // 按每包rtp装载160字节g711a的量
+    buffSizeDist = 160 * 2;
+#else
+    // 按20ms采样间隔的量
+    buffSizeDist = WMIX_INTERVAL_MS * freq / 1000 * chn * sample / 8;
+#endif
+
+    //缓存分配
+    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
+    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
+    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
+
+    //生成sdp文件,可用于vlc播放
     rtp_create_sdp(
         "/tmp/record.sdp",
         url, port, chn, freq,
         RTP_PAYLOAD_TYPE_PCMA);
-
-    //一秒数据量
-    secBytes = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
-    //缓存分配,配合aac编码需要,设置输出格式
-    buffSizeDist = freq * WMIX_INTERVAL_MS / 1000 * chn * sample / 8;
-    buffDist = (uint8_t *)calloc(buffSizeDist, sizeof(uint8_t));
-    buffSizeSrc = wmix_len_of_in(WMIX_CHN, WMIX_FREQ, chn, freq, buffSizeDist);
-    buffSrc = (uint8_t *)calloc(buffSizeSrc, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
         printf(
@@ -1104,20 +1118,15 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             //g711a编码,同时塞入rtp包中
             ret = PCM2G711a((char *)buffDist, (char *)rtpPacket.payload, ret, 0);
             //时间戳更新
-            rtpPacket.rtpHeader.timestamp += ret;
-            pthread_mutex_lock(&rcs->lock);
-            //bindMode时,作为主机的一端必须先收到数据才开始发送数据
-            // if(rcs->bindMode && rcs->recv_run && rcs->flagRecv == 0)
-            //     ;
-            // else
-            ret = rtp_send(rcs->ss, &rtpPacket, ret);
-            pthread_mutex_unlock(&rcs->lock);
+            rtpPacket.rtpHeader.timestamp += ret / chn;
+            //发
+            ret = rtp_send(ss, &rtpPacket, ret);
             if (ret < 0)
             {
                 // WMIX_ERR("rtp_send err !!\r\n");
                 delayus(1000000);
                 //重连
-                rtpChain_reconnect(rcs);
+                rtp_socket_reconnect(&ss, url, port, bindMode);
                 continue;
             }
         }
@@ -1128,8 +1137,8 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
     }
     if (wmtp->wmix->debug)
         printf(">> RTP-SEND-PCM: %s:%d end <<\r\n", url, port);
-    //释放rtp链表
-    rtpChain_release(rcs, true);
+    //释放rtp
+    rtp_socket_close(&ss);
     //关闭流和删除fifo文件
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
@@ -1170,8 +1179,8 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
     //背景削减: reduce>1时表示别人的削减倍数,reduceSkip标记自己不参与削减
     uint8_t reduce = ((wmtp->flag >> 8) & 0xFF) + 1, reduceSkip = 0;
     //rtp
-    RtpChain_Struct *rcs;
     RtpPacket rtpPacket;
+    SocketStruct *ss;
     long ctrlType = 0;
     int retSize;
     int recv_timeout = 0;
@@ -1180,13 +1189,14 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
     uint8_t loopWord;
     loopWord = wmtp->wmix->loopWordRtp;
 
-    //初始化rtp
-    rcs = rtpChain_get(url, port, false, bindMode);
-    if (!rcs)
+    //初始化rtp,建立socket
+    ss = rtp_socket(url, port, bindMode);
+    if (!ss)
     {
-        WMIX_ERR("rtpChain_get: err\r\n");
+        WMIX_ERR2("rtp_socket: %s:%d <%d> err\r\n", url, port, bindMode ? 1 : 0);
         return;
     }
+
     //初始化消息
     msgPath = (char *)&wmtp->param[strlen(url) + 11 + 1];
     if (msgPath && msgPath[0])
@@ -1216,9 +1226,10 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
     else
         reduce = 1;
 
-    //一秒数据量和缓存分配
+    //一秒数据量
     secBytes = chn * sample / 8 * freq;
-    buffSize = wmix_len_of_out(chn, freq, chn * sample / 8 * 1024, WMIX_CHN, WMIX_FREQ);
+    //最多每包200ms数据量
+    buffSize = 200 * freq / 1000 * chn * sample / 8;
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
 
     if (wmtp->wmix->debug)
@@ -1241,9 +1252,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
         if (!wmtp->wmix->run)
             break;
         //读rtp数据
-        pthread_mutex_lock(&rcs->lock);
-        ret = rtp_recv(rcs->ss, &rtpPacket, (uint32_t *)&retSize);
-        pthread_mutex_unlock(&rcs->lock);
+        ret = rtp_recv(ss, &rtpPacket, (uint32_t *)&retSize);
         //g711a解码
         if (ret > 0 && retSize > 0)
         {
@@ -1263,7 +1272,7 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
                 // WMIX_ERR("rtp_recv err !!\r\n");
                 delayus(1000000);
                 //重连
-                rtpChain_reconnect(rcs);
+                rtp_socket_reconnect(&ss, url, port, bindMode);
                 recv_timeout = 0;
                 continue;
             }
@@ -1305,8 +1314,8 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
-    //释放rtp链表
-    rtpChain_release(rcs, false);
+    //释放rtp
+    rtp_socket_close(&ss);
     //线程计数
     wmtp->wmix->thread_play -= 1;
     //关闭 reduceMode
@@ -1569,7 +1578,7 @@ void wmix_task_play_aac(
     void *aacDec = NULL;
     uint8_t buff[8192];
     //音频基本参数
-    uint8_t  chn;
+    uint8_t chn;
     uint16_t freq;
     int sample = 16;
     uint32_t secBytes;

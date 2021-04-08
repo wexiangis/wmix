@@ -138,11 +138,23 @@ SocketStruct *rtp_socket(char *ip, uint16_t port, bool bindMode)
     return ss;
 }
 
-void rtp_socket_close(SocketStruct *ss)
+void rtp_socket_close(SocketStruct **ss)
 {
     if (!ss)
         return;
-    close(ss->fd);
+    if (*ss)
+    {
+        if ((*ss)->fd > 0)
+            close((*ss)->fd);
+        free(*ss);
+        *ss = NULL;
+    }
+}
+
+void rtp_socket_reconnect(SocketStruct **ss, char *ip, uint16_t port, bool bindMode)
+{
+    rtp_socket_close(ss);
+    *ss = rtp_socket(ip, port, bindMode);
 }
 
 void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
@@ -221,135 +233,4 @@ void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t 
         write(fd, buff, strlen(buff));
         close(fd);
     }
-}
-
-/* ----- 辅助 wmix 添加的链表管理结构 -----
-** ----- 检索到新增同ip和端口连接时,使用现存的socket句柄,关闭时由最后使用者回收内存 ----- */
-
-//本地保留一个链表头,不参与遍历
-static RtpChain_Struct rtpChain_struct = {
-    .next = NULL,
-};
-
-//链表操作禁止异步,简单的互斥保护
-static bool rtpChain_busy = false;
-
-//申请节点(已自动连上socket),NULL为失败
-RtpChain_Struct *rtpChain_get(char *ip, int port, bool send, bool bindMode)
-{
-    SocketStruct *ss = NULL;
-    RtpChain_Struct *rcs = &rtpChain_struct;
-    while (rtpChain_busy)
-        usleep(10000);
-    rtpChain_busy = true;
-    //遍历链表
-    while (rcs->next)
-    {
-        //下一个
-        rcs = rcs->next;
-        //已存在ip和端口相同 且bind模式相同
-        if (port == rcs->port &&
-            strlen(ip) == strlen(rcs->ip) &&
-            strcmp(ip, rcs->ip) == 0 &&
-            rcs->bindMode == bindMode)
-        {
-            //保证只有一个s或r
-            if (rcs->send_run && send)
-            {
-                rtpChain_busy = false;
-                return NULL;
-            }
-            else if (rcs->recv_run && !send)
-            {
-                rtpChain_busy = false;
-                return NULL;
-            }
-            //占坑
-            else if (send)
-                rcs->send_run = true;
-            else
-                rcs->recv_run = true;
-            //有效返回
-            rtpChain_busy = false;
-            printf("rtpChain_get the same node send/%d bindMode/%d %s:%d\r\n",
-                   send ? 1 : 0, bindMode ? 1 : 0, ip, port);
-            return rcs;
-        }
-    }
-    //新建连接
-    ss = rtp_socket(ip, port, bindMode);
-    if (!ss)
-    {
-        rtpChain_busy = false;
-        return NULL;
-    }
-    //添加节点
-    rcs->next = (RtpChain_Struct *)calloc(1, sizeof(RtpChain_Struct));
-    rcs->next->last = rcs;
-    rcs = rcs->next;
-    //参数备份
-    strcpy(rcs->ip, ip);
-    rcs->port = port;
-    rcs->ss = ss;
-    if (send)
-        rcs->send_run = true;
-    else
-        rcs->recv_run = true;
-    rcs->bindMode = bindMode;
-    pthread_mutex_init(&rcs->lock, NULL);
-    //有效返回
-    rtpChain_busy = false;
-    printf("rtpChain_get a new node send/%d bindMode/%d %s:%d\r\n",
-           send ? 1 : 0, bindMode ? 1 : 0, ip, port);
-    return rcs;
-}
-
-//释放节点(不要调用free(rcs)!! 链表的内存由系统决定何时回收)
-void rtpChain_release(RtpChain_Struct *rcs, bool send)
-{
-    if (!rcs)
-        return;
-    while (rtpChain_busy)
-        usleep(10000);
-    rtpChain_busy = true;
-    //清标志
-    if (send)
-        rcs->send_run = false;
-    else
-        rcs->recv_run = false;
-    //发收线程都退出了,允许回收内存
-    if (!rcs->send_run && !rcs->recv_run)
-    {
-        //关闭连接
-        if (rcs->ss)
-        {
-            rtp_socket_close(rcs->ss);
-            free(rcs->ss);
-        }
-        //移除节点
-        if (rcs->next)
-            rcs->next->last = rcs->last;
-        rcs->last->next = rcs->next; //上一个节点必然存在
-        //释放内存
-        pthread_mutex_destroy(&rcs->lock);
-        free(rcs);
-    }
-    //
-    rtpChain_busy = false;
-}
-
-void rtpChain_reconnect(RtpChain_Struct *rcs)
-{
-    if (!rcs)
-        return;
-    // printf("rtpChain_reconnect bindMode/%d %s:%d\r\n",
-    //        rcs->bindMode ? 1 : 0, rcs->ip, rcs->port);
-    pthread_mutex_lock(&rcs->lock);
-    if (rcs->ss)
-    {
-        rtp_socket_close(rcs->ss);
-        free(rcs->ss);
-    }
-    rcs->ss = rtp_socket(rcs->ip, rcs->port, rcs->bindMode);
-    pthread_mutex_unlock(&rcs->lock);
 }

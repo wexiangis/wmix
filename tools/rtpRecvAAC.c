@@ -77,8 +77,7 @@ int main(int argc, char *argv[])
     }
 
     close(fd);
-    close(ss->fd);
-    free(ss);
+    rtp_socket_close(&ss);
 
     return 0;
 }
