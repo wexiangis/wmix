@@ -16,7 +16,7 @@ void help(char *argv0)
 {
     printf(
         "\n"
-        "Usage: %s [option] fileName\n"
+        "Usage: %s [option] audioPath\n"
         "\n"
         "Option:\n"
         "  -l : 排队模式,排到最后一位(默认模式)\n"
@@ -240,7 +240,7 @@ int main(int argc, char **argv)
     int vad = -1, aec = -1, ns = -1, ns_pa = -1, agc = -1, rw = -1;
 
     //目标播放、录音文件
-    char *filePath = NULL;
+    char *audioPath = NULL;
 
     char tmpPath[128] = {0};
     char tmpPath2[128] = {0};
@@ -546,7 +546,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            filePath = argv[i];
+            audioPath = argv[i];
         }
     }
 
@@ -707,25 +707,25 @@ int main(int argc, char **argv)
         helpFalg = false;
     }
 
-    if (filePath && filePath[0] == '.')
+    if (audioPath && audioPath[0] == '.')
     {
         if (getcwd(tmpPath, sizeof(tmpPath)))
         {
-            snprintf(tmpPath2, sizeof(tmpPath2), "%s/%s", tmpPath, filePath);
-            filePath = tmpPath2;
+            snprintf(tmpPath2, sizeof(tmpPath2), "%s/%s", tmpPath, audioPath);
+            audioPath = tmpPath2;
         }
     }
 
-    if (filePath && filePath[0])
+    if (audioPath && audioPath[0])
     {
         if (tm_test_mode >= 0)
-            wmix_mem_test(filePath, rt, tm_test_mode);
+            wmix_mem_test(audioPath, rt, tm_test_mode);
         else if (tfi_test_mode >= 0)
-            wmix_fifo_test(filePath, rc, rr, rt, tfi_test_mode);
+            wmix_fifo_test(audioPath, rc, rr, rt, tfi_test_mode);
         else if (record)
-            wmix_record(filePath, rc, rr, rt, recordType);
+            wmix_record(audioPath, rc, rr, rt, recordType);
         else
-            ret_id = wmix_play(filePath, reduce, interval, order);
+            ret_id = wmix_play(audioPath, reduce, interval, order);
         helpFalg = false;
     }
 

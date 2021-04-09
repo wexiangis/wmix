@@ -68,6 +68,7 @@ void wmix_thread_fifo_pcm_play(WMixThread_Param *wmtp)
                "   采样位数: %d bit\n"
                "   采样率: %d Hz\n",
                path, chn, sample, freq);
+
     //指针准备
     src.U8 = buff;
     head.U8 = 0;
@@ -162,6 +163,7 @@ void wmix_thread_fifo_pcm_record(WMixThread_Param *wmtp)
                "   采样率: %d Hz\n"
                "   时间长度: -- sec\n\r\n",
                path, chn, sample, freq);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
@@ -258,6 +260,7 @@ void wmix_thread_fifo_g711a_record(WMixThread_Param *wmtp)
                "   采样率: %d Hz\n"
                "   时间长度: -- sec\n\r\n",
                path, chn, sample, freq);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
@@ -352,6 +355,7 @@ void wmix_thread_fifo_aac_record(WMixThread_Param *wmtp)
                "   采样位数: %d bit\n"
                "   采样率: %d Hz\n",
                path, chn, sample, freq);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordFifo)
@@ -456,6 +460,7 @@ void wmix_thread_record_wav(WMixThread_Param *wmtp)
                "   采样率: %d Hz\n"
                "   时间长度: %d sec\n\r\n",
                path, chn, sample, freq, time);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
@@ -577,6 +582,7 @@ void wmix_thread_record_aac(WMixThread_Param *wmtp)
                "   采样率: %d Hz\n"
                "   时间长度: %d sec %d - %d\n\r\n",
                path, chn, sample, freq, time, buffSizeSrc, buffSizeDist);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
@@ -710,6 +716,10 @@ void wmix_thread_rtp_send_aac(WMixThread_Param *wmtp)
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
             url, port, chn, sample, freq);
+
+    //往文件写入当前任务的具体信息(方便查询)
+    wmix_write_file(msgPath, "rtp send aac, chn %d, freq %d, url %s:%d", chn, freq, url, port);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRtp)
@@ -878,6 +888,9 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
             "   采样率: %d Hz\r\n",
             url, port, chn, sample, freq);
 
+    //往文件写入当前任务的具体信息(方便查询)
+    wmix_write_file(msgPath, "rtp recv aac, chn %d, freq %d, url %s:%d", chn, freq, url, port);
+
     src.U8 = buff;
     head.U8 = 0;
     tick = 0;
@@ -925,6 +938,9 @@ void wmix_thread_rtp_recv_aac(WMixThread_Param *wmtp)
                         "   采样位数: %d bit\r\n"
                         "   采样率: %d Hz\r\n",
                         url, port, chn, sample, freq);
+
+                //往文件写入当前任务的具体信息(方便查询)
+                wmix_write_file(msgPath, "rtp recv aac, chn %d, freq %d, url %s:%d", chn, freq, url, port);
             }
             recv_timeout = 0;
         }
@@ -1092,6 +1108,10 @@ void wmix_thread_rtp_send_pcma(WMixThread_Param *wmtp)
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
             url, port, chn, sample, freq);
+
+    //往文件写入当前任务的具体信息(方便查询)
+    wmix_write_file(msgPath, "rtp send pcma, chn %d, freq %d, url %s:%d", chn, freq, url, port);
+
     //线程计数
     wmtp->wmix->thread_record += 1;
     while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWordRecord)
@@ -1239,6 +1259,9 @@ void wmix_thread_rtp_recv_pcma(WMixThread_Param *wmtp)
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n",
             url, port, chn, sample, freq);
+
+    //往文件写入当前任务的具体信息(方便查询)
+    wmix_write_file(msgPath, "rtp recv pcma, chn %d, freq %d, url %s:%d", chn, freq, url, port);
 
     src.U8 = buff;
     head.U8 = 0;
@@ -1402,6 +1425,7 @@ void wmix_task_play_wav(
     buffSize = wav.format.bytes_p_second;
     buffSize2 = WMIX_CHN * WMIX_SAMPLE / 8 * WMIX_FREQ;
     totalWait = buffSize2 / 2;
+
     //把每秒数据包拆得越细, 打断速度越快
     //以下拆包的倍数必须能同时被 wav.format.sample_rate 和 WMIX_FREQ 整除 !!
     if (wav.format.sample_rate % 4 == 0)
@@ -1422,7 +1446,7 @@ void wmix_task_play_wav(
         buffSize2 /= 2;
         totalWait = buffSize2 / 2;
     }
-
+    //内存
     buff = (uint8_t *)calloc(buffSize, sizeof(uint8_t));
 
     src.U8 = buff;
@@ -1431,13 +1455,10 @@ void wmix_task_play_wav(
 
     while (wmix->run && loopWord == wmix->loopWord)
     {
-        //msg 检查
+        //检查消息是否已被销毁
         if (msg_fd)
         {
-            if (msgrcv(msg_fd, &msg,
-                       WMIX_MSG_BUFF_SIZE,
-                       0, IPC_NOWAIT) < 1 &&
-                errno != ENOMSG) //消息队列被关闭
+            if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 && errno != ENOMSG)
             {
                 if (wmix->debug)
                     printf("PLAY-WAV exit: %d msgrecv err/%d\r\n", msg_fd, errno);
@@ -1475,7 +1496,6 @@ void wmix_task_play_wav(
                 if (wmix->debug)
                     printf("  PLAY-WAV: %s %02d:%02d\r\n", wavPath, second / 60, second % 60);
             }
-            //
             if (head.U8 == 0)
             {
                 if (wmix->debug)
@@ -1488,22 +1508,20 @@ void wmix_task_play_wav(
             //关闭 reduceMode
             if (reduceSkip && wmix->reduceMode == reduce)
                 wmix->reduceMode = 1;
-            //
+            //播放位置重置(跳过wav文件头)
             lseek(fd, 44, SEEK_SET);
-            //
+            //播放间隔延时,期间不忘检查msg消息和退出请求
             for (ret = 0; ret < repeat; ret++)
             {
                 delayus(100000);
-                //
+                //检查退出请求
                 if (!wmix->run || loopWord != wmix->loopWord)
                     break;
-                //
+                //检查消息状态
                 if (msg_fd)
                 {
-                    if (msgrcv(msg_fd, &msg,
-                               WMIX_MSG_BUFF_SIZE,
-                               0, IPC_NOWAIT) < 1 &&
-                        errno != ENOMSG) //消息队列被关闭
+                    //检查消息是否已被销毁
+                    if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 && errno != ENOMSG)
                     {
                         if (wmix->debug)
                             printf("PLAY-WAV exit: %d msgrecv err/%d\r\n", msg_fd, errno);
@@ -1511,7 +1529,7 @@ void wmix_task_play_wav(
                     }
                 }
             }
-            //
+            //收到了退出请求
             if (ret != repeat)
             {
                 ret = -1;
@@ -1616,6 +1634,7 @@ void wmix_task_play_aac(
             "   每秒字节: %d Bytes\r\n"
             "   重播间隔: %d sec\r\n",
             aacPath, chn, sample, freq, secBytes, repeat / 10);
+
     //独占 reduceMode
     reduce += 1;
     if (reduce > 1 && wmix->reduceMode == 1)
@@ -1634,11 +1653,10 @@ void wmix_task_play_aac(
 
     while (wmix->run && loopWord == wmix->loopWord)
     {
-        //msg 检查
+        //检查消息队列是否被关闭
         if (msg_fd)
         {
-            if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 &&
-                errno != ENOMSG) //消息队列被关闭
+            if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 && errno != ENOMSG)
             {
                 if (wmix->debug)
                     printf("PLAY-AAC exit: %d msgrecv err/%d\r\n", msg_fd, errno);
@@ -1655,6 +1673,7 @@ void wmix_task_play_aac(
                    tick > wmix->tick &&
                    tick - wmix->tick > totalWait)
                 delayus(5000);
+            //是否有退出请求
             if (!wmix->run || loopWord != wmix->loopWord)
                 break;
             //写入循环缓冲区
@@ -1685,21 +1704,19 @@ void wmix_task_play_aac(
             //关闭 reduceMode
             if (reduceSkip && wmix->reduceMode == reduce)
                 wmix->reduceMode = 1;
-
+            //播放位置重置
             lseek(fd, 0, SEEK_SET);
-
+            //播放间隔延时,期间不忘检查msg消息和退出请求
             for (ret = 0; ret < repeat; ret++)
             {
                 delayus(100000);
+                //检查退出请求
                 if (!wmix->run || loopWord != wmix->loopWord)
                     break;
-
+                //检查消息队列是否被关闭
                 if (msg_fd)
                 {
-                    if (msgrcv(msg_fd, &msg,
-                               WMIX_MSG_BUFF_SIZE,
-                               0, IPC_NOWAIT) < 1 &&
-                        errno != ENOMSG) //消息队列被关闭
+                    if (msgrcv(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 && errno != ENOMSG)
                     {
                         if (wmix->debug)
                             printf("PLAY-AAC exit: %d msgrecv err/%d\r\n", msg_fd, errno);
@@ -1707,6 +1724,7 @@ void wmix_task_play_aac(
                     }
                 }
             }
+            //是退出请求
             if (ret != repeat)
             {
                 ret = -1;
@@ -1818,7 +1836,7 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
         wmm->head.U8 = 0;
         wmm->tick = 0;
     }
-    //msg 检查
+    //检查消息队列是否被关闭
     if (wmm->msg_fd)
     {
         if (msgrcv(wmm->msg_fd,
@@ -1900,25 +1918,23 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
 
         if (wmm->repeat)
         {
-            if (wmm->head.U8) //已经播放完一遍了
+            //已经播放完一遍了
+            if (wmm->head.U8)
             {
                 //关闭 reduceMode
                 if (wmm->reduceSkip && wmm->wmix->reduceMode == wmm->reduce)
                     wmm->wmix->reduceMode = 1;
-
+                //播放间隔延时
                 for (count = 0; count < wmm->repeat; count++)
                 {
                     delayus(100000);
+                    //检查退出请求
                     if (!wmm->wmix->run || wmm->loopWord != wmm->wmix->loopWord)
                         return MAD_FLOW_STOP;
-                    //msg 检查
+                    //检查消息队列是否被关闭
                     if (wmm->msg_fd)
                     {
-                        if (msgrcv(wmm->msg_fd,
-                                   &wmm->msg,
-                                   WMIX_MSG_BUFF_SIZE,
-                                   0, IPC_NOWAIT) < 1 &&
-                            errno != ENOMSG) //消息队列被关闭
+                        if (msgrcv(wmm->msg_fd, &wmm->msg, WMIX_MSG_BUFF_SIZE, 0, IPC_NOWAIT) < 1 && errno != ENOMSG)
                         {
                             if (wmm->wmix->debug)
                                 printf("PLAY-MP3 exit: %d msgrecv err/%d\r\n", wmm->msg_fd, errno);
@@ -1959,6 +1975,7 @@ void wmix_task_play_mp3(
 
     struct stat sta;
     int fd;
+
     //参数准备
     memset(&wmm, 0, sizeof(WMix_Mp3));
     wmm.wmix = wmix;

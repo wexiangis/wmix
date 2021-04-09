@@ -12,7 +12,7 @@
 
 /* ---------- 需和客户端(程序)保持同步的信息 ---------- */
 
-#define WMIX_VERSION "V6.0RC1 - 20210407"
+#define WMIX_VERSION "V6.0RC1 - 20210409"
 
 //路径检查指令
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"

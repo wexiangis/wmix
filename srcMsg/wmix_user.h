@@ -16,7 +16,7 @@ extern "C"
 
 /* ---------- 需和服务端(程序)保持同步的信息 ---------- */
 
-#define WMIX_VERSION "V6.0RC1 - 20210407"
+#define WMIX_VERSION "V6.0RC1 - 20210409"
 
 //客户端(根据id) 发 服务端线程 控制类型
 typedef enum
@@ -57,7 +57,7 @@ void wmix_set_volumeAgc(uint8_t value);
 /*
  *  播放 wav 和 mp3 文件
  *  参数:
- *    wavOrMp3: 音频文件,支持格式: wav, aac, mp3
+ *    audioPath: 音频文件,支持格式: wav, aac, mp3
  *    backgroundReduce: 播放当前音频时,降低背景音量
  *          0: 不启用  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
  *          (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
@@ -68,7 +68,7 @@ void wmix_set_volumeAgc(uint8_t value);
  *  返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
 int wmix_play(
-    char *wavOrMp3,
+    char *audioPath,
     uint8_t backgroundReduce,
     uint8_t repeatInterval,
     int order);

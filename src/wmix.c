@@ -21,6 +21,30 @@
 #include "wmix.h"
 #include "delay.h"
 
+//快速写文件
+void wmix_write_file(char *file, const char* format, ...)
+{
+    int fd, ret;
+    char buff[1024] = {0};
+    va_list ap;
+    //拼接内容
+    va_start(ap, format);
+    ret = vsnprintf(buff, sizeof(buff), format, ap);
+    va_end(ap);
+    //写文件
+    if (ret > 0)
+    {
+        fd = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (fd > 0)
+        {
+            write(fd, buff, ret);
+            close(fd);
+        }
+        else
+            WMIX_ERR2("write %s \"%s\" failed\r\n", file, buff);
+    }
+}
+
 //知道输入长度,计算缩放后输出长度(注意长度必须2倍数)
 uint32_t wmix_len_of_out(
     uint8_t inChn, uint16_t inFreq,
@@ -270,60 +294,65 @@ void wmix_load_thread(
     pthread_attr_destroy(&attr);
 }
 
+//用于加载 wmix_task_xxx
 void wmix_load_task(WMixThread_Param *wmtp)
 {
-    char *name = (char *)wmtp->param;
-    uint16_t len = strlen((char *)wmtp->param);
-
+    //基本参数截取
+    char *audioPath = (char *)wmtp->param;
+    uint16_t pathLen = strlen((char *)wmtp->param);
+    uint8_t loopWord = wmtp->wmix->loopWord;
+    //消息通信
     char *msgPath;
     key_t msg_key;
     int msg_fd = 0;
-    FILE *fp;
-
-    bool run = true, joinQueue = false;
-
+    //正在播放标志
+    bool run = true;
+    //是否参与排队标志(循环播放、混音、背景消减除时不参与)
+    bool joinQueue = false;
+    //当前排队序号
     int queue = -1;
 
-    uint8_t loopWord;
-    loopWord = wmtp->wmix->loopWord;
     //线程计数
     wmtp->wmix->thread_play += 1;
-
-    msgPath = (char *)&wmtp->param[len + 1];
+    //消息依附的路径或文件
+    msgPath = (char *)&wmtp->param[pathLen + 1];
     if (msgPath && msgPath[0])
     {
         //创建消息挂靠路径
         if (access(msgPath, F_OK) != 0)
             creat(msgPath, 0666);
-        //写节点描述
-        if ((fp = fopen(msgPath, "w")))
-        {
-            fprintf(fp, "play %s", name);
-            fclose(fp);
-        }
+        //往文件写入当前任务的具体信息(方便查询)
+        wmix_write_file(msgPath, "play %s", audioPath);
         //创建消息
         if ((msg_key = ftok(msgPath, WMIX_MSG_ID)) > 0)
             msg_fd = msgget(msg_key, IPC_CREAT | 0666);
     }
     else
         msgPath = NULL;
-    //排队(循环播放和背景消减除时除外)
+
+    //是否参与排队检查(循环播放、混音、背景消减除时不参与)
     if (((wmtp->flag & 0xFF) == 9 || (wmtp->flag & 0xFF) == 10) &&
         ((wmtp->flag >> 8) & 0xFF) == 0 && ((wmtp->flag >> 16) & 0xFF) == 0)
     {
+        //还未排到自己
         run = false;
+        //确认参与排队
         joinQueue = true;
 
+        //排头
         if ((wmtp->flag & 0xFF) == 9 &&
-            wmtp->wmix->queue.head != wmtp->wmix->queue.tail) //排头
+            wmtp->wmix->queue.head != wmtp->wmix->queue.tail)
             queue = wmtp->wmix->queue.head--;
+        //排尾
         else
             queue = wmtp->wmix->queue.tail++;
 
+        //等待排到自己
         while (wmtp->wmix->run && loopWord == wmtp->wmix->loopWord)
         {
             if (queue == wmtp->wmix->queue.head && wmtp->wmix->onPlayCount == 0)
             {
+                //轮到自己,打断退出排队
                 run = true;
                 break;
             }
@@ -331,49 +360,55 @@ void wmix_load_task(WMixThread_Param *wmtp)
         }
     }
 
+    //准许播放
     if (run)
     {
+        //排队播放的要拉起播放标志
         if (joinQueue)
             wmtp->wmix->onPlayCount += 1;
 
-        if (len > 3 &&
-            (name[len - 3] == 'a' || name[len - 3] == 'A') &&
-            (name[len - 2] == 'a' || name[len - 2] == 'A') &&
-            (name[len - 1] == 'c' || name[len - 1] == 'C'))
+        //播放aac
+        if (pathLen > 3 &&
+            (audioPath[pathLen - 3] == 'a' || audioPath[pathLen - 3] == 'A') &&
+            (audioPath[pathLen - 2] == 'a' || audioPath[pathLen - 2] == 'A') &&
+            (audioPath[pathLen - 1] == 'c' || audioPath[pathLen - 1] == 'C'))
 #if (MAKE_AAC)
             wmix_task_play_aac(
-                wmtp->wmix, name, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
+                wmtp->wmix, audioPath, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
 #else
             ;
 #endif
-        else if (len > 3 &&
-                 (name[len - 3] == 'm' || name[len - 3] == 'M') &&
-                 (name[len - 2] == 'p' || name[len - 2] == 'P') &&
-                 name[len - 1] == '3')
+        //播放mp3
+        else if (pathLen > 3 &&
+                 (audioPath[pathLen - 3] == 'm' || audioPath[pathLen - 3] == 'M') &&
+                 (audioPath[pathLen - 2] == 'p' || audioPath[pathLen - 2] == 'P') &&
+                 audioPath[pathLen - 1] == '3')
 #if (MAKE_MP3)
             wmix_task_play_mp3(
-                wmtp->wmix, name, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
+                wmtp->wmix, audioPath, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
 #else
             ;
 #endif
+        //播放wav
         else
             wmix_task_play_wav(
-                wmtp->wmix, name, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
+                wmtp->wmix, audioPath, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
 
+        //排队播放的结束要清标志
         if (joinQueue)
             wmtp->wmix->onPlayCount -= 1;
     }
-
+    //线程计数
     if (queue >= 0)
         wmtp->wmix->queue.head += 1;
-
+    //消息注销
     if (msg_fd)
         msgctl(msg_fd, IPC_RMID, NULL);
     if (msgPath)
         remove(msgPath);
     //线程计数
     wmtp->wmix->thread_play -= 1;
-
+    //内存回收
     if (wmtp->param)
         free(wmtp->param);
     free(wmtp);

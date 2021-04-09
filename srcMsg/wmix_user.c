@@ -189,7 +189,7 @@ int wmix_auto_path(char *buff, int id)
 }
 
 int wmix_play(
-    char *wavOrMp3,
+    char *audioPath,
     uint8_t backgroundReduce,
     uint8_t repeatInterval,
     int order)
@@ -198,7 +198,7 @@ int wmix_play(
     char msgPath[128] = {0};
     int redId;
 
-    if (!wavOrMp3)
+    if (!audioPath)
     {
         if (order < 0)
             wmix_play_kill(0);
@@ -207,10 +207,10 @@ int wmix_play(
 
     redId = wmix_auto_path(msgPath, 0);
 
-    if (strlen(msgPath) + strlen(wavOrMp3) + 2 > WMIX_MSG_BUFF_SIZE)
+    if (strlen(msgPath) + strlen(audioPath) + 2 > WMIX_MSG_BUFF_SIZE)
     {
         fprintf(stderr, "wmix_play: %s > max len (%ld)\n",
-                wavOrMp3, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 2));
+                audioPath, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 2));
         return 0;
     }
     //msg初始化
@@ -226,8 +226,8 @@ int wmix_play(
         msg.type += (int)WMT_PLAY_FIRST;
     else
         msg.type += (int)WMT_PLAY_MIX;
-    strcpy((char *)msg.value, wavOrMp3);
-    strcpy((char *)&msg.value[strlen(wavOrMp3) + 1], msgPath);
+    strcpy((char *)msg.value, audioPath);
+    strcpy((char *)&msg.value[strlen(audioPath) + 1], msgPath);
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 
@@ -814,7 +814,7 @@ int wmix_ctrl(int id, WMIX_CTRL_TYPE ctrl_type)
 void wmix_list(void)
 {
     FILE *fp;
-    char path[512];
+    char buff[512];
     DIR *dir;
     struct dirent *ptr;
     //打开路径
@@ -828,15 +828,15 @@ void wmix_list(void)
         if (ptr->d_type == 8)
         {
             //拼接绝对路径
-            memset(path, 0, sizeof(path));
-            sprintf(path, "%s/%s", WMIX_MSG_PATH, ptr->d_name);
+            memset(buff, 0, sizeof(buff));
+            sprintf(buff, "%s/%s", WMIX_MSG_PATH, ptr->d_name);
             //读取文件描述
-            fp = fopen(path, "r");
+            fp = fopen(buff, "r");
             if (fp)
             {
-                memset(path, 0, sizeof(path));
-                if (fread(path, 1, sizeof(path), fp) > 0)
-                    printf("  ID %s : %s \r\n", ptr->d_name, path);
+                memset(buff, 0, sizeof(buff));
+                if (fread(buff, 1, sizeof(buff), fp) > 0)
+                    printf("  ID %s : %s \r\n", ptr->d_name, buff);
                 fclose(fp);
             }
         }

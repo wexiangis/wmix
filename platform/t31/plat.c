@@ -17,13 +17,13 @@
 #define T31_ERR2(fmt, argv...) fprintf(stderr, "%s(%d): " fmt, __func__, __LINE__, ##argv)
 
 //音量最大值、分块和最小值(范围10格)
-#define T31_AO_VOL_MAX 115
+#define T31_AO_VOL_MAX 70
 #define T31_AO_VOL_DIV 7
-#define T31_AO_VOL_MIN 45
+#define T31_AO_VOL_MIN 0
 
-#define T31_AI_VOL_MAX 115
+#define T31_AI_VOL_MAX 70
 #define T31_AI_VOL_DIV 7
-#define T31_AI_VOL_MIN 45
+#define T31_AI_VOL_MIN 0
 
 //ao和ai的devID不能一样
 #define T31_AO_DEV_ID 0
@@ -73,11 +73,11 @@ void plat_ao_vol_set(void *objAo, int vol)
     T31_AO_Struct *tas = (T31_AO_Struct *)objAo;
 
     if (vol > 10)
-        tas->aoVol = 10 * T31_AO_VOL_DIV;
+        tas->aoVol = 10 * T31_AO_VOL_DIV + T31_AO_VOL_MIN;
     else if (vol < 1)
         tas->aoVol = 0;
     else
-        tas->aoVol = vol * T31_AO_VOL_DIV;
+        tas->aoVol = vol * T31_AO_VOL_DIV + T31_AO_VOL_MIN;
 
     if (IMP_AO_SetVol(tas->devID, tas->chnID, tas->aoVol) != 0)
     {
@@ -96,11 +96,11 @@ void plat_ai_vol_set(void *objAi, int vol)
     T31_AI_Struct *tas = (T31_AI_Struct *)objAi;
 
     if (vol > 10)
-        tas->aiVol = 10 * T31_AI_VOL_DIV;
+        tas->aiVol = 10 * T31_AI_VOL_DIV + T31_AI_VOL_MIN;
     else if (vol < 1)
         tas->aiVol = 0;
     else
-        tas->aiVol = vol * T31_AI_VOL_DIV;
+        tas->aiVol = vol * T31_AI_VOL_DIV + T31_AI_VOL_MIN;
 
     if (IMP_AI_SetVol(tas->devID, tas->chnID, tas->aiVol) != 0)
     {

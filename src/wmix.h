@@ -2,6 +2,7 @@
 #ifndef _WMIX_H_
 #define _WMIX_H_
 
+#include <stdarg.h>
 #include "wmixConf.h"
 
 //wav编码
@@ -32,6 +33,9 @@ void wmix_exit(WMix_Struct *wmix);
 // 信号事件接收,主要是识别ctrl+c结束时完成收尾工作
 void wmix_signal(int signo);
 
+//快速写文件
+void wmix_write_file(char *file, const char* format, ...);
+
 //往混音器载入音频数据
 WMix_Point wmix_load_data(
     WMix_Struct *wmix,
@@ -44,7 +48,7 @@ WMix_Point wmix_load_data(
     uint8_t reduce,
     uint32_t *tick);
 
-//抛线程工具
+//抛线程工具 或 用于加载 wmix_thread_xxx
 void wmix_load_thread(
     WMix_Struct *wmix,
     long flag,
@@ -52,9 +56,8 @@ void wmix_load_thread(
     size_t paramLen,
     void *callback);
 
-//任务线程加载函数
-void wmix_load_task(
-    WMixThread_Param *wmtp);
+//用于加载 wmix_task_xxx
+void wmix_load_task(WMixThread_Param *wmtp);
 
 //用 wmix_load_thread() 加载的功能模块
 void wmix_thread_fifo_pcm_play(WMixThread_Param *wmtp);
