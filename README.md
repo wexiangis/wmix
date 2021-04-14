@@ -12,7 +12,7 @@
 
 * make # 生成主程序 wmix 和客户端程序 wmixMsg
 
-* sudo cp ./libs/lib/*.so* /usr/lib/ # 部署运行环境,拷贝依赖库到系统
+* sudo cp ./libs/lib/\*.so* /usr/lib/ # 部署运行环境,拷贝依赖库到系统
 
 * wmix -? # 查看主程序传参说明
 
