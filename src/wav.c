@@ -19,7 +19,7 @@
  * 返回: 0：正常 -1:错误
  * 说明: 无
  ******************************************************************************/
-static char *WAV_P_FmtString(uint16_t fmt)
+static const char *WAV_P_FmtString(uint16_t fmt)
 {
     switch (fmt)
     {

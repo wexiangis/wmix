@@ -106,7 +106,7 @@ int rtp_send(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t dataSize);
 int rtp_recv(SocketStruct *ss, RtpPacket *rtpPacket, uint32_t *dataSize);
 
 //创建dsp文件(用于vlc播放)
-void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
+void rtp_create_sdp(const char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type);
 
 
 #endif //_RTP_H_

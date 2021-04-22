@@ -16,7 +16,7 @@
 
 static WMix_MemCircle *mem1x8000 = NULL, *memOrigin = NULL;
 
-int wmix_mem_create(char *path, int flag, int size, void **mem)
+int wmix_mem_create(const char *path, int flag, int size, void **mem)
 {
     int id;
     key_t key = ftok(path, flag);

@@ -567,7 +567,7 @@ bool wmix_check_id(int id)
 static WMix_MemCircle *mem1x8000 = NULL, *memOrigin = NULL;
 static int memIsOpen = 0;
 
-int wmix_mem_create(char *path, int flag, int size, void **mem)
+int wmix_mem_create(const char *path, int flag, int size, void **mem)
 {
     key_t key = ftok(path, flag);
     if (key < 0)

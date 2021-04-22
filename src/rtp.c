@@ -157,7 +157,7 @@ void rtp_socket_reconnect(SocketStruct **ss, char *ip, uint16_t port, bool bindM
     *ss = rtp_socket(ip, port, bindMode);
 }
 
-void rtp_create_sdp(char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
+void rtp_create_sdp(const char *file, char *ip, uint16_t port, uint16_t chn, uint16_t freq, RTP_AUDIO_TYPE type)
 {
     char buff[1024] = {0};
     char typeName[64] = {0};

@@ -90,7 +90,7 @@ void *vad_init(int chn, int freq, int intervalMs, bool *debug)
  */
 void vad_process(void *fp, int16_t *frame, int frameNum)
 {
-    Vad_Struct *vs = fp;
+    Vad_Struct *vs = (Vad_Struct *)fp;
     int cChn, cLen, cPkg, cReduce, ret;
     int16_t *pFrame;
     int32_t tmp32;
@@ -155,7 +155,7 @@ void vad_process(void *fp, int16_t *frame, int frameNum)
  */
 void vad_release(void *fp)
 {
-    Vad_Struct *vs = fp;
+    Vad_Struct *vs = (Vad_Struct *)fp;
     WebRtcVad_Free(vs->handle);
     if (vs->debug && (*vs->debug))
         printf("vad_release\r\n");
@@ -285,7 +285,7 @@ void *aec_init(int chn, int freq, int intervalMs, bool *debug)
  */
 int aec_setFrameFar(void *fp, int16_t *frameFar, int frameNum)
 {
-    Aec_Struct *as = fp;
+    Aec_Struct *as = (Aec_Struct *)fp;
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
@@ -336,7 +336,7 @@ int aec_setFrameFar(void *fp, int16_t *frameFar, int frameNum)
  */
 int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms)
 {
-    Aec_Struct *as = fp;
+    Aec_Struct *as = (Aec_Struct *)fp;
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
@@ -409,7 +409,7 @@ int aec_process(void *fp, int16_t *frameNear, int16_t *frameOut, int frameNum, i
  */
 int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frameOut, int frameNum, int delayms)
 {
-    Aec_Struct *as = fp;
+    Aec_Struct *as = (Aec_Struct *)fp;
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
@@ -487,7 +487,7 @@ int aec_process2(void *fp, int16_t *frameFar, int16_t *frameNear, int16_t *frame
  */
 void aec_release(void *fp)
 {
-    Aec_Struct *as = fp;
+    Aec_Struct *as = (Aec_Struct *)fp;
     WebRtcAecX_Free(as->aecInst);
     free(as->in[0]);
     free(as->out[0]);
@@ -611,7 +611,7 @@ void *ns_init(int chn, int freq, bool *debug)
  */
 void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
 {
-    Ns_Struct *ns = fp;
+    Ns_Struct *ns = (Ns_Struct *)fp;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
 
@@ -648,7 +648,7 @@ void ns_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
  */
 void ns_release(void *fp)
 {
-    Ns_Struct *ns = fp;
+    Ns_Struct *ns = (Ns_Struct *)fp;
     WebRtcNsX_Free(ns->nsxInst);
     free(ns->in[0]);
     free(ns->out[0]);
@@ -704,9 +704,9 @@ void *agc_init(int chn, int freq, int intervalMs, int value, bool *debug)
     // 3 - kAgcModeFixedDigital - Fixed Digital Gain 0dB
     int16_t agcMode = kAgcModeAdaptiveDigital;
     WebRtcAgcConfig config = {
-        .targetLevelDbfs = 0,       // default 3 (-3 dBOv)
-        .compressionGaindB = value, // default 9 dB
-        .limiterEnable = kAgcFalse, // default kAgcTrue (on)
+        .targetLevelDbfs = 0,                // default 3 (-3 dBOv)
+        .compressionGaindB = (int16_t)value, // default 9 dB
+        .limiterEnable = kAgcFalse,          // default kAgcTrue (on)
     };
     if (freq > 32000 || freq % 8000 != 0)
         return NULL;
@@ -766,7 +766,7 @@ void *agc_init(int chn, int freq, int intervalMs, int value, bool *debug)
  */
 int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
 {
-    Agc_Struct *as = fp;
+    Agc_Struct *as = (Agc_Struct *)fp;
     int ret;
     int cLen, cPkg, cChn;
     int realFrameLen, realPkgFrame;
@@ -823,7 +823,7 @@ int agc_process(void *fp, int16_t *frame, int16_t *frameOut, int frameNum)
  */
 void agc_addition(void *fp, uint8_t value)
 {
-    Agc_Struct *as = fp;
+    Agc_Struct *as = (Agc_Struct *)fp;
     int ret;
     WebRtcAgcConfig config = {
         .targetLevelDbfs = 0,
@@ -843,7 +843,7 @@ void agc_addition(void *fp, uint8_t value)
  */
 void agc_release(void *fp)
 {
-    Agc_Struct *as = fp;
+    Agc_Struct *as = (Agc_Struct *)fp;
     WebRtcAgc_Free(as->agcInst);
     free(as->in[0]);
     free(as->out[0]);

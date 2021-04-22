@@ -289,7 +289,7 @@ void wmix_load_thread(
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED); //禁用线程同步, 线程运行结束后自动释放
     //抛出线程
-    pthread_create(&th, &attr, callback, (void *)wmtp);
+    pthread_create(&th, &attr, (void* (*)(void*))callback, (void *)wmtp);
     //attr destroy
     pthread_attr_destroy(&attr);
 }
@@ -925,7 +925,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_load_task);
+                                 (void *)&wmix_load_task);
                 break;
             //fifo播放pcm流
             case WMT_FIFO_PLAY:
@@ -933,7 +933,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_fifo_pcm_play);
+                                 (void *)&wmix_thread_fifo_pcm_play);
                 break;
             //复位
             case WMT_RESET:
@@ -946,7 +946,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_fifo_pcm_record);
+                                 (void *)&wmix_thread_fifo_pcm_record);
                 break;
             //录音wav文件
             case WMT_RECORD_WAV:
@@ -954,7 +954,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_record_wav);
+                                 (void *)&wmix_thread_record_wav);
                 break;
             //清空播放列表
             case WMT_CLEAN_LIST:
@@ -966,7 +966,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_rtp_send_pcma);
+                                 (void *)&wmix_thread_rtp_send_pcma);
                 break;
             //rtp recv pcma
             case WMT_RTP_RECV_PCMA:
@@ -974,7 +974,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_rtp_recv_pcma);
+                                 (void *)&wmix_thread_rtp_recv_pcma);
                 break;
 #if (MAKE_AAC)
             //录音aac文件
@@ -983,7 +983,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_record_aac);
+                                 (void *)&wmix_thread_record_aac);
                 break;
 #endif
             //开/关 shmem
@@ -1063,7 +1063,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_rtp_send_aac);
+                                 (void *)&wmix_thread_rtp_send_aac);
                 break;
             //rtp recv aac
             case WMT_RTP_RECV_AAC:
@@ -1071,7 +1071,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_rtp_recv_aac);
+                                 (void *)&wmix_thread_rtp_recv_aac);
                 break;
 #endif
             //关闭所有播放和录音
@@ -1127,7 +1127,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_fifo_aac_record);
+                                 (void *)&wmix_thread_fifo_aac_record);
                 break;
 #endif
             //fifo录音g711a流
@@ -1136,7 +1136,7 @@ void wmix_msg_thread(WMixThread_Param *wmtp)
                                  msg.type,
                                  msg.value,
                                  WMIX_MSG_BUFF_SIZE,
-                                 &wmix_thread_fifo_g711a_record);
+                                 (void *)&wmix_thread_fifo_g711a_record);
                 break;
             //开关log
             case WMT_LOG_SW:
@@ -1570,10 +1570,10 @@ WMix_Struct *wmix_init(void)
 
     //混音器主要线程初始化
 #ifndef WMIX_RECORD_PLAY_SYNC
-    wmix_load_thread(wmix, 0, NULL, 0, &wmix_shmem_write_circle); //录音及数据写共享内存线程
+    wmix_load_thread(wmix, 0, NULL, 0, (void *)&wmix_shmem_write_circle); //录音及数据写共享内存线程
 #endif
-    wmix_load_thread(wmix, 0, NULL, 0, &wmix_msg_thread);  //接收客户端消息的线程
-    wmix_load_thread(wmix, 0, NULL, 0, &wmix_play_thread); //从播音数据迟取数据并播放的线程
+    wmix_load_thread(wmix, 0, NULL, 0, (void *)&wmix_msg_thread);  //接收客户端消息的线程
+    wmix_load_thread(wmix, 0, NULL, 0, (void *)&wmix_play_thread); //从播音数据迟取数据并播放的线程
 
     //默认音量
     wmix->volume = 10;
@@ -2012,10 +2012,10 @@ void main_loop(WMixThread_Param *wmtp)
             delayus(500000);
             wmtp->wmix->run = true;
 #ifndef WMIX_RECORD_PLAY_SYNC
-            wmix_load_thread(wmtp->wmix, 0, NULL, 0, &wmix_shmem_write_circle);
+            wmix_load_thread(wmtp->wmix, 0, NULL, 0, (void *)&wmix_shmem_write_circle);
 #endif
-            wmix_load_thread(wmtp->wmix, 0, NULL, 0, &wmix_msg_thread);
-            wmix_load_thread(wmtp->wmix, 0, NULL, 0, &wmix_play_thread);
+            wmix_load_thread(wmtp->wmix, 0, NULL, 0, (void *)&wmix_msg_thread);
+            wmix_load_thread(wmtp->wmix, 0, NULL, 0, (void *)&wmix_play_thread);
         }
         delayus(500000);
 
@@ -2038,7 +2038,7 @@ void wmix_start(void)
     {
         //开始
         show_setup();
-        wmix_load_thread(main_wmix, 0, NULL, 0, &main_loop);
+        wmix_load_thread(main_wmix, 0, NULL, 0, (void *)&main_loop);
     }
     else
         printf("audio init failed !!\r\n");
@@ -2154,12 +2154,12 @@ int main(int argc, char **argv)
                     3,
                     (uint8_t *)path,
                     WMIX_MSG_BUFF_SIZE,
-                    &wmix_load_task);
+                    (void *)&wmix_load_task);
             }
         }
         //开始
         show_setup();
-        wmix_load_thread(main_wmix, 0, NULL, 0, &main_loop);
+        wmix_load_thread(main_wmix, 0, NULL, 0, (void *)&main_loop);
         while (1)
             delayus(500000);
     }

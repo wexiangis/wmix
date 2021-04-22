@@ -1805,7 +1805,7 @@ static int16_t mad_scale(mad_fixed_t sample)
 
 enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad_pcm *pcm)
 {
-    WMix_Mp3 *wmm = data;
+    WMix_Mp3 *wmm = (WMix_Mp3 *)data;
     uint32_t count = 0, second;
     int16_t *val = (int16_t *)&pcm->samples[0][count];
     int timeout;
@@ -1910,11 +1910,11 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
 
 enum mad_flow mad_input(void *data, struct mad_stream *stream)
 {
-    WMix_Mp3 *wmm = data;
+    WMix_Mp3 *wmm = (WMix_Mp3 *)data;
     uint8_t count;
     if (wmm->size > 0)
     {
-        mad_stream_buffer(stream, wmm->fdm + wmm->seek, wmm->size);
+        mad_stream_buffer(stream, (const unsigned char *)wmm->fdm + wmm->seek, wmm->size);
 
         if (wmm->repeat)
         {

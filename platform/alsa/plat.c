@@ -73,7 +73,7 @@ int SNDWAV_SetParams(SNDPCMContainer_t *obj, int freq, int chn, int sample)
         fprintf(stderr, "Error snd_pcm_hw_params_set_rate_near\r\n");
         return -1;
     }
-    if (freq != exact_rate)
+    if ((uint32_t)freq != exact_rate)
     {
         fprintf(stderr, "The rate %d Hz is not supported by your hardware.\n ==> Using %d Hz instead.\r\n",
                 freq, exact_rate);
@@ -291,7 +291,7 @@ int plat_ao_write(void *objAo, uint8_t *data, int len)
         if (ret < 0)
             ret = snd_pcm_recover(obj->handle, ret, 0);
 
-        if (ret == -EAGAIN || (ret >= 0 && (size_t)ret < frame_num))
+        if (ret == -EAGAIN || (ret >= 0 && ret < frame_num))
         {
             snd_pcm_wait(obj->handle, 1000);
         }
@@ -338,7 +338,7 @@ int plat_ai_read(void *objAi, uint8_t *data, int len)
         if (ret < 0)
             ret = snd_pcm_recover(obj->handle, ret, 0);
         //其它问题处理
-        if (ret == -EAGAIN || (ret >= 0 && (size_t)ret < frame_num))
+        if (ret == -EAGAIN || (ret >= 0 && ret < frame_num))
         {
             snd_pcm_wait(obj->handle, 1000);
         }
