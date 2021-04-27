@@ -12,7 +12,7 @@
 
 /* ---------- 需和客户端(程序)保持同步的信息 ---------- */
 
-#define WMIX_VERSION "V6.0RC1 - 20210409"
+#define WMIX_VERSION "V6.0 - 20210427"
 
 //路径检查指令
 #define WMIX_MSG_PATH_CLEAR "rm -rf /tmp/wmix/*"
@@ -69,8 +69,10 @@ typedef struct
 {
     /*
      *  type[0,7]: see WMIX_MSG_TYPE or WMIX_CTRL_TYPE
-     *  type[8,15]: reduce
-     *  type[16,23]: repeatInterval
+     *  type[8,11]: reduce, 0~15
+     *  type[12,15]: reserve
+     *  type[16,23]: interval, 0~255
+     *  type[24,30]: repeat, 0~127
      */
     long type;
     /*

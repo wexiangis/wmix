@@ -374,7 +374,12 @@ void wmix_load_task(WMixThread_Param *wmtp)
             (audioPath[pathLen - 1] == 'c' || audioPath[pathLen - 1] == 'C'))
 #if (MAKE_AAC)
             wmix_task_play_aac(
-                wmtp->wmix, audioPath, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
+                wmtp->wmix,
+                audioPath,
+                msg_fd,
+                (wmtp->flag >> 8) & 0x0F,
+                (wmtp->flag >> 16) & 0xFF,
+                (wmtp->flag >> 24) & 0x7F);
 #else
             ;
 #endif
@@ -385,14 +390,24 @@ void wmix_load_task(WMixThread_Param *wmtp)
                  audioPath[pathLen - 1] == '3')
 #if (MAKE_MP3)
             wmix_task_play_mp3(
-                wmtp->wmix, audioPath, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
+                wmtp->wmix,
+                audioPath,
+                msg_fd,
+                (wmtp->flag >> 8) & 0x0F,
+                (wmtp->flag >> 16) & 0xFF,
+                (wmtp->flag >> 24) & 0x7F);
 #else
             ;
 #endif
         //播放wav
         else
             wmix_task_play_wav(
-                wmtp->wmix, audioPath, msg_fd, (wmtp->flag >> 8) & 0xFF, (wmtp->flag >> 16) & 0xFF);
+                wmtp->wmix,
+                audioPath,
+                msg_fd,
+                (wmtp->flag >> 8) & 0x0F,
+                (wmtp->flag >> 16) & 0xFF,
+                (wmtp->flag >> 24) & 0x7F);
 
         //排队播放的结束要清标志
         if (joinQueue)

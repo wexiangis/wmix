@@ -71,8 +71,10 @@ typedef struct
 {
     /*
      *  type[0,7]: see WMIX_MSG_TYPE or WMIX_CTRL_TYPE
-     *  type[8,15]: reduce
-     *  type[16,23]: repeatInterval
+     *  type[8,11]: reduce, 0~15
+     *  type[12,15]: reserve
+     *  type[16,23]: interval, 0~255
+     *  type[24,30]: repeat, 0~127
      */
     long type;
     /*
@@ -189,35 +191,43 @@ int wmix_auto_path(char *buff, int id)
 }
 
 int wmix_play(
-    char *audioPath,
-    uint8_t backgroundReduce,
-    uint8_t repeatInterval,
+    char *audioFile,
+    uint8_t reduce,
+    uint8_t interval,
+    uint8_t repeat,
     int order)
 {
     WMix_Msg msg;
     char msgPath[128] = {0};
     int redId;
 
-    if (!audioPath)
+    if (!audioFile)
     {
         if (order < 0)
             wmix_play_kill(0);
         return 0;
     }
 
+    if (reduce > 15)
+        reduce = 15;
+    if (interval > 255)
+        interval = 255;
+    if (repeat > 127)
+        repeat = 127;
+
     redId = wmix_auto_path(msgPath, 0);
 
-    if (strlen(msgPath) + strlen(audioPath) + 2 > WMIX_MSG_BUFF_SIZE)
+    if (strlen(msgPath) + strlen(audioFile) + 2 > WMIX_MSG_BUFF_SIZE)
     {
         fprintf(stderr, "wmix_play: %s > max len (%ld)\n",
-                audioPath, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 2));
+                audioFile, (long)(WMIX_MSG_BUFF_SIZE - strlen(msgPath) - 2));
         return 0;
     }
     //msg初始化
     MSG_INIT();
     //装填 message
     memset(&msg, 0, sizeof(WMix_Msg));
-    msg.type = backgroundReduce * 0x100 + repeatInterval * 0x10000;
+    msg.type = (reduce << 8) | (interval << 16) | (repeat << 24);
     if (order < 0)
         msg.type += (int)WMT_PLYAY_MUTEX;
     else if (order == 0)
@@ -226,8 +236,8 @@ int wmix_play(
         msg.type += (int)WMT_PLAY_FIRST;
     else
         msg.type += (int)WMT_PLAY_MIX;
-    strcpy((char *)msg.value, audioPath);
-    strcpy((char *)&msg.value[strlen(audioPath) + 1], msgPath);
+    strcpy((char *)msg.value, audioFile);
+    strcpy((char *)&msg.value[strlen(audioFile) + 1], msgPath);
     //发出
     msgsnd(msg_fd, &msg, WMIX_MSG_BUFF_SIZE, IPC_NOWAIT);
 
@@ -326,7 +336,7 @@ void *_tmp_callback(void *path)
 int wmix_fifo_play(
     uint8_t chn,
     uint16_t freq,
-    uint8_t backgroundReduce)
+    uint8_t reduce)
 {
     if (!freq || !chn)
         return -1;
@@ -335,16 +345,19 @@ int wmix_fifo_play(
     int timeout;
     char *path;
     WMix_Msg msg;
-
     //msg初始化
     MSG_INIT();
+
+    if (reduce > 15)
+        reduce = 15;
+
     //路径创建
     memset(&msg, 0, sizeof(WMix_Msg));
     path = (char *)&msg.value[4];
     wmix_auto_path(path, 0);
     // remove(path);
     //装填 message
-    msg.type = (int)WMT_FIFO_PLAY + backgroundReduce * 0x100;
+    msg.type = (int)WMT_FIFO_PLAY + (reduce << 8);
     msg.value[0] = chn > 1 ? 2 : 1;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xFF;
@@ -483,7 +496,7 @@ int wmix_reset(void)
     return 0;
 }
 
-int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool bindMode, uint8_t backgroundReduce)
+int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool bindMode, uint8_t reduce)
 {
     WMix_Msg msg;
     char msgPath[128] = {0};
@@ -491,6 +504,9 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
 
     if (!ip)
         return -1;
+
+    if (reduce > 15)
+        reduce = 15;
 
     redId = wmix_auto_path(msgPath, 0);
 
@@ -508,7 +524,7 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
         msg.type = isSend ? WMT_RTP_SEND_AAC : WMT_RTP_RECV_AAC;
     else
         msg.type = isSend ? WMT_RTP_SEND_PCMA : WMT_RTP_RECV_PCMA;
-    msg.type += backgroundReduce * 0x100;
+    msg.type += (reduce << 8);
     msg.value[0] = chn > 1 ? 2 : 1;
     msg.value[1] = 16;
     msg.value[2] = (freq >> 8) & 0xff;
@@ -542,9 +558,9 @@ int _wmix_rtp(char *ip, int port, int chn, int freq, bool isSend, int type, bool
     return redId;
 }
 
-int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode, uint8_t backgroundReduce)
+int wmix_rtp_recv(char *ip, int port, int chn, int freq, int type, bool bindMode, uint8_t reduce)
 {
-    return _wmix_rtp(ip, port, chn, freq, false, type, bindMode, backgroundReduce);
+    return _wmix_rtp(ip, port, chn, freq, false, type, bindMode, reduce);
 }
 
 int wmix_rtp_send(char *ip, int port, int chn, int freq, int type, bool bindMode)

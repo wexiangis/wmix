@@ -16,7 +16,7 @@ extern "C"
 
 /* ---------- 需和服务端(程序)保持同步的信息 ---------- */
 
-#define WMIX_VERSION "V6.0RC1 - 20210409"
+#define WMIX_VERSION "V6.0 - 20210427"
 
 //客户端(根据id) 发 服务端线程 控制类型
 typedef enum
@@ -55,22 +55,30 @@ void wmix_set_volumeMic(uint8_t value);
 void wmix_set_volumeAgc(uint8_t value);
 
 /*
- *  播放 wav 和 mp3 文件
+ *  播放 wav、mp3(需启用MAKE_MP3)、aac(需启用MAKE_AAC) 文件
  *  参数:
- *    audioPath: 音频文件,支持格式: wav, aac, mp3
- *    backgroundReduce: 播放当前音频时,降低背景音量
- *          0: 不启用  >0: 背景音量降低倍数 backgroundVolume/(backgroundReduce+1)
- *          (注意: 当有进程正在使用backgroundReduce功能时,当前启用无效(先占先得))
- *    repeatInterval: 音频重复播放间隔,单位 sec
- *          0: 不启用  >0: 播放结束后间隔 repeatInterval sec 后重播
- *    order: 播放顺序(backgroundReduce>0或repeatInterval>0时不参与排队)
+ *    audioFile: 音频文件,支持格式: wav, aac, mp3
+ *    reduce:
+ *          播放当前音频时,降低背景音量,取值[1~15]
+ *          0: 不启用  >0: 背景音量降低倍数 backgroundVolume/(reduce+1)
+ *          (注意: 当有进程正在使用reduce功能时,当前启用无效(先占先得))
+ *    interval:
+ *          音频重复播放间隔,单位 sec,取值[1~255]
+ *          0: 不启用  >0: 播放结束后间隔 interval sec 后重播
+ *    repeat:
+ *          播放次数,取值[1~127]
+ *          0： 不起用  >0: 重复播放次数(interval没有设置时默认1秒)
+ *    order:
+ *          播放顺序(reduce>0或interval>0时不参与排队)
  *          -1: 打断所有 0:排尾 1:排头 2:混音
+ * 
  *  返回: <=0错误, >0 正常返回特定id,可用于"wmix_play_kill(id)"
  */
 int wmix_play(
-    char *audioPath,
-    uint8_t backgroundReduce,
-    uint8_t repeatInterval,
+    char *audioFile,
+    uint8_t reduce,
+    uint8_t interval,
+    uint8_t repeat,
     int order);
 
 // 根据 wmix_play() 返回的id关闭启动的音频,id=0时关闭所有, 正常返回0
@@ -82,7 +90,7 @@ void wmix_kill_all();
 /*
  *  音频流播放
  *  参数:
- *      backgroundReduce: 同上面
+ *      reduce: 同上面
  *      chn: 声道数(取值1,2)
  *      freq: 频率(取值44100,32000,22050,16000,11025,8000)
  *  返回: 成功返回>0的fd(fifo的写入端)  失败返回-1
@@ -90,7 +98,7 @@ void wmix_kill_all();
 int wmix_fifo_play(
     uint8_t chn,
     uint16_t freq,
-    uint8_t backgroundReduce);
+    uint8_t reduce);
 
 /*
  *  音频流录音
@@ -130,7 +138,7 @@ int wmix_record(
  *      chn: pcma只支持1通道
  *      freq: pcma只支持8000Hz
  *      bindMode: 以服务器形式连接(bind),这个设置很重要
- *      backgroundReduce: 同上面
+ *      reduce: 同上面
  *  返回: 正常返回>0特定id,可用于"wmix_play_kill(id)"  失败返回-1
  */
 int wmix_rtp_recv(
@@ -140,7 +148,7 @@ int wmix_rtp_recv(
     int freq,
     int type,
     bool bindMode,
-    uint8_t backgroundReduce);
+    uint8_t reduce);
 
 /*
  *  创建rtp发送任务

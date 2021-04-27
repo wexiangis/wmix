@@ -24,7 +24,8 @@ void help(char *argv0)
         "  -m : 混音模式(不设置时为排队模式)\n"
         "  -b : 打断模式(不设置时为排队模式)\n"
         "  -t interval : 循环播放模式,间隔秒,取值[1~255]\n"
-        "  -d reduce : 背景音削减倍数,取值[1~255]\n"
+        "  -n repeat : 重复播放次数,取值[1~127]\n"
+        "  -d reduce : 背景音削减倍数,取值[1~15]\n"
         "\n"
         "  -v volume : 音量设置0~10\n"
         "  -vr volume : 录音音量设置0~10\n"
@@ -190,6 +191,7 @@ int main(int argc, char **argv)
 
     int interval = 0; //重读播音标志和间隔(秒) -t
     int reduce = 0; //背景削减量 -d
+    int repeat = 0; //重复播放次数 -n
 
     int volume = -1, volumeMic = -1, volumeAgc = -1; //播音-v,录音-vr,增益音量-va 0~10
 
@@ -323,14 +325,33 @@ int main(int argc, char **argv)
         else if (argvLen == 2 && strstr(argv[i], "-t"))
         {
             if (i + 1 < argc)
+            {
                 sscanf(argv[++i], "%d", &interval);
+                if (interval > 255)
+                    interval = 255;
+            }
             else
                 warn("-t", 1);
+        }
+        else if (argvLen == 2 && strstr(argv[i], "-n"))
+        {
+            if (i + 1 < argc)
+            {
+                sscanf(argv[++i], "%d", &repeat);
+                if (repeat > 127)
+                    repeat = 127;
+            }
+            else
+                warn("-n", 1);
         }
         else if (argvLen == 2 && strstr(argv[i], "-d"))
         {
             if (i + 1 < argc)
+            {
                 sscanf(argv[++i], "%d", &reduce);
+                if (reduce > 15)
+                    reduce = 15;
+            }
             else
                 warn("-d", 1);
         }
@@ -725,7 +746,7 @@ int main(int argc, char **argv)
         else if (record)
             wmix_record(audioPath, rc, rr, rt, recordType);
         else
-            ret_id = wmix_play(audioPath, reduce, interval, order);
+            ret_id = wmix_play(audioPath, reduce, interval, repeat, order);
         helpFalg = false;
     }
 

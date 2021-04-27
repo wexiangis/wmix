@@ -1355,7 +1355,8 @@ void wmix_task_play_wav(
     char *wavPath,
     int msg_fd,
     uint8_t reduce,
-    uint8_t repeatInterval)
+    uint8_t interval,
+    uint8_t repeat)
 {
     int fd = 0;
     ssize_t ret = 0;
@@ -1370,8 +1371,8 @@ void wmix_task_play_wav(
     uint32_t tick, total = 0, totalWait;
     uint32_t second = 0, secBytesCount = 0;
     //背景消减和重复播放延时
-    uint8_t reduceSkip = 0;
-    uint16_t repeat = (uint16_t)repeatInterval * 10;
+    uint8_t reduceSkip = 0; //自己不被背景削减
+    int intervalMs = interval * 1000;
     //消息通信
     WMix_Msg msg;
     //系统更新loopWord时,会关闭该条播放
@@ -1401,7 +1402,7 @@ void wmix_task_play_wav(
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n"
             "   每秒字节: %d Bytes\r\n"
-            "   重播间隔: %d sec\r\n"
+            "   重播间隔/次数: %d/%d\r\n"
             "   tick: %d\r\n"
             "   msgid: %d\r\n",
             wavPath,
@@ -1409,13 +1410,14 @@ void wmix_task_play_wav(
             wav.format.sample_length,
             wav.format.sample_rate,
             wav.format.bytes_p_second,
-            repeat / 10,
+            interval, repeat,
             wmix->tick,
             msg_fd);
     //独占 reduceMode
     reduce += 1;
     if (reduce > 1 && wmix->reduceMode == 1)
     {
+        //系统背景削减量以我为准
         wmix->reduceMode = reduce;
         reduceSkip = 1;
     }
@@ -1503,15 +1505,30 @@ void wmix_task_play_wav(
                 break;
             }
         }
-        else if (repeat)
+        else if (interval > 0 || repeat > 0)
         {
+            //配置了播放次数
+            if (repeat > 0)
+            {
+                //已经是最后一次
+                if (repeat == 1)
+                    break;
+                else
+                    repeat -= 1;
+                //没有配置播放间隔时,默认1秒
+                if (interval < 1)
+                {
+                    interval = 1;
+                    intervalMs = 1000;
+                }
+            }
             //关闭 reduceMode
             if (reduceSkip && wmix->reduceMode == reduce)
                 wmix->reduceMode = 1;
             //播放位置重置(跳过wav文件头)
             lseek(fd, 44, SEEK_SET);
             //播放间隔延时,期间不忘检查msg消息和退出请求
-            for (ret = 0; ret < repeat; ret++)
+            for (ret = 0; ret < intervalMs; ret += 100)
             {
                 delayus(100000);
                 //检查退出请求
@@ -1530,7 +1547,7 @@ void wmix_task_play_wav(
                 }
             }
             //收到了退出请求
-            if (ret != repeat)
+            if (ret < intervalMs)
             {
                 ret = -1;
                 break;
@@ -1540,18 +1557,23 @@ void wmix_task_play_wav(
                 wmix->reduceMode = reduce;
 
             if (wmix->debug)
-                printf("<< PLAY-WAV: %s start >>\n"
-                       "   通道数: %d\n"
-                       "   采样位数: %d bit\n"
-                       "   采样率: %d Hz\n"
-                       "   每秒字节: %d Bytes\n"
-                       "   重播间隔: %d sec\r\n",
-                       wavPath,
-                       wav.format.channels,
-                       wav.format.sample_length,
-                       wav.format.sample_rate,
-                       wav.format.bytes_p_second,
-                       repeat / 10);
+                printf(
+                    "<< PLAY-WAV: %s start >>\r\n"
+                    "   通道数: %d\r\n"
+                    "   采样位数: %d bit\r\n"
+                    "   采样率: %d Hz\r\n"
+                    "   每秒字节: %d Bytes\r\n"
+                    "   重播间隔/次数: %d/%d\r\n"
+                    "   tick: %d\r\n"
+                    "   msgid: %d\r\n",
+                    wavPath,
+                    wav.format.channels,
+                    wav.format.sample_length,
+                    wav.format.sample_rate,
+                    wav.format.bytes_p_second,
+                    interval, repeat,
+                    wmix->tick,
+                    msg_fd);
 
             total = secBytesCount = 0;
             src.U8 = buff;
@@ -1578,7 +1600,8 @@ void wmix_task_play_aac(
     char *aacPath,
     int msg_fd,
     uint8_t reduce,
-    uint8_t repeatInterval)
+    uint8_t interval,
+    uint8_t repeat)
 {
     int fd = 0;
     ssize_t ret = 0;
@@ -1588,8 +1611,8 @@ void wmix_task_play_aac(
     uint32_t tick, total = 0, totalWait;
     uint32_t second = 0, secBytesCount = 0;
     //背景消减和重复播放延时
-    uint8_t reduceSkip = 0;
-    uint16_t repeat = (uint16_t)repeatInterval * 10;
+    uint8_t reduceSkip = 0; //自己不被背景削减
+    int intervalMs = interval * 1000;
     //消息通信
     WMix_Msg msg;
     //aac解码句柄
@@ -1632,13 +1655,14 @@ void wmix_task_play_aac(
             "   采样位数: %d bit\r\n"
             "   采样率: %d Hz\r\n"
             "   每秒字节: %d Bytes\r\n"
-            "   重播间隔: %d sec\r\n",
-            aacPath, chn, sample, freq, secBytes, repeat / 10);
+            "   重播间隔/次数: %d/%d\r\n",
+            aacPath, chn, sample, freq, secBytes, interval, repeat);
 
     //独占 reduceMode
     reduce += 1;
     if (reduce > 1 && wmix->reduceMode == 1)
     {
+        //系统背景削减量以我为准
         wmix->reduceMode = reduce;
         reduceSkip = 1;
     }
@@ -1699,15 +1723,30 @@ void wmix_task_play_aac(
         }
         else if (ret == 0)
             ;
-        else if (repeat)
+        else if (interval > 0 || repeat > 0)
         {
+            //配置了播放次数
+            if (repeat > 0)
+            {
+                //已经是最后一次
+                if (repeat == 1)
+                    break;
+                else
+                    repeat -= 1;
+                //没有配置播放间隔时,默认1秒
+                if (interval < 1)
+                {
+                    interval = 1;
+                    intervalMs = 1000;
+                }
+            }
             //关闭 reduceMode
             if (reduceSkip && wmix->reduceMode == reduce)
                 wmix->reduceMode = 1;
             //播放位置重置
             lseek(fd, 0, SEEK_SET);
             //播放间隔延时,期间不忘检查msg消息和退出请求
-            for (ret = 0; ret < repeat; ret++)
+            for (ret = 0; ret < intervalMs; ret += 100)
             {
                 delayus(100000);
                 //检查退出请求
@@ -1725,7 +1764,7 @@ void wmix_task_play_aac(
                 }
             }
             //是退出请求
-            if (ret != repeat)
+            if (ret < intervalMs)
             {
                 ret = -1;
                 break;
@@ -1740,8 +1779,8 @@ void wmix_task_play_aac(
                        "   采样位数: %d bit\n"
                        "   采样率: %d Hz\n"
                        "   每秒字节: %d Bytes\n"
-                       "   重播间隔: %d sec\r\n",
-                       aacPath, chn, sample, freq, secBytes, repeat / 10);
+                       "   重播间隔/次数: %d/%d\r\n",
+                       aacPath, chn, sample, freq, secBytes, interval, repeat);
 
             total = secBytesCount = 0;
             src.U8 = buff;
@@ -1788,9 +1827,11 @@ typedef struct
 
     uint32_t bps, secBytesCount; //bps:每秒字节数 secBytesCount计数用于计算当前播放时间
 
-    uint8_t reduce;  //reduce
-    uint16_t repeat; //repeatInterval*10
-    uint8_t reduceSkip;
+    uint8_t reduce;
+    uint8_t interval;
+    int intervalMs;
+    uint8_t repeat;
+    uint8_t reduceSkip; //自己不被背景削减
 } WMix_Mp3;
 
 static int16_t mad_scale(mad_fixed_t sample)
@@ -1825,12 +1866,12 @@ enum mad_flow mad_output(void *data, struct mad_header const *header, struct mad
                 "   采样位数: %d bit\r\n"
                 "   采样率: %d Hz\r\n"
                 "   每秒字节: %d Bytes\r\n"
-                "   重播间隔: %d sec\r\n",
+                "   重播间隔/次数: %d/%d\r\n",
                 wmm->mp3Path,
                 pcm->channels, 16,
                 header->samplerate,
                 wmm->bps,
-                wmm->repeat / 10);
+                wmm->interval, wmm->repeat);
 
         wmm->total = wmm->secBytesCount = 0;
         wmm->head.U8 = 0;
@@ -1916,8 +1957,23 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
     {
         mad_stream_buffer(stream, (const unsigned char *)wmm->fdm + wmm->seek, wmm->size);
 
-        if (wmm->repeat)
+        if (wmm->interval > 0 || wmm->repeat > 0)
         {
+            //配置了播放次数
+            if (wmm->repeat > 0)
+            {
+                //已经是最后一次
+                if (wmm->repeat == 1)
+                    return MAD_FLOW_STOP;
+                else
+                    wmm->repeat -= 1;
+                //没有配置播放间隔时,默认1秒
+                if (wmm->interval < 1)
+                {
+                    wmm->interval = 1;
+                    wmm->intervalMs = 1000;
+                }
+            }
             //已经播放完一遍了
             if (wmm->head.U8)
             {
@@ -1925,7 +1981,7 @@ enum mad_flow mad_input(void *data, struct mad_stream *stream)
                 if (wmm->reduceSkip && wmm->wmix->reduceMode == wmm->reduce)
                     wmm->wmix->reduceMode = 1;
                 //播放间隔延时
-                for (count = 0; count < wmm->repeat; count++)
+                for (count = 0; count < wmm->intervalMs; count += 100)
                 {
                     delayus(100000);
                     //检查退出请求
@@ -1968,7 +2024,8 @@ void wmix_task_play_mp3(
     char *mp3Path,
     int msg_fd,
     uint8_t reduce,
-    uint8_t repeatInterval)
+    uint8_t interval,
+    uint8_t repeat)
 {
     WMix_Mp3 wmm;
     struct mad_decoder decoder;
@@ -1980,7 +2037,9 @@ void wmix_task_play_mp3(
     memset(&wmm, 0, sizeof(WMix_Mp3));
     wmm.wmix = wmix;
     wmm.mp3Path = mp3Path;
-    wmm.repeat = (uint16_t)repeatInterval * 10;
+    wmm.interval = interval;
+    wmm.intervalMs = interval * 1000;
+    wmm.repeat = repeat;
     wmm.loopWord = wmix->loopWord;
     wmm.reduceSkip = 0;
     wmm.reduce = reduce + 1;
@@ -2013,6 +2072,7 @@ void wmix_task_play_mp3(
     //独占 reduceMode
     if (wmm.reduce > 1 && wmix->reduceMode == 1)
     {
+        //系统背景削减量以我为准
         wmix->reduceMode = wmm.reduce;
         wmm.reduceSkip = 1;
     }

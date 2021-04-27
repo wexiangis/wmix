@@ -79,14 +79,16 @@ void wmix_task_play_wav(
     char *wavPath,
     int msg_fd,
     uint8_t reduce,
-    uint8_t repeatInterval);
+    uint8_t interval,
+    uint8_t repeat);
 #if (MAKE_AAC)
 void wmix_task_play_aac(
     WMix_Struct *wmix,
     char *aacPath,
     int msg_fd,
     uint8_t reduce,
-    uint8_t repeatInterval);
+    uint8_t interval,
+    uint8_t repeat);
 #endif
 #if (MAKE_MP3)
 void wmix_task_play_mp3(
@@ -94,7 +96,8 @@ void wmix_task_play_mp3(
     char *mp3Path,
     int msg_fd,
     uint8_t reduce,
-    uint8_t repeatInterval);
+    uint8_t interval,
+    uint8_t repeat);
 #endif
 
 //单通道8000Hz共享内存数据,len和返回长度都按int16计算长度
