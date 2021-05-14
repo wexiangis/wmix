@@ -50,8 +50,10 @@ typedef enum
  */
 typedef struct
 {
+    /* 注意下面每字节中的参数低位bit排在前面(可能和arm的小端存储有关) */
+
     /* byte 0 */
-    uint8_t cc : 4; //crc标识符个数
+    uint8_t cc : 4; //csrc标识符个数,0~15
     uint8_t x : 1;  //扩展标志,为1时表示rtp报头后有1个扩展包
     uint8_t p : 1;  //填充标志,为1时标识数据尾部有无效填充
     uint8_t v : 2;  //版本号
@@ -61,14 +63,16 @@ typedef struct
     uint8_t m : 1;  //载荷标记,视频为1帧结束,音频为会话开始
 
     /* bytes 2,3 */
-    uint16_t seq; //序列号,每帧+1,随机开始,音/视频分开
+    uint16_t seq; //序列号,每帧+1,随机开始
 
     /* bytes 4-7 */
     uint32_t timestamp; //时间戳,us,自增
 
     /* bytes 8-11 */
-    uint32_t ssrc; //同步信号源
+    uint32_t ssrc; //同步信号源,信号来源唯一标识
 
+    /* 由前面的cc决定这里长度 */
+    // uint32_t csrc[cc]; //由混合器记录的各路参与者的ssrc的列表
 } RtpHeader;
 
 typedef struct
